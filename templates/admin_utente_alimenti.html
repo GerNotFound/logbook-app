@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-2">ADMIN - GESTIONE ALIMENTI</h1>
+        <h3 class="text-muted mb-4">{{ user.username }}</h3>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Alimento</th>
+                <th>P</th>
+                <th>C</th>
+                <th>G</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for food in alimenti %}
+            <tr>
+                <form method="POST">
+                    <!-- MODIFICA QUI: Aggiunto token CSRF -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="update_food">
+                    <input type="hidden" name="food_id" value="{{ food.id }}">
+                    <td><input type="text" name="name" class="form-control form-control-sm" value="{{ food.name }}"></td>
+                    <td><input type="number" step="0.1" min="0" name="protein" class="form-control form-control-sm" value="{{ food.protein }}"></td>
+                    <td><input type="number" step="0.1" min="0" name="carbs" class="form-control form-control-sm" value="{{ food.carbs }}"></td>
+                    <td><input type="number" step="0.1" min="0" name="fat" class="form-control form-control-sm" value="{{ food.fat }}"></td>
+                    <td class="text-center align-middle">
+                        <button type="submit" class="btn btn-sm btn-outline-light">Salva</button>
+                </form>
+                <form method="POST" class="d-inline" onsubmit="return confirm('Sei sicuro?');">
+                    <!-- MODIFICA QUI: Aggiunto token CSRF -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete_food">
+                    <input type="hidden" name="food_id" value="{{ food.id }}">
+                    <button type="submit" class="btn btn-sm btn-delete">X</button>
+                </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">Questo utente non ha creato nessun alimento personale.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

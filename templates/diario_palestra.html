@@ -1,0 +1,74 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">LOGBOOK - DIARIO PALESTRA</h1>
+        <p class="text-muted">Riepilogo di tutti gli allenamenti, raggruppati per giorno.</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="accordion" id="workoutAccordion">
+    {% for day, day_data in workouts_by_day.items() %}
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-{{ day }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ day }}">
+                {{ day_data.date_formatted }}
+            </button>
+        </h2>
+        <div id="collapse-{{ day }}" class="accordion-collapse collapse" data-bs-parent="#workoutAccordion">
+            <div class="accordion-body">
+                {% for ts, session_data in day_data.sessions.items() %}
+                <div class="mb-4 p-3 border rounded">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-0">{{ session_data.template_name }}</h4>
+                            <small class="text-muted">Ore: {{ session_data.time_formatted }} | Durata: {{ session_data.duration }} min</small>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('gym.sessione_palestra', date_param=day, session_ts=ts) }}" class="btn btn-sm btn-outline-dark">✏️</a>
+                            <form method="POST" action="{{ url_for('gym.diario_palestra') }}" style="display: inline;" onsubmit="return confirm('Sei sicuro di voler eliminare questa sessione di allenamento?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="session_to_delete" value="{{ ts }}">
+                                <button type="submit" class="btn btn-sm btn-delete">X</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% for exercise_name, sets in session_data.exercises.items() %}
+                    <div class="mb-3">
+                        <h5>{{ exercise_name }}</h5>
+                        <table class="table table-sm table-striped mb-0">
+                            <thead><tr><th>Set</th><th>Reps</th><th>Peso (kg)</th></tr></thead>
+                            <tbody>
+                                {% for s in sets %}
+                                <tr><td>{{ s.set }}</td><td>{{ s.reps }}</td><td>{{ s.weight }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-secondary text-center">
+        Nessun allenamento registrato. Inizia da "Sessione Palestra".
+    </div>
+    {% endfor %}
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

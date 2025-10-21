@@ -1,0 +1,68 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">LOGBOOK - NOTE</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Note Personali</h5>
+    <p class="text-muted" style="font-size: 0.9rem;">Queste note sono private e visibili solo a te.</p>
+    <!-- MODIFICA QUI -->
+    <form id="personal-note-form" method="POST" action="{{ url_for('main.note') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_personal">
+        <textarea name="personal_note" class="form-control" rows="8" placeholder="Scrivi qui le tue note personali...">{{ note.content or '' }}</textarea>
+        <button type="submit" class="btn btn-custom w-100 mt-2">SALVA NOTA PERSONALE</button>
+    </form>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Note per l'Admin</h5>
+    <p class="text-muted" style="font-size: 0.9rem;">Queste note saranno visibili all'amministratore per darti feedback.</p>
+    <!-- MODIFICA QUI -->
+    <form id="shared-note-form" method="POST" action="{{ url_for('main.note') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_shared">
+        <textarea name="shared_note" class="form-control" rows="8" placeholder="Scrivi qui le note per il tuo coach...">{{ note.content_shared or '' }}</textarea>
+        <button type="submit" class="btn btn-custom w-100 mt-2">SALVA NOTA PER L'ADMIN</button>
+    </form>
+</div>
+
+<div class="sticky-bottom-nav">
+    <!-- MODIFICA QUI -->
+    <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const DRAFT_KEY_NOTES_PERSONAL = `notes_draft_personal_{{ session['user_id'] }}`;
+    const personalNoteForm = document.getElementById('personal-note-form');
+    const personalNoteTextarea = personalNoteForm.querySelector('textarea');
+    function savePersonalNoteDraft() { localStorage.setItem(DRAFT_KEY_NOTES_PERSONAL, personalNoteTextarea.value); }
+    function loadPersonalNoteDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_NOTES_PERSONAL);
+        if (draft) { personalNoteTextarea.value = draft; }
+    }
+    personalNoteTextarea.addEventListener('input', savePersonalNoteDraft);
+    personalNoteForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_NOTES_PERSONAL));
+    document.addEventListener('DOMContentLoaded', loadPersonalNoteDraft);
+
+    const DRAFT_KEY_NOTES_SHARED = `notes_draft_shared_{{ session['user_id'] }}`;
+    const sharedNoteForm = document.getElementById('shared-note-form');
+    const sharedNoteTextarea = sharedNoteForm.querySelector('textarea');
+    function saveSharedNoteDraft() { localStorage.setItem(DRAFT_KEY_NOTES_SHARED, sharedNoteTextarea.value); }
+    function loadSharedNoteDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_NOTES_SHARED);
+        if (draft) { sharedNoteTextarea.value = draft; }
+    }
+    sharedNoteTextarea.addEventListener('input', saveSharedNoteDraft);
+    sharedNoteForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_NOTES_SHARED));
+    document.addEventListener('DOMContentLoaded', loadSharedNoteDraft);
+</script>
+{% endblock %}

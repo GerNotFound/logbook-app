@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-2">DIARIO PALESTRA</h1>
+        <h3 class="text-muted mb-4">{{ user.username }}</h3>
+    </div>
+</div>
+
+<div class="accordion" id="workoutAccordion">
+    {% for day, day_data in workouts_by_day.items() %}
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-{{ day }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ day }}">
+                {{ day_data.date_formatted }}
+            </button>
+        </h2>
+        <div id="collapse-{{ day }}" class="accordion-collapse collapse" data-bs-parent="#workoutAccordion">
+            <div class="accordion-body">
+                {% for ts, session_data in day_data.sessions.items() %}
+                <div class="mb-4 p-3 border rounded">
+                    <h4 class="mb-3">Sessione delle <span class="text-muted">{{ session_data.time_formatted }}</span></h4>
+                    {% for exercise_name, sets in session_data.exercises.items() %}
+                    <div class="mb-3">
+                        <h5>{{ exercise_name }}</h5>
+                        <table class="table table-sm table-striped mb-0">
+                            <thead><tr><th>Set</th><th>Reps</th><th>Peso (kg)</th></tr></thead>
+                            <tbody>
+                                {% for s in sets %}
+                                <tr><td>{{ s.set }}</td><td>{{ s.reps }}</td><td>{{ s.weight }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-secondary text-center">
+        Nessun allenamento registrato per questo utente.
+    </div>
+    {% endfor %}
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

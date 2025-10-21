@@ -1,0 +1,66 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- MODIFICA TITOLO -->
+        <h1 class="mb-4">LOGBOOK - DATI PERSONALI</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<form id="user-data-form" method="POST" action="{{ url_for('main.utente') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="update_data">
+    <div class="mb-4 p-3 border rounded">
+        <h5>Dati Anagrafici</h5>
+        <div class="mb-3">
+            <label>Data di nascita</label>
+            <input type="date" name="birth_date" class="form-control" value="{{ profile.birth_date or '' }}">
+        </div>
+        <div class="mb-3">
+            <label>Altezza (metri, es. 1.80)</label>
+            <input type="number" step="0.01" min="0" name="height" class="form-control" placeholder="Altezza (metri)" value="{{ profile.height or '' }}">
+        </div>
+        <div class="mb-3">
+            <label>Sesso</label>
+            <select name="gender" class="form-select form-control">
+                <option value="M" {% if profile.gender == 'M' %}selected{% endif %}>Uomo</option>
+                <option value="F" {% if profile.gender == 'F' %}selected{% endif %}>Donna</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-custom w-100 mt-2">SALVA DATI ANAGRAFICI</button>
+    </div>
+</form>
+
+<!-- RIMOSSO: Il box per l'immagine del profilo è stato spostato -->
+
+<a href="{{ url_for('main.home') }}" class="btn btn-custom w-100 mt-2">INDIETRO</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const DRAFT_KEY_UTENTE = `utente_draft_{{ session['user_id'] }}`;
+    const utenteForm = document.getElementById('user-data-form');
+    const utenteInputs = utenteForm.querySelectorAll('input[type="date"], input[type="number"], select');
+
+    function saveUtenteDraft() {
+        const draftData = {};
+        utenteInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
+        localStorage.setItem(DRAFT_KEY_UTENTE, JSON.stringify(draftData));
+    }
+
+    function loadUtenteDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_UTENTE);
+        if (draft) {
+            const draftData = JSON.parse(draft);
+            utenteInputs.forEach(input => { if (draftData[input.name]) input.value = draftData[input.name]; });
+        }
+    }
+    
+    utenteInputs.forEach(input => input.addEventListener('input', saveUtenteDraft));
+    utenteForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_UTENTE));
+    document.addEventListener('DOMContentLoaded', loadUtenteDraft);
+</script>
+{% endblock %}

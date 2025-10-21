@@ -1,0 +1,171 @@
+/* --- TEMA SCURO --- */
+body { 
+    background-color: black;
+    color: white; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: 90px;
+}
+
+h1 {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    margin-top: 0.5rem; 
+}
+
+.btn-custom { 
+    background-color: white;
+    border-color: white; 
+    color: black; 
+    padding: 20px;
+    margin: 8px 0;
+    font-size: 18px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.btn-custom:active {
+    background-color: #ccc;
+    transform: scale(0.98);
+}
+
+.btn-delete {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: white;
+}
+.btn-delete:hover, .btn-delete:active {
+    background-color: #212529;
+    border-color: #212529;
+    color: white;
+}
+
+.form-control { 
+    background-color: black;
+    border: 2px solid #555;
+    color: white;
+    margin-bottom: 15px;
+    padding: 12px;
+    font-size: 16px;
+}
+.form-control:focus {
+    background-color: black;
+    color: white;
+    border-color: #888;
+    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25);
+}
+.form-control::placeholder {
+    color: #6c757d;
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+.password-toggle-icon {
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #ccc;
+    z-index: 100;
+}
+.password-wrapper .form-control {
+    padding-right: 40px;
+}
+
+.table {
+    color: white;
+}
+.table-bordered {
+    border-color: #444;
+}
+.table-striped>tbody>tr:nth-of-type(odd)>* {
+    --bs-table-accent-bg: #1a1a1a; 
+    color: white;
+}
+
+.accordion-button {
+    background-color: #212529;
+    color: white;
+}
+.accordion-button:not(.collapsed) {
+    background-color: #343a40;
+    color: white;
+}
+.accordion-button:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25);
+}
+.accordion-item, .modal-content, .card {
+    background-color: #212529;
+    border-color: #444;
+}
+
+.modal-header, .modal-footer {
+    border-bottom-color: #444;
+    border-top-color: #444;
+}
+
+.alert {
+    background-color: #343a40;
+    color: white;
+    border-color: #444;
+}
+
+.dropdown-menu {
+    background-color: #212529;
+    border-color: #444;
+}
+.dropdown-item {
+    color: white;
+}
+.dropdown-item:hover, .dropdown-item:focus {
+    background-color: #343a40;
+    color: white;
+}
+
+hr {
+    background-color: #444;
+    opacity: 1;
+    border-top: 1px solid #444;
+}
+
+.list-group-item {
+    background-color: #212529;
+    border-color: #444;
+}
+
+.container-mobile { max-width: 100%; padding: 0 15px; }
+.table-responsive { font-size: 14px; }
+.macronutrienti-card { background-color: #212529; color: white; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 10px; font-size: 14px; }
+.suggestions-container { position: relative; }
+.suggestions-list { position: absolute; z-index: 1000; width: 100%; max-height: 200px; overflow-y: auto; background: #212529; border: 1px solid #444; border-top: none; display: none; }
+.suggestion-item { padding: 12px 15px; border-bottom: 1px solid #444; cursor: pointer; font-size: 16px; }
+.suggestion-item:hover { background-color: #343a40; }
+
+.suggestions-list-up {
+    bottom: 100%;
+    border-top: 1px solid #444;
+    border-bottom: none;
+}
+
+.stopwatch-wrapper { }
+.stopwatch-container { display: flex; justify-content: center; align-items: center; padding: 10px 15px; margin-bottom: 1rem; border: 1px solid #444; border-radius: 5px; }
+.stopwatch-sticky { position: fixed; top: 0; left: 0; right: 0; background-color: #121212; padding: 5px 15px; border-bottom: 1px solid #333; z-index: 1020; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 0; transform: translateZ(0); -webkit-transform: translateZ(0); }
+.sticky-bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background-color: #121212; padding: 10px 15px; border-top: 1px solid #333; z-index: 1020; display: flex; justify-content: space-between; align-items: center; transform: translateZ(0); -webkit-transform: translateZ(0); }
+.sticky-bottom-nav .action-btn { width: 48%; margin: 0; padding: 12px; font-size: 16px; min-height: auto; }
+.sticky-bottom-nav .full-width-btn { width: 100%; margin: 0; padding: 12px; font-size: 16px; min-height: auto; }
+@media (max-width: 768px) { .btn-custom { font-size: 16px; padding: 18px; } .container-mobile { padding: 0 10px; } }
+
+/* NUOVO: Stile per il numero di versione */
+.app-version {
+    position: fixed;
+    bottom: 10px;
+    right: 15px;
+    font-size: 0.75rem;
+    color: #555;
+    z-index: 1000;
+}

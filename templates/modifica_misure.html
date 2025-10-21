@@ -1,0 +1,108 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">MODIFICA MISURE - {{ date_formatted }}</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+<form id="misure-edit-form" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    
+    <div class="row">
+        <div class="col-6">
+            <label for="weight" class="form-label" style="min-height: 40px;">Peso (kg)</label>
+            <input type="number" step="0.1" min="0" name="weight" id="weight" class="form-control" value="{{ misure.weight or '' }}">
+        </div>
+        <div class="col-6">
+            <label for="weight_time" class="form-label" style="min-height: 40px;">Orario Peso</label>
+            <input type="text" name="weight_time" id="weight_time" class="form-control" value="{{ misure.weight_time or '' }}" placeholder="HH:MM">
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="row">
+        <div class="col-6">
+            <label for="sleep" class="form-label" style="min-height: 40px;">Sonno</label>
+            <input type="text" name="sleep" id="sleep" class="form-control" value="{{ misure.sleep or '' }}" placeholder="ore:min">
+        </div>
+        <div class="col-6">
+            <label for="sleep_quality" class="form-label" style="min-height: 40px;">Qualità Sonno</label>
+            <input type="number" min="1" max="10" step="1" name="sleep_quality" id="sleep_quality" class="form-control" value="{{ misure.sleep_quality or '' }}" placeholder="1-10">
+        </div>
+    </div>
+    
+    <hr>
+    
+    <div class="mb-3">
+        <label class="form-label">Calcolo BFP</label>
+        <select id="bfp-mode-selector" name="bfp_mode_selector" class="form-select form-control">
+            <option value="manual" {% if misure.bfp_manual is not none %}selected{% endif %}>Inserisci Manualmente</option>
+            <option value="formula" {% if misure.bfp_manual is none %}selected{% endif %}>Calcola con Formula</option>
+        </select>
+    </div>
+
+    <div id="bfp-manual-group">
+        <label for="bfp_manual" class="form-label">BFP (%)</label>
+        <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
+    </div>
+
+    <div id="bfp-formula-group">
+        <div class="row">
+            <div class="col-4">
+                <label for="neck" class="form-label" style="min-height: 40px;">Collo (cm)</label>
+                <input type="number" step="0.1" min="0" name="neck" id="neck" class="form-control" value="{{ misure.neck or '' }}">
+            </div>
+            <div class="col-4">
+                <label for="waist" class="form-label" style="min-height: 40px;">Vita (cm)</label>
+                <input type="number" step="0.1" min="0" name="waist" id="waist" class="form-control" value="{{ misure.waist or '' }}">
+            </div>
+            {% if gender == 'F' %}
+            <div class="col-4" id="hip-container">
+                <label for="hip" class="form-label" style="min-height: 40px;">Fianchi (cm)</label>
+                <input type="number" step="0.1" min="0" name="hip" id="hip" class="form-control" value="{{ misure.hip or '' }}">
+            </div>
+            {% endif %}
+        </div>
+        <div class="mb-3">
+            <label for="measure_time" class="form-label">Orario Misure</label>
+            <input type="text" name="measure_time" id="measure_time" class="form-control" value="{{ misure.measure_time or '' }}">
+        </div>
+    </div>
+</form>
+
+<div class="sticky-bottom-nav">
+    <button type="submit" form="misure-edit-form" class="btn btn-custom action-btn">SALVA</button>
+    <!-- MODIFICA QUI -->
+    <a href="{{ url_for('main.generale') }}" class="btn btn-custom action-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const bfpModeSelector = document.getElementById('bfp-mode-selector');
+    const manualGroup = document.getElementById('bfp-manual-group');
+    const formulaGroup = document.getElementById('bfp-formula-group');
+
+    function toggleBfpFields() {
+        if (bfpModeSelector.value === 'manual') {
+            manualGroup.style.display = 'block';
+            formulaGroup.style.display = 'none';
+        } else {
+            manualGroup.style.display = 'none';
+            formulaGroup.style.display = 'block';
+        }
+    }
+
+    bfpModeSelector.addEventListener('change', toggleBfpFields);
+    document.addEventListener('DOMContentLoaded', toggleBfpFields);
+</script>
+{% endblock %}

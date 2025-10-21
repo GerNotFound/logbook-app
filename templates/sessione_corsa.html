@@ -1,0 +1,83 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">LOGBOOK - SESSIONE CORSA</h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('cardio.sessione_corsa', date_str=prev_day) }}" class="btn btn-outline-light">◀ Prec.</a>
+            <span class="text-center">
+                <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
+                {% if not is_today %}
+                    <a href="{{ url_for('cardio.sessione_corsa') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
+                {% endif %}
+            </span>
+            <a href="{{ url_for('cardio.sessione_corsa', date_str=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">Succ. ▶</a>
+        </div>
+    </div>
+</div>
+
+<form id="cardio-form" method="POST" action="{{ url_for('cardio.sessione_corsa', date_str=current_date_str) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label for="location" class="form-label">Dove</label>
+        <select name="location" id="location" class="form-select form-control">
+            <option value="STRADA">STRADA</option>
+            <option value="TAPPETO">TAPPETO</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="activity_type" class="form-label">Tipo</label>
+        <select name="activity_type" id="activity_type" class="form-select form-control">
+            <option value="CORSA">CORSA</option>
+            <option value="CORSA LEGGERA">CORSA LEGGERA</option>
+            <option value="CAMMINATA">CAMMINATA</option>
+        </select>
+    </div>
+    
+    <div class="mb-3">
+        <label for="distance_km" class="form-label">Distanza (km)</label>
+        <input type="number" step="0.01" min="0" name="distance_km" id="distance_km" class="form-control">
+    </div>
+    <div class="mb-3">
+        <label for="duration_min" class="form-label">Tempo (minuti)</label>
+        <input type="number" min="0" step="1" name="duration_min" id="duration_min" class="form-control">
+    </div>
+    <div class="mb-3">
+        <label for="incline" class="form-label">Inclinazione (%)</label>
+        <input type="number" step="0.1" min="0" name="incline" id="incline" class="form-control" disabled>
+    </div>
+</form>
+
+<div class="sticky-bottom-nav">
+    <button type="submit" form="cardio-form" class="btn btn-custom action-btn">SALVA</button>
+    <a href="{{ url_for('cardio.corsa') }}" class="btn btn-custom action-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const locationSelect = document.getElementById('location'); const inclineInput = document.getElementById('incline');
+    locationSelect.addEventListener('change', function() { if (this.value === 'TAPPETO') { inclineInput.disabled = false; } else { inclineInput.disabled = true; inclineInput.value = ''; } });
+    if (locationSelect.value !== 'TAPPETO') { inclineInput.disabled = true; }
+
+    const DRAFT_KEY_CARDIO = `cardio_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
+    const cardioForm = document.getElementById('cardio-form');
+    const cardioInputs = cardioForm.querySelectorAll('input, select');
+    function saveCardioDraft() {
+        const draftData = {};
+        cardioInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
+        localStorage.setItem(DRAFT_KEY_CARDIO, JSON.stringify(draftData));
+    }
+    function loadCardioDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_CARDIO);
+        if (draft) {
+            const draftData = JSON.parse(draft);
+            cardioInputs.forEach(input => { if (draftData[input.name]) input.value = draftData[input.name]; });
+            if (locationSelect.value !== 'TAPPETO') inclineInput.disabled = true; else inclineInput.disabled = false;
+        }
+    }
+    cardioInputs.forEach(input => input.addEventListener('input', saveCardioDraft));
+    cardioForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_CARDIO));
+    document.addEventListener('DOMContentLoaded', loadCardioDraft);
+</script>
+{% endblock %}

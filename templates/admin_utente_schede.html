@@ -1,0 +1,46 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-2">ADMIN - GESTIONE SCHEDE</h1>
+        <h3 class="text-muted mb-4">{{ user.username }}</h3>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Nome Scheda</th>
+                <th class="text-center">Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scheda in schede %}
+            <tr>
+                <td>{{ scheda.name }}</td>
+                <td class="text-center">
+                    <a href="{{ url_for('admin.admin_utente_scheda_modifica', user_id=user.id, template_id=scheda.id) }}" class="btn btn-sm btn-outline-light">Modifica</a>
+                    <form method="POST" class="d-inline" onsubmit="return confirm('Sei sicuro di voler eliminare questa scheda?');">
+                        <input type="hidden" name="action" value="delete_template">
+                        <input type="hidden" name="template_id" value="{{ scheda.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete">X</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="2" class="text-center text-muted">Questo utente non ha creato nessuna scheda.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">MODIFICA SESSIONE CORSA - {{ entry.date_formatted }}</h1>
+    </div>
+</div>
+<form id="cardio-edit-form" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label for="location" class="form-label">Dove</label>
+        <select name="location" id="location" class="form-select form-control">
+            <option value="STRADA" {% if entry.location == 'STRADA' %}selected{% endif %}>STRADA</option>
+            <option value="TAPPETO" {% if entry.location == 'TAPPETO' %}selected{% endif %}>TAPPETO</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="activity_type" class="form-label">Tipo</label>
+        <select name="activity_type" id="activity_type" class="form-select form-control">
+            <option value="CORSA" {% if entry.activity_type == 'CORSA' %}selected{% endif %}>CORSA</option>
+            <option value="CORSA LEGGERA" {% if entry.activity_type == 'CORSA LEGGERA' %}selected{% endif %}>CORSA LEGGERA</option>
+            <option value="CAMMINATA" {% if entry.activity_type == 'CAMMINATA' %}selected{% endif %}>CAMMINATA</option>
+        </select>
+    </div>
+
+    <!-- MODIFICA QUI: Aggiunte le etichette -->
+    <div class="mb-3">
+        <label for="distance_km" class="form-label">Distanza (km)</label>
+        <input type="number" step="0.01" min="0" name="distance_km" id="distance_km" class="form-control" value="{{ entry.distance_km or '' }}">
+    </div>
+    <div class="mb-3">
+        <label for="duration_min" class="form-label">Tempo (minuti)</label>
+        <input type="number" min="0" step="1" name="duration_min" id="duration_min" class="form-control" value="{{ entry.duration_min or '' }}">
+    </div>
+    <div class="mb-3">
+        <label for="incline" class="form-label">Inclinazione (%)</label>
+        <input type="number" step="0.1" min="0" name="incline" id="incline" class="form-control" value="{{ entry.incline or '' }}">
+    </div>
+    <!-- FINE MODIFICA -->
+</form>
+
+<div class="sticky-bottom-nav">
+    <button type="submit" form="cardio-edit-form" class="btn btn-custom action-btn">SALVA</button>
+    <a href="{{ url_for('cardio.diario_corsa') }}" class="btn btn-custom action-btn">INDIETRO</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const locationSelect = document.getElementById('location');
+    const inclineInput = document.getElementById('incline');
+    function toggleIncline() {
+        if (locationSelect.value === 'TAPPETO') {
+            inclineInput.disabled = false;
+        } else {
+            inclineInput.disabled = true;
+            inclineInput.value = '';
+        }
+    }
+    locationSelect.addEventListener('change', toggleIncline);
+    document.addEventListener('DOMContentLoaded', toggleIncline);
+</script>
+{% endblock %}
