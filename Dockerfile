@@ -20,8 +20,9 @@ COPY . .
 # Esponi la porta su cui Gunicorn sarà in ascolto
 EXPOSE 8000
 
+# MODIFICA TEMPORANEA
 # Comando per avviare l'applicazione in produzione usando Gunicorn
-# Gunicorn avvierà l'oggetto 'app' creato dalla funzione 'create_app()' nel file 'app.py'
-# Il file di avvio è specificato come 'nome_modulo:nome_variabile_app'
-# In Flask 2.x e successivi, si può passare direttamente la factory con 'nome_modulo:nome_funzione()'
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:create_app()"]
+# CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:create_app()"]
+
+# NUOVO COMANDO: Esegui lo script del database una sola volta
+CMD ["python", "database.py"]
