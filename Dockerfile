@@ -20,9 +20,5 @@ COPY . .
 # Esponi la porta su cui Gunicorn sarà in ascolto
 EXPOSE 8000
 
-# MODIFICA TEMPORANEA
 # Comando per avviare l'applicazione in produzione usando Gunicorn
-# CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:create_app()"]
-
-# NUOVO COMANDO: Esegui lo script del database una sola volta
-CMD ["python", "database.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:create_app()"]
