@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from collections import defaultdict
 from .auth import login_required
 from utils import execute_query
+from sqlalchemy.exc import IntegrityError
+from extensions import db
 
 gym_bp = Blueprint('gym', __name__)
 
@@ -22,8 +24,12 @@ def esercizi():
         if action == 'add_exercise':
             name = request.form.get('name')
             if name:
-                execute_query('INSERT INTO exercises (name, user_id) VALUES (:name, :user_id)', {'name': name, 'user_id': user_id}, commit=True)
-                flash('Esercizio personale aggiunto.', 'success')
+                try:
+                    execute_query('INSERT INTO exercises (name, user_id) VALUES (:name, :user_id)', {'name': name, 'user_id': user_id}, commit=True)
+                    flash('Esercizio personale aggiunto.', 'success')
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(f"Errore: L'esercizio '{name}' esiste già.", 'danger')
         elif action == 'delete_exercise':
             exercise_id = request.form.get('exercise_id')
             execute_query('DELETE FROM exercises WHERE id = :id AND user_id = :user_id', {'id': exercise_id, 'user_id': user_id}, commit=True)
@@ -31,21 +37,12 @@ def esercizi():
         elif action == 'update_notes':
             exercise_id = request.form.get('exercise_id')
             notes = request.form.get('notes')
-            query = """
-                INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes) 
-                ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes
-            """
+            query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes) ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes"
             execute_query(query, {'user_id': user_id, 'eid': exercise_id, 'notes': notes}, commit=True)
             flash('Note personali aggiornate.', 'success')
         return redirect(url_for('gym.esercizi'))
     
-    query = """
-        SELECT e.id, e.name, e.user_id, uen.notes 
-        FROM exercises e
-        LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id
-        WHERE e.user_id IS NULL OR e.user_id = :user_id
-        ORDER BY e.name
-    """
+    query = "SELECT e.id, e.name, e.user_id, uen.notes FROM exercises e LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE e.user_id IS NULL OR e.user_id = :user_id ORDER BY e.name"
     exercises = execute_query(query, {'user_id': user_id}, fetchall=True)
     return render_template('esercizi.html', title='Esercizi', exercises=exercises)
 
@@ -57,24 +54,15 @@ def esercizio_dettaglio(exercise_id):
     if not exercise:
         return redirect(url_for('gym.esercizi'))
     
-    query = """
-        SELECT wl.record_date, wl.session_timestamp, wl.set_number, wl.reps, wl.weight, wsc.comment
-        FROM workout_log wl
-        LEFT JOIN workout_session_comments wsc ON wl.session_timestamp = wsc.session_timestamp AND wl.exercise_id = wsc.exercise_id AND wl.user_id = wsc.user_id
-        WHERE wl.user_id = :user_id AND wl.exercise_id = :eid
-        ORDER BY wl.record_date DESC, wl.session_timestamp DESC, wl.id ASC
-    """
+    query = "SELECT wl.record_date, wl.session_timestamp, wl.set_number, wl.reps, wl.weight, wsc.comment FROM workout_log wl LEFT JOIN workout_session_comments wsc ON wl.session_timestamp = wsc.session_timestamp AND wl.exercise_id = wsc.exercise_id AND wl.user_id = wsc.user_id WHERE wl.user_id = :user_id AND wl.exercise_id = :eid ORDER BY wl.record_date DESC, wl.session_timestamp DESC, wl.id ASC"
     history_raw = execute_query(query, {'user_id': user_id, 'eid': exercise_id}, fetchall=True)
 
     sessions = {}
     for row in history_raw:
         ts = row['session_timestamp']
         if ts not in sessions:
-            sessions[ts] = {
-                'date_formatted': datetime.strptime(row['record_date'], '%Y-%m-%d').strftime('%d %b %y'),
-                'comment': row['comment'],
-                'sets': []
-            }
+            # --- MODIFICA QUI ---
+            sessions[ts] = { 'date_formatted': row['record_date'].strftime('%d %b %y'), 'comment': row['comment'], 'sets': [] }
         sessions[ts]['sets'].append(dict(row))
     return render_template('esercizio_dettaglio.html', title=f"Progressione - {exercise['name']}", exercise=exercise, sessions=sessions)
 
@@ -106,12 +94,7 @@ def sessione_palestra(date_param, session_ts=None):
                 duration_minutes = max(0, int(duration.total_seconds() / 60))
             except (ValueError, TypeError): pass
         
-        session_query = """
-            INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes) 
-            VALUES (:uid, :ts, :rd, :tn, :dur)
-            ON CONFLICT(session_timestamp) DO UPDATE SET
-            template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes
-        """
+        session_query = "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes) VALUES (:uid, :ts, :rd, :tn, :dur) ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes"
         execute_query(session_query, {'uid': user_id, 'ts': session_timestamp, 'rd': record_date, 'tn': template_name, 'dur': duration_minutes}, commit=True)
 
         if session_ts:
@@ -151,10 +134,7 @@ def sessione_palestra(date_param, session_ts=None):
             if key.startswith('comment_'):
                 exercise_id = int(key.split('_')[1])
                 if comment:
-                    comment_query = """
-                        INSERT INTO workout_session_comments (user_id, session_timestamp, exercise_id, comment) VALUES (:uid, :ts, :eid, :comm) 
-                        ON CONFLICT(user_id, session_timestamp, exercise_id) DO UPDATE SET comment=EXCLUDED.comment
-                    """
+                    comment_query = "INSERT INTO workout_session_comments (user_id, session_timestamp, exercise_id, comment) VALUES (:uid, :ts, :eid, :comm) ON CONFLICT(user_id, session_timestamp, exercise_id) DO UPDATE SET comment=EXCLUDED.comment"
                     execute_query(comment_query, {'uid': user_id, 'ts': session_timestamp, 'eid': exercise_id, 'comm': comment}, commit=True)
         
         flash('Allenamento salvato con successo!', 'success')
@@ -165,23 +145,13 @@ def sessione_palestra(date_param, session_ts=None):
     template_ids = list(templates_dict.keys())
 
     if template_ids:
-        all_template_exercises_raw = execute_query(f'''
-            SELECT te.id, te.template_id, e.id as exercise_id, e.name, uen.notes, te.sets
-            FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id
-            LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id
-            WHERE te.template_id = ANY(:template_ids) ORDER BY te.id
-        ''', {'user_id': user_id, 'template_ids': template_ids}, fetchall=True)
+        all_template_exercises_raw = execute_query(f'SELECT te.id, te.template_id, e.id as exercise_id, e.name, uen.notes, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE te.template_id = ANY(:template_ids) ORDER BY te.id', {'user_id': user_id, 'template_ids': template_ids}, fetchall=True)
         
         exercise_ids = list(set(ex['exercise_id'] for ex in all_template_exercises_raw))
         if exercise_ids:
             history_raw = execute_query(f'SELECT record_date, session_timestamp, exercise_id, set_number, reps, weight FROM workout_log WHERE user_id = :user_id AND exercise_id = ANY(:eids) AND record_date < :rd ORDER BY record_date DESC, session_timestamp DESC, id ASC', 
                                         {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date}, fetchall=True)
-            comments_raw = execute_query(f'''
-                SELECT wsc.comment, wl.record_date, wsc.exercise_id FROM workout_session_comments wsc 
-                JOIN workout_log wl ON wsc.session_timestamp = wl.session_timestamp 
-                WHERE wsc.user_id = :user_id AND wsc.exercise_id = ANY(:eids) AND wl.record_date < :rd 
-                ORDER BY wl.record_date DESC, wsc.id DESC
-                ''', {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date}, fetchall=True)
+            comments_raw = execute_query(f"SELECT wsc.comment, wl.record_date, wsc.exercise_id FROM workout_session_comments wsc JOIN workout_log wl ON wsc.session_timestamp = wl.session_timestamp WHERE wsc.user_id = :user_id AND wsc.exercise_id = ANY(:eids) AND wl.record_date < :rd ORDER BY wl.record_date DESC, wsc.id DESC", {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date}, fetchall=True)
 
             history_by_exercise = defaultdict(list); last_comment_by_exercise = {}
             for row in history_raw: history_by_exercise[row['exercise_id']].append(row)
@@ -194,13 +164,15 @@ def sessione_palestra(date_param, session_ts=None):
                     ts = row['session_timestamp']
                     if ts not in history_grouped:
                         if len(history_grouped) >= 2: break
-                        history_grouped[ts] = {'date_formatted': datetime.strptime(row['record_date'], '%Y-%m-%d').strftime('%d %b'), 'sets': []}
+                        # --- MODIFICA QUI ---
+                        history_grouped[ts] = {'date_formatted': row['record_date'].strftime('%d %b'), 'sets': []}
                     history_grouped[ts]['sets'].append(f"{row['weight']}kg x {row['reps']}")
                 ex_dict['history'] = history_grouped
 
                 last_comment = last_comment_by_exercise.get(ex['exercise_id'])
                 ex_dict['last_comment'] = last_comment['comment'] if last_comment else None
-                ex_dict['last_comment_date'] = datetime.strptime(last_comment['record_date'], '%Y-%m-%d').strftime('%d %b') if last_comment else None
+                # --- MODIFICA QUI ---
+                ex_dict['last_comment_date'] = last_comment['record_date'].strftime('%d %b') if last_comment else None
                 templates_dict[ex['template_id']]['exercises'].append(ex_dict)
 
     templates = list(templates_dict.values())
@@ -222,8 +194,12 @@ def scheda():
         if action == 'add_template':
             name = request.form.get('template_name')
             if name:
-                execute_query('INSERT INTO workout_templates (user_id, name) VALUES (:uid, :name)', {'uid': user_id, 'name': name}, commit=True)
-                flash('Scheda creata con successo.', 'success')
+                try:
+                    execute_query('INSERT INTO workout_templates (user_id, name) VALUES (:uid, :name)', {'uid': user_id, 'name': name}, commit=True)
+                    flash('Scheda creata con successo.', 'success')
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
         elif action == 'delete_template':
             template_id = request.form.get('template_id')
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
@@ -267,7 +243,8 @@ def diario_palestra():
     workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'duration': None, 'template_name': 'N/D', 'exercises': defaultdict(list)})})
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
-        workouts_by_day[day]['date_formatted'] = datetime.strptime(day, '%Y-%m-%d').strftime('%d %b %y')
+        # --- MODIFICA QUI ---
+        workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
         session_details = sessions_info.get(ts, {})
         s_data = workouts_by_day[day]['sessions'][ts]
         s_data['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')

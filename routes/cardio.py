@@ -30,10 +30,7 @@ def sessione_corsa(date_str):
         location = request.form.get('location')
         incline = request.form.get('incline') if location == 'TAPPETO' else None
         
-        query = """
-            INSERT INTO cardio_log (user_id, record_date, location, activity_type, distance_km, duration_min, incline)
-            VALUES (:user_id, :rd, :loc, :act, :dist, :dur, :inc)
-        """
+        query = "INSERT INTO cardio_log (user_id, record_date, location, activity_type, distance_km, duration_min, incline) VALUES (:user_id, :rd, :loc, :act, :dist, :dur, :inc)"
         params = {
             'user_id': user_id, 'rd': current_date_str, 'loc': location, 'act': request.form.get('activity_type'),
             'dist': float(request.form.get('distance_km')) if request.form.get('distance_km') else None,
@@ -56,7 +53,8 @@ def diario_corsa():
     entries = []
     for entry in entries_raw:
         entry_dict = dict(entry)
-        entry_dict['date_formatted'] = datetime.strptime(entry['record_date'], '%Y-%m-%d').strftime('%d %b %y')
+        # --- MODIFICA QUI ---
+        entry_dict['date_formatted'] = entry['record_date'].strftime('%d %b %y')
         entries.append(entry_dict)
 
     return render_template('diario_corsa.html', title='Diario Corsa', entries=entries)
@@ -75,10 +73,7 @@ def modifica_corsa(entry_id):
         location = request.form.get('location')
         incline = request.form.get('incline') if location == 'TAPPETO' else None
         
-        query = """
-            UPDATE cardio_log SET location = :loc, activity_type = :act, distance_km = :dist, duration_min = :dur, incline = :inc
-            WHERE id = :id AND user_id = :user_id
-        """
+        query = "UPDATE cardio_log SET location = :loc, activity_type = :act, distance_km = :dist, duration_min = :dur, incline = :inc WHERE id = :id AND user_id = :user_id"
         params = {
             'loc': location, 'act': request.form.get('activity_type'),
             'dist': float(request.form.get('distance_km')) if request.form.get('distance_km') else None,
@@ -91,7 +86,8 @@ def modifica_corsa(entry_id):
         return redirect(url_for('cardio.diario_corsa'))
 
     entry_dict = dict(entry)
-    entry_dict['date_formatted'] = datetime.strptime(entry['record_date'], '%Y-%m-%d').strftime('%d %b %y')
+    # --- MODIFICA QUI ---
+    entry_dict['date_formatted'] = entry['record_date'].strftime('%d %b %y')
     return render_template('modifica_cardio.html', title='Modifica Corsa', entry=entry_dict)
 
 @cardio_bp.route('/elimina_corsa', methods=['POST'])

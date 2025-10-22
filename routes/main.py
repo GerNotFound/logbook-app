@@ -1,6 +1,6 @@
 # routes/main.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, make_response, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash, Response, make_response, send_from_directory
 from extensions import db
 import bcrypt
 import os
@@ -13,12 +13,9 @@ import uuid
 from PIL import Image
 from collections import defaultdict
 from .auth import login_required
-# NUOVA IMPORTAZIONE
 from utils import execute_query, is_valid_time_format, allowed_file
 
 main_bp = Blueprint('main', __name__)
-
-# Le funzioni helper sono state spostate in utils.py
 
 @main_bp.route('/service-worker.js')
 def service_worker():
@@ -187,7 +184,8 @@ def generale():
         except (ValueError, TypeError, KeyError):
             entry_dict['bmi'] = None
             
-        entry_dict['date_formatted'] = datetime.strptime(record_date, '%Y-%m-%d').strftime('%d %b %y')
+        # --- MODIFICA QUI: Rimossa la conversione strptime ---
+        entry_dict['date_formatted'] = record_date.strftime('%d %b %y')
         entries.append(entry_dict)
         
     return render_template('generale.html', title='Generale', entries=entries)
@@ -281,10 +279,10 @@ def modifica_misure(record_date):
         if not is_valid_time_format(weight_time) or not is_valid_time_format(measure_time):
             flash('Formato orario non valido. Usa HH:MM.','danger')
             misure=execute_query('SELECT * FROM daily_data WHERE user_id = :user_id AND record_date = :date',{'user_id':user_id, 'date':record_date}, fetchone=True)
-            date_formatted=datetime.strptime(record_date,'%Y-%m-%d').strftime('%d %b %y')
-            return render_template('modifica_misure.html',title=f'Modifica {date_formatted}',misure=misure,date_formatted=date_formatted,record_date=record_date, gender=gender)
+            date_obj = datetime.strptime(record_date,'%Y-%m-%d').date()
+            return render_template('modifica_misure.html',title=f'Modifica {date_obj.strftime("%d %b %y")}',misure=misure,date_formatted=date_obj.strftime("%d %b %y"),record_date=record_date, gender=gender)
         
-        bfp_mode = request.form.get('bfp_mode_selector')
+        bfp_mode = request.form.get('bfp-mode-selector')
         try:
             form_values = {
                 'weight': float(request.form.get('weight')) if request.form.get('weight') else None,
@@ -298,8 +296,8 @@ def modifica_misure(record_date):
                 if value is not None and value < 0:
                     flash(f'Il valore per "{key}" non può essere negativo.', 'danger')
                     misure=execute_query('SELECT * FROM daily_data WHERE user_id = :user_id AND record_date = :date',{'user_id':user_id, 'date':record_date}, fetchone=True)
-                    date_formatted=datetime.strptime(record_date,'%Y-%m-%d').strftime('%d %b %y')
-                    return render_template('modifica_misure.html',title=f'Modifica {date_formatted}',misure=misure,date_formatted=date_formatted,record_date=record_date, gender=gender)
+                    date_obj = datetime.strptime(record_date,'%Y-%m-%d').date()
+                    return render_template('modifica_misure.html',title=f'Modifica {date_obj.strftime("%d %b %y")}',misure=misure,date_formatted=date_obj.strftime("%d %b %y"),record_date=record_date, gender=gender)
             form_data={
                 'weight': form_values['weight'], 'weight_time':weight_time or None,
                 'sleep':request.form.get('sleep') or None, 'sleep_quality': form_values['sleep_quality'],
@@ -320,8 +318,8 @@ def modifica_misure(record_date):
     
     misure=execute_query('SELECT * FROM daily_data WHERE user_id = :user_id AND record_date = :date',{'user_id':user_id, 'date':record_date}, fetchone=True)
     if not misure:return redirect(url_for('main.generale'))
-    date_formatted=datetime.strptime(record_date,'%Y-%m-%d').strftime('%d %b %y')
-    return render_template('modifica_misure.html',title=f'Modifica {date_formatted}',misure=misure,date_formatted=date_formatted,record_date=record_date, gender=gender)
+    date_obj = datetime.strptime(record_date,'%Y-%m-%d').date()
+    return render_template('modifica_misure.html',title=f'Modifica {date_obj.strftime("%d %b %y")}',misure=misure,date_formatted=date_obj.strftime("%d %b %y"),record_date=record_date, gender=gender)
 
 @main_bp.route('/elimina_giorno',methods=['POST'])
 @login_required

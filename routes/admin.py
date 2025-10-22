@@ -12,6 +12,8 @@ import os
 
 admin_bp = Blueprint('admin', __name__)
 
+# ... (le rotte fino a admin_utente_diario_palestra rimangono invariate) ...
+
 @admin_bp.route('/')
 @login_required
 @admin_required
@@ -72,7 +74,6 @@ def admin_utente_dettaglio(user_id):
             else:
                 flash('Il campo password non può essere vuoto.', 'warning')
             return redirect(url_for('admin.admin_utente_dettaglio', user_id=user_id))
-
         elif action == 'delete_account':
             profile_to_delete = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
             if profile_to_delete and profile_to_delete.get('profile_image_file'):
@@ -174,7 +175,8 @@ def admin_utente_diario_palestra(user_id):
     workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'exercises': defaultdict(list)})})
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
-        workouts_by_day[day]['date_formatted'] = datetime.strptime(day, '%Y-%m-%d').strftime('%d %b %y')
+        # --- MODIFICA QUI ---
+        workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
         workouts_by_day[day]['sessions'][ts]['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
         workouts_by_day[day]['sessions'][ts]['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
     final_workouts = {day: {'date_formatted': data['date_formatted'], 'sessions': {ts: dict(s_data) for ts, s_data in data['sessions'].items()}} for day, data in workouts_by_day.items()}
@@ -187,7 +189,8 @@ def admin_utente_diario_corsa(user_id):
     user = execute_query('SELECT * FROM users WHERE id = :id', {'id': user_id}, fetchone=True)
     if not user: return redirect(url_for('admin.admin_utenti'))
     entries_raw = execute_query('SELECT * FROM cardio_log WHERE user_id = :user_id ORDER BY record_date DESC, id DESC', {'user_id': user_id}, fetchall=True)
-    entries = [{'date_formatted': datetime.strptime(entry['record_date'], '%Y-%m-%d').strftime('%d %b %y'), **entry} for entry in entries_raw]
+    # --- MODIFICA QUI ---
+    entries = [{'date_formatted': entry['record_date'].strftime('%d %b %y'), **entry} for entry in entries_raw]
     return render_template('admin_utente_diario_corsa.html', title=f'Diario Corsa di {user["username"]}', user=user, entries=entries)
 
 @admin_bp.route('/esercizi', methods=['GET', 'POST'])
@@ -234,11 +237,6 @@ def admin_alimenti():
 @login_required
 @admin_required
 def admin_note_condivise():
-    query = """
-        SELECT u.username, un.content_shared FROM user_notes un
-        JOIN users u ON un.user_id = u.id
-        WHERE u.is_admin = 0 AND un.content_shared IS NOT NULL AND un.content_shared != ''
-        ORDER BY u.username
-    """
+    query = "SELECT u.username, un.content_shared FROM user_notes un JOIN users u ON un.user_id = u.id WHERE u.is_admin = 0 AND un.content_shared IS NOT NULL AND un.content_shared != '' ORDER BY u.username"
     notes = execute_query(query, fetchall=True)
     return render_template('admin_note_condivise.html', title='Note Utenti', notes=notes)

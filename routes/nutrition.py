@@ -41,7 +41,8 @@ def diario_alimentare():
     """
     daily_summary = execute_query(query, {'user_id': user_id}, fetchall=True)
     
-    entries = [{'date_formatted': datetime.strptime(row['record_date'], '%Y-%m-%d').strftime('%d %b %y'), **row} for row in daily_summary]
+    # --- MODIFICA QUI ---
+    entries = [{'date_formatted': row['record_date'].strftime('%d %b %y'), **row} for row in daily_summary]
     return render_template('diario_alimentare.html', title='Diario Alimentare', entries=entries)
     
 @nutrition_bp.route('/dieta', defaults={'date_str': None}, methods=['GET', 'POST'])
