@@ -28,9 +28,9 @@ function addFormSubmitFeedback(formId, loadingText, timeout = 0) {
     if (!form) return;
 
     form.addEventListener('submit', function(event) {
-        if (this.hasAttribute('onsubmit')) return;
+        if (form.dataset.ajax === "true") return;
 
-        const submitButton = this.querySelector('button[type="submit"]');
+        const submitButton = form.querySelector('button[type="submit"]');
         if (!submitButton) return;
 
         const originalText = submitButton.textContent;
@@ -52,19 +52,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// --- FUNZIONE AJAX GENERICA E HELPER PER TUTTE LE PAGINE ---
+// --- NUOVA FUNZIONE AJAX GENERICA BASATA SU CLICK ---
 
-async function handleAjaxFormSubmit(event, url, onSuccess) {
-    event.preventDefault();
+async function handleAjaxClick(button, url, successCallback) {
+    const form = button.closest('form');
+    if (!form) return;
 
-    const form = event.target;
     const formData = new FormData(form);
-    const submitButton = form.querySelector('button[type="submit"]');
-    const originalButtonHTML = submitButton.innerHTML;
-    let successHandled = false;
-
-    submitButton.disabled = true;
-    submitButton.innerHTML = '...'; 
+    const originalButtonHTML = button.innerHTML;
+    
+    button.disabled = true;
+    button.innerHTML = '...'; 
 
     try {
         const response = await fetch(url, {
@@ -76,8 +74,7 @@ async function handleAjaxFormSubmit(event, url, onSuccess) {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            onSuccess(result, form, originalButtonHTML);
-            successHandled = true;
+            successCallback(result, form);
         } else {
             alert('Errore: ' + (result.error || 'Si è verificato un problema.'));
         }
@@ -86,72 +83,22 @@ async function handleAjaxFormSubmit(event, url, onSuccess) {
         console.error('Errore durante la richiesta AJAX:', error);
         alert('Si è verificato un errore di rete. Riprova.');
     } finally {
-        if (!successHandled) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalButtonHTML;
+        // La funzione di successo è responsabile del ripristino del pulsante
+        // per gestire i feedback personalizzati (es. "Salvato!")
+        if (successCallback !== onUpdateNotesSuccess) {
+            button.disabled = false;
+            button.innerHTML = originalButtonHTML;
         }
     }
 }
 
+
 // --- FUNZIONI SPECIFICHE PER LA PAGINA SCHEDA ---
-
-function onAddExerciseSuccess(result, form) {
-    const exercise = result.exercise;
-    const tableBody = form.closest('.border.rounded').querySelector('table tbody');
-    
-    const noExerciseRow = tableBody.querySelector('.no-exercise-row');
-    if (noExerciseRow) noExerciseRow.remove();
-
-    const newRow = document.createElement('tr');
-    newRow.id = `tex-${exercise.id}`;
-    newRow.innerHTML = `
-        <td>${exercise.name}</td>
-        <td>${exercise.sets}</td>
-        <td class="text-center">
-            <form onsubmit="handleDeleteTemplateExercise(event, '/scheda/elimina-esercizio')">
-                <input type="hidden" name="csrf_token" value="${result.csrf_token}">
-                <input type="hidden" name="template_exercise_id" value="${exercise.id}">
-                <button type="submit" class="btn btn-sm btn-delete">X</button>
-            </form>
-        </td>
-    `;
-    tableBody.appendChild(newRow);
-    form.reset();
-}
-
-async function handleDeleteTemplateExercise(event, url) {
-    if (!confirm('Sei sicuro di voler eliminare questo esercizio?')) {
-        event.preventDefault();
-        return;
-    }
-    await handleAjaxFormSubmit(event, url, (result, form) => {
-        form.closest('tr').remove();
-    });
-}
-
-function onRenameTemplateSuccess(result, form, originalButtonHTML) {
-    const templateId = result.templateId;
-    const newName = result.newName;
-    const templateHeader = document.querySelector(`#template-${templateId} h4`);
-    if (templateHeader) templateHeader.textContent = newName;
-    
-    const input = form.querySelector('[name=new_template_name]');
-    if(input) input.value = newName;
-    
-    const modalElement = form.closest('.modal');
-    const modalInstance = bootstrap.Modal.getInstance(modalElement);
-    modalInstance.hide();
-
-    // Ripristina il pulsante dopo la chiusura del modal
-    const submitButton = form.querySelector('button[type="submit"]');
-    submitButton.disabled = false;
-    submitButton.innerHTML = originalButtonHTML;
-}
-
+// (Queste non sono più usate direttamente, ma la logica è simile)
 
 // --- FUNZIONI SPECIFICHE PER LA PAGINA ESERCIZI ---
 
-function onRenameExerciseSuccess(result, form, originalButtonHTML) {
+function onRenameExerciseSuccess(result, form) {
     const exerciseId = result.exerciseId;
     const newName = result.newName;
     const exerciseRow = document.querySelector(`#exercise-${exerciseId}`);
@@ -161,33 +108,22 @@ function onRenameExerciseSuccess(result, form, originalButtonHTML) {
             nameSpan.textContent = newName;
         }
     }
-    const input = form.querySelector('[name=new_exercise_name]');
-    if(input) input.value = newName;
     
     const modalElement = form.closest('.modal');
     const modalInstance = bootstrap.Modal.getInstance(modalElement);
     modalInstance.hide();
-    
-    const submitButton = form.querySelector('button[type="submit"]');
-    submitButton.disabled = false;
-    submitButton.innerHTML = originalButtonHTML;
 }
 
-function onUpdateNotesSuccess(result, form, originalButtonHTML) {
+function onUpdateNotesSuccess(result, form) {
     const button = form.querySelector('button[type="submit"]');
+    const originalText = "Salva Nota"; // Testo originale
     button.innerHTML = 'Salvato!';
     setTimeout(() => {
-        button.innerHTML = originalButtonHTML;
+        button.innerHTML = originalText;
         button.disabled = false;
     }, 1500);
 }
 
-async function handleDeleteExercise(event, url) {
-    if (!confirm('Sei sicuro di voler eliminare questo esercizio? L\'azione è irreversibile.')) {
-        event.preventDefault();
-        return;
-    }
-    await handleAjaxFormSubmit(event, url, (result, form) => {
-        form.closest('tr').remove();
-    });
+function onDeleteExerciseSuccess(result, form) {
+    form.closest('tr').remove();
 }

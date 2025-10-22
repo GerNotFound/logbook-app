@@ -38,7 +38,7 @@ def aggiungi_esercizio_ajax():
     template_id = request.form.get('template_id')
     exercise_id = request.form.get('exercise_id')
     sets = request.form.get('sets')
-    csrf_token = request.form.get('csrf_token') # Passa il token per la nuova riga
+    csrf_token = request.form.get('csrf_token')
     if not all([template_id, exercise_id, sets]):
         return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
     try:
@@ -133,7 +133,6 @@ def esercizi():
     user_id = session['user_id']
     if request.method == 'POST':
         action = request.form.get('action')
-        # MODIFICA: L'unica azione gestita qui è 'add_exercise'
         if action == 'add_exercise':
             name = request.form.get('name')
             notes = request.form.get('notes')
@@ -187,7 +186,6 @@ def scheda():
     all_exercises = execute_query('SELECT * FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
     return render_template('scheda.html', title='Scheda Allenamento', templates=templates, all_exercises=all_exercises)
 
-# ... le altre rotte (diario_palestra, ecc.) rimangono invariate ...
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required
 def esercizio_dettaglio(exercise_id):

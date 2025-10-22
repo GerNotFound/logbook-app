@@ -39,11 +39,13 @@
                     {% if ex.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}
                 </td>
                 <td>
-                    <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.aggiorna_note_ajax') }}', onUpdateNotesSuccess)">
+                    <!-- MODIFICA QUI: Usa un bottone di tipo button con onclick -->
+                    <form>
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="exercise_id" value="{{ ex.id }}">
                         <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Aggiungi una nota personale...">{{ ex.notes or '' }}</textarea>
-                        <button type="submit" class="btn btn-sm btn-outline-light mt-1 w-100">Salva Nota</button>
+                        <button type="button" class="btn btn-sm btn-outline-light mt-1 w-100" 
+                                onclick="handleAjaxClick(this, '{{ url_for('gym.aggiorna_note_ajax') }}', onUpdateNotesSuccess)">Salva Nota</button>
                     </form>
                 </td>
                 <td class="text-center align-middle">
@@ -53,10 +55,12 @@
                         <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameExerciseModal-{{ ex.id }}">
                             Rinomina
                         </button>
-                        <form onsubmit="handleDeleteExercise(event, '{{ url_for('gym.elimina_esercizio_personale_ajax') }}')">
+                        <!-- MODIFICA QUI: Usa un bottone di tipo button con onclick -->
+                        <form>
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="exercise_id" value="{{ ex.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete">X</button>
+                            <button type="button" class="btn btn-sm btn-delete w-100" 
+                                    onclick="if(confirm('Sei sicuro?')) handleAjaxClick(this, '{{ url_for('gym.elimina_esercizio_personale_ajax') }}', onDeleteExerciseSuccess)">X</button>
                         </form>
                         {% endif %}
                     </div>
@@ -71,8 +75,7 @@
                             <h5 class="modal-title">Rinomina Esercizio</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
-                        <!-- MODIFICA QUI: La chiamata AJAX ora è corretta e punta all'endpoint giusto -->
-                        <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.rinomina_esercizio_ajax') }}', onRenameExerciseSuccess)">
+                        <form>
                             <div class="modal-body">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="exercise_id" value="{{ ex.id }}">
@@ -81,7 +84,9 @@
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                                <button type="submit" class="btn btn-custom" style="margin: 0; min-height: auto;">Salva</button>
+                                <!-- MODIFICA QUI: Usa un bottone di tipo button con onclick -->
+                                <button type="button" class="btn btn-custom" style="margin: 0; min-height: auto;"
+                                        onclick="handleAjaxClick(this, '{{ url_for('gym.rinomina_esercizio_ajax') }}', onRenameExerciseSuccess)">Salva</button>
                             </div>
                         </form>
                     </div>
