@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta
 from flask import Flask
-from extensions import db, csrf
+from extensions import db, csrf, talisman # REINTRODUCIAMO L'IMPORT
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,24 +11,59 @@ def create_app():
 
     # --- CONFIGURAZIONE ---
     
-    # MODIFICA QUI: postgres:// -> postgresql://
-    # Questa riga ora leggerà la stringa corretta dal file .env
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-    if app.config['SQLALCHEMY_DATABASE_URI'] and app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
-        app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
-
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url and db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-insecure') 
     
     app.debug = os.environ.get('FLASK_ENV') == 'development'
 
     app.config['UPLOAD_FOLDER'] = 'static/profile_pics'
     app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+    
+    app.config.update(
+        SESSION_COOKIE_SECURE=not app.debug,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+    )
 
+    # Inizializza le estensioni
     db.init_app(app)
     csrf.init_app(app)
+    
+    # --- CONFIGURAZIONE DI SICUREZZA TALISMAN CORRETTA ---
+    csp = {
+        'default-src': "'self'",
+        'script-src': [
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            "'unsafe-inline'"  # Permette gli script inline (LA NOSTRA SOLUZIONE)
+        ],
+        'style-src': [
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            'https://fonts.googleapis.com',
+            "'unsafe-inline'" # Aggiunto per massima compatibilità
+        ],
+        'font-src': [
+            "'self'",
+            'https://fonts.gstatic.com',
+            'https://cdn.jsdelivr.net' # Permette i font per le icone di Bootstrap
+        ],
+        'img-src': [
+            "'self'",
+            'data:'
+        ],
+    }
+    
+    # Inizializza Talisman (forza HTTPS solo in produzione)
+    talisman.init_app(app, content_security_policy=csp, force_https=not app.debug)
+
 
     with app.app_context():
         

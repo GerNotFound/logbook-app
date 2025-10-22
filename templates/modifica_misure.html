@@ -44,7 +44,7 @@
     
     <div class="mb-3">
         <label class="form-label">Calcolo BFP</label>
-        <select id="bfp-mode-selector" name="bfp_mode_selector" class="form-select form-control">
+        <select id="bfp-mode-selector" name="bfp-mode-selector" class="form-select form-control">
             <option value="manual" {% if misure.bfp_manual is not none %}selected{% endif %}>Inserisci Manualmente</option>
             <option value="formula" {% if misure.bfp_manual is none %}selected{% endif %}>Calcola con Formula</option>
         </select>
@@ -81,28 +81,30 @@
 
 <div class="sticky-bottom-nav">
     <button type="submit" form="misure-edit-form" class="btn btn-custom action-btn">SALVA</button>
-    <!-- MODIFICA QUI -->
     <a href="{{ url_for('main.generale') }}" class="btn btn-custom action-btn">INDIETRO</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const bfpModeSelector = document.getElementById('bfp-mode-selector');
-    const manualGroup = document.getElementById('bfp-manual-group');
-    const formulaGroup = document.getElementById('bfp-formula-group');
+    document.addEventListener('DOMContentLoaded', function() {
+        const bfpModeSelector = document.getElementById('bfp-mode-selector');
+        const manualGroup = document.getElementById('bfp-manual-group');
+        const formulaGroup = document.getElementById('bfp-formula-group');
+        const manualInputs = manualGroup.querySelectorAll('input');
+        const formulaInputs = formulaGroup.querySelectorAll('input');
 
-    function toggleBfpFields() {
-        if (bfpModeSelector.value === 'manual') {
-            manualGroup.style.display = 'block';
-            formulaGroup.style.display = 'none';
-        } else {
-            manualGroup.style.display = 'none';
-            formulaGroup.style.display = 'block';
+        function toggleBfpFields() {
+            const isManual = bfpModeSelector.value === 'manual';
+            manualGroup.style.display = isManual ? 'block' : 'none';
+            formulaGroup.style.display = isManual ? 'none' : 'block';
+            manualInputs.forEach(input => input.disabled = !isManual);
+            formulaInputs.forEach(input => input.disabled = isManual);
         }
-    }
-
-    bfpModeSelector.addEventListener('change', toggleBfpFields);
-    document.addEventListener('DOMContentLoaded', toggleBfpFields);
+        
+        bfpModeSelector.addEventListener('change', toggleBfpFields);
+        
+        toggleBfpFields();
+    });
 </script>
 {% endblock %}
