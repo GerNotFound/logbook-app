@@ -28,7 +28,6 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- MODIFICA QUI: Inclusione del file JS centralizzato -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     
     <script>
@@ -43,6 +42,20 @@
             });
         });
       }
+    </script>
+
+    <!-- NUOVO: Script per lo scorrimento fluido alle ancore -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.location.hash) {
+                setTimeout(() => {
+                    const targetElement = document.querySelector(window.location.hash);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        });
     </script>
 
     {% block scripts %}{% endblock %}

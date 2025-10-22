@@ -16,7 +16,8 @@
         <input type="hidden" name="action" value="add_exercise">
         <div class="row g-2">
             <div class="col"><input type="text" name="name" class="form-control" placeholder="Nome Esercizio" required></div>
-            <div class="col-auto"><button type="submit" class="btn btn-custom" style="padding: 12px 15px; min-height: auto; height: 44px;">Aggiungi</button></div>
+            <div class="col-12"><textarea name="notes" class="form-control" rows="2" placeholder="Note personali (opzionali)..."></textarea></div>
+            <div class="col-12"><button type="submit" class="btn btn-custom" style="padding: 15px; min-height: auto;">Aggiungi</button></div>
         </div>
     </form>
 </div>
@@ -32,12 +33,14 @@
         </thead>
         <tbody>
             {% for ex in exercises %}
-            <tr>
-                <td>{{ ex.name }} {% if ex.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}</td>
+            <tr id="exercise-{{ ex.id }}">
+                <td class="align-middle">
+                    <span class="exercise-name">{{ ex.name }}</span>
+                    {% if ex.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}
+                </td>
                 <td>
-                    <form method="POST">
+                    <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.aggiorna_note_ajax') }}', onUpdateNotesSuccess)">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="update_notes">
                         <input type="hidden" name="exercise_id" value="{{ ex.id }}">
                         <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Aggiungi una nota personale...">{{ ex.notes or '' }}</textarea>
                         <button type="submit" class="btn btn-sm btn-outline-light mt-1 w-100">Salva Nota</button>
@@ -47,9 +50,11 @@
                     <div class="d-grid gap-2">
                         <a href="{{ url_for('gym.esercizio_dettaglio', exercise_id=ex.id) }}" class="btn btn-sm btn-outline-light">Progressione</a>
                         {% if ex.user_id == session.user_id %}
-                        <form method="POST" onsubmit="return confirm('Sei sicuro?');" class="d-grid">
+                        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameExerciseModal-{{ ex.id }}">
+                            Rinomina
+                        </button>
+                        <form onsubmit="handleDeleteExercise(event, '{{ url_for('gym.elimina_esercizio_personale_ajax') }}')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_exercise">
                             <input type="hidden" name="exercise_id" value="{{ ex.id }}">
                             <button type="submit" class="btn btn-sm btn-delete">X</button>
                         </form>
@@ -57,6 +62,32 @@
                     </div>
                 </td>
             </tr>
+
+            {% if ex.user_id == session.user_id %}
+            <div class="modal fade" id="renameExerciseModal-{{ ex.id }}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Rinomina Esercizio</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <!-- MODIFICA QUI: La chiamata AJAX ora è corretta e punta all'endpoint giusto -->
+                        <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.rinomina_esercizio_ajax') }}', onRenameExerciseSuccess)">
+                            <div class="modal-body">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                                <label for="new_exercise_name-{{ ex.id }}" class="form-label">Nuovo nome</label>
+                                <input type="text" name="new_exercise_name" id="new_exercise_name-{{ ex.id }}" class="form-control" value="{{ ex.name }}" required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                                <button type="submit" class="btn btn-custom" style="margin: 0; min-height: auto;">Salva</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% else %}
             <tr><td colspan="3" class="text-center">Nessun esercizio.</td></tr>
             {% endfor %}
@@ -72,21 +103,26 @@
 <script>
     const DRAFT_KEY_ESERCIZI = `esercizi_draft_{{ session['user_id'] }}`;
     const eserciziForm = document.getElementById('add-exercise-form');
-    const eserciziInput = eserciziForm.querySelector('input[name="name"]');
+    const eserciziInputs = eserciziForm.querySelectorAll('input[name="name"], textarea[name="notes"]');
     function saveEserciziDraft() {
-        if (eserciziInput.value) {
-            localStorage.setItem(DRAFT_KEY_ESERCIZI, eserciziInput.value);
-        } else {
-            localStorage.removeItem(DRAFT_KEY_ESERCIZI);
-        }
+        const draftData = {};
+        eserciziInputs.forEach(input => {
+            if (input.value) { draftData[input.name] = input.value; }
+        });
+        localStorage.setItem(DRAFT_KEY_ESERCIZI, JSON.stringify(draftData));
     }
     function loadEserciziDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_ESERCIZI);
-        if (draft) {
-            eserciziInput.value = draft;
+        const draftJSON = localStorage.getItem(DRAFT_KEY_ESERCIZI);
+        if (draftJSON) {
+            const draftData = JSON.parse(draftJSON);
+            eserciziInputs.forEach(input => {
+                if(draftData[input.name]) {
+                    input.value = draftData[input.name];
+                }
+            });
         }
     }
-    eserciziInput.addEventListener('input', saveEserciziDraft);
+    eserciziInputs.forEach(input => input.addEventListener('input', saveEserciziDraft));
     eserciziForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ESERCIZI));
     document.addEventListener('DOMContentLoaded', loadEserciziDraft);
 </script>

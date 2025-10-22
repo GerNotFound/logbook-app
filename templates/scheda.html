@@ -35,15 +35,20 @@
 
 {% if templates %}
     {% for template in templates %}
-    <div class="mb-4 p-3 border rounded">
+    <div class="mb-4 p-3 border rounded" id="template-{{ template.id }}">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="mb-0">{{ template.name }}</h4>
-            <form method="POST" action="{{ url_for('gym.scheda') }}" onsubmit="return confirm('Sei sicuro di voler eliminare questa scheda e tutti i suoi esercizi?');" style="display: inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="delete_template">
-                <input type="hidden" name="template_id" value="{{ template.id }}">
-                <button type="submit" class="btn btn-sm btn-delete">Elimina Scheda</button>
-            </form>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal-{{ template.id }}">
+                    Rinomina
+                </button>
+                <form method="POST" action="{{ url_for('gym.scheda') }}" onsubmit="return confirm('Sei sicuro di voler eliminare questa scheda e tutti i suoi esercizi?');" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete_template">
+                    <input type="hidden" name="template_id" value="{{ template.id }}">
+                    <button type="submit" class="btn btn-sm btn-delete">Elimina</button>
+                </form>
+            </div>
         </div>
 
         <table class="table table-bordered table-sm">
@@ -56,27 +61,27 @@
             </thead>
             <tbody>
             {% for exercise in template.exercises %}
-                <tr>
+                <tr id="tex-{{ exercise.id }}">
                     <td>{{ exercise.name }}</td>
                     <td>{{ exercise.sets }}</td>
                     <td class="text-center">
-                        <form method="POST" action="{{ url_for('gym.scheda') }}" style="display: inline;">
+                        <!-- MODIFICA QUI: Form convertito per usare AJAX -->
+                        <form onsubmit="handleDeleteExercise(event, '{{ url_for('gym.elimina_esercizio_ajax') }}')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_template_exercise">
                             <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                             <button type="submit" class="btn btn-sm btn-delete">X</button>
                         </form>
                     </td>
                 </tr>
             {% else %}
-                <tr><td colspan="3" class="text-center text-muted">Aggiungi un esercizio a questa scheda.</td></tr>
+                <tr class="no-exercise-row"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio a questa scheda.</td></tr>
             {% endfor %}
             </tbody>
         </table>
 
-        <form id="add-exercise-form-{{ template.id }}" method="POST" action="{{ url_for('gym.scheda') }}">
+        <!-- MODIFICA QUI: Form convertito per usare AJAX -->
+        <form id="add-exercise-form-{{ template.id }}" onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.aggiungi_esercizio_ajax') }}', onAddExerciseSuccess)">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="add_exercise">
             <input type="hidden" name="template_id" value="{{ template.id }}">
             <input type="hidden" name="exercise_id" class="exercise-id-input">
 
@@ -98,6 +103,30 @@
             </div>
         </form>
     </div>
+
+    <div class="modal fade" id="renameTemplateModal-{{ template.id }}" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rinomina Scheda</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <!-- MODIFICA QUI: Form convertito per usare AJAX -->
+                <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.rinomina_scheda_ajax') }}', onRenameTemplateSuccess)">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="template_id" value="{{ template.id }}">
+                        <label for="new_template_name-{{ template.id }}" class="form-label">Nuovo nome</label>
+                        <input type="text" name="new_template_name" id="new_template_name-{{ template.id }}" class="form-control" value="{{ template.name }}" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-custom" style="margin: 0; min-height: auto;">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     {% endfor %}
 {% else %}
     <div class="alert alert-secondary text-center">Nessuna scheda di allenamento trovata. Creane una per iniziare.</div>
@@ -110,6 +139,7 @@
 
 {% block scripts %}
 <script>
+    // La logica di ricerca rimane qui perché specifica della pagina
     const exerciseList = {{ all_exercises|tojson|safe }};
 
     document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
@@ -117,19 +147,10 @@
         const suggestionsDiv = parentForm.querySelector('.suggestions-list');
         const exerciseIdInput = parentForm.querySelector('.exercise-id-input');
 
-        function checkPositionAndDisplay(term) {
-            const rect = searchInput.getBoundingClientRect();
-            const spaceBelow = window.innerHeight - rect.bottom;
-
-            if (spaceBelow < 220) {
-                suggestionsDiv.classList.add('suggestions-list-up');
-            } else {
-                suggestionsDiv.classList.remove('suggestions-list-up');
-            }
-            
+        function showSuggestions(term) {
             const filteredExercises = exerciseList.filter(ex => ex.name.toLowerCase().includes(term)).slice(0, 8);
+            suggestionsDiv.innerHTML = '';
             if (filteredExercises.length > 0) {
-                suggestionsDiv.innerHTML = '';
                 filteredExercises.forEach(ex => {
                     const item = document.createElement('div');
                     item.className = 'suggestion-item';
@@ -154,25 +175,26 @@
                 suggestionsDiv.style.display = 'none';
                 return;
             }
-            checkPositionAndDisplay(searchTerm);
+            showSuggestions(searchTerm);
         });
         
         searchInput.addEventListener('focus', function() {
             const searchTerm = this.value.toLowerCase();
             if (searchTerm.length > 0) {
-                checkPositionAndDisplay(searchTerm);
+                showSuggestions(searchTerm);
             }
         });
     });
     
     document.addEventListener('click', (e) => {
-        if (!e.target.matches('.exercise-search-input')) {
+        if (!e.target.closest('.suggestions-container')) {
             document.querySelectorAll('.suggestions-list').forEach(div => {
                 div.style.display = 'none';
             });
         }
     });
 
+    // La logica delle bozze rimane qui
     const DRAFT_KEY_SCHEDA = `scheda_draft`;
     const schedaForm = document.getElementById('create-template-form');
     if (schedaForm) {
@@ -183,35 +205,5 @@
         schedaForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_SCHEDA));
         document.addEventListener('DOMContentLoaded', loadSchedaDraft);
     }
-    
-    document.querySelectorAll('form[id^="add-exercise-form-"]').forEach(form => {
-        const templateId = form.querySelector('input[name="template_id"]').value;
-        const DRAFT_KEY_ADD_EXERCISE = `add_exercise_draft_${templateId}`;
-        const inputs = form.querySelectorAll('input[type="text"]');
-
-        function saveAddExerciseDraft() {
-            const draftData = {};
-            inputs.forEach(input => {
-                if (input.classList.contains('exercise-search-input')) { draftData['exercise_name'] = input.value; }
-                else if (input.name) { draftData[input.name] = input.value; }
-            });
-            localStorage.setItem(DRAFT_KEY_ADD_EXERCISE, JSON.stringify(draftData));
-        }
-
-        function loadAddExerciseDraft() {
-            const draft = localStorage.getItem(DRAFT_KEY_ADD_EXERCISE);
-            if (draft) {
-                const draftData = JSON.parse(draft);
-                inputs.forEach(input => {
-                    if (input.classList.contains('exercise-search-input') && draftData['exercise_name']) { input.value = draftData['exercise_name']; }
-                    else if (input.name && draftData[input.name]) { input.value = draftData[input.name]; }
-                });
-            }
-        }
-        
-        inputs.forEach(input => input.addEventListener('input', saveAddExerciseDraft));
-        form.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE));
-        loadAddExerciseDraft();
-    });
 </script>
 {% endblock %}

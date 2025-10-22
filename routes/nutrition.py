@@ -41,7 +41,6 @@ def diario_alimentare():
     """
     daily_summary = execute_query(query, {'user_id': user_id}, fetchall=True)
     
-    # --- MODIFICA QUI ---
     entries = [{'date_formatted': row['record_date'].strftime('%d %b %y'), **row} for row in daily_summary]
     return render_template('diario_alimentare.html', title='Diario Alimentare', entries=entries)
     
@@ -166,17 +165,29 @@ def macros():
     targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
     targets = dict(targets_row) if targets_row else {'days_on': 3, 'days_off': 4, 'p_on': 1.8, 'c_on': 5.0, 'f_on': 0.55, 'p_off': 1.8, 'c_off': 3.0, 'f_off': 0.70}
     
-    calcs = {}
+    # --- MODIFICA QUI: Inizializza calcs con valori di default ---
+    calcs = {
+        'p_on_g': 0, 'c_on_g': 0, 'f_on_g': 0, 'cal_on': 0,
+        'p_off_g': 0, 'c_off_g': 0, 'f_off_g': 0, 'cal_off': 0,
+        'weekly_cal': 0, 'avg_daily_cal': 0, 'cg_ratio': 0
+    }
+
     if latest_weight > 0:
-        calcs['p_on_g'] = targets['p_on'] * latest_weight; calcs['c_on_g'] = targets['c_on'] * latest_weight; calcs['f_on_g'] = targets['f_on'] * latest_weight
+        calcs['p_on_g'] = targets['p_on'] * latest_weight
+        calcs['c_on_g'] = targets['c_on'] * latest_weight
+        calcs['f_on_g'] = targets['f_on'] * latest_weight
         calcs['cal_on'] = (calcs['p_on_g'] * 4) + (calcs['c_on_g'] * 4) + (calcs['f_on_g'] * 9)
-        calcs['p_off_g'] = targets['p_off'] * latest_weight; calcs['c_off_g'] = targets['c_off'] * latest_weight; calcs['f_off_g'] = targets['f_off'] * latest_weight
+        calcs['p_off_g'] = targets['p_off'] * latest_weight
+        calcs['c_off_g'] = targets['c_off'] * latest_weight
+        calcs['f_off_g'] = targets['f_off'] * latest_weight
         calcs['cal_off'] = (calcs['p_off_g'] * 4) + (calcs['c_off_g'] * 4) + (calcs['f_off_g'] * 9)
         calcs['weekly_cal'] = (calcs['cal_on'] * targets['days_on']) + (calcs['cal_off'] * targets['days_off'])
         total_days = targets['days_on'] + targets['days_off']
-        if total_days > 0: calcs['avg_daily_cal'] = calcs['weekly_cal'] / 7
+        if total_days > 0:
+            calcs['avg_daily_cal'] = calcs['weekly_cal'] / 7
         weekly_carbs = (calcs['c_on_g'] * targets['days_on']) + (calcs['c_off_g'] * targets['days_off'])
         weekly_fat = (calcs['f_on_g'] * targets['days_on']) + (calcs['f_off_g'] * targets['days_off'])
-        if weekly_fat > 0: calcs['cg_ratio'] = weekly_carbs / weekly_fat
+        if weekly_fat > 0:
+            calcs['cg_ratio'] = weekly_carbs / weekly_fat
     
     return render_template('macros.html', title='Macros', targets=targets, latest_weight=latest_weight, calcs=calcs)

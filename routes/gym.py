@@ -1,6 +1,6 @@
 # routes/gym.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 from .auth import login_required
@@ -9,6 +9,118 @@ from sqlalchemy.exc import IntegrityError
 from extensions import db
 
 gym_bp = Blueprint('gym', __name__)
+
+# --- ENDPOINT API PER AJAX ---
+
+@gym_bp.route('/scheda/rinomina', methods=['POST'])
+@login_required
+def rinomina_scheda_ajax():
+    user_id = session['user_id']
+    template_id = request.form.get('template_id')
+    new_name = request.form.get('new_template_name')
+    if not new_name or not template_id:
+        return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+    try:
+        query = "UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid"
+        execute_query(query, {'name': new_name, 'id': template_id, 'uid': user_id}, commit=True)
+        return jsonify({'success': True, 'newName': new_name, 'templateId': template_id})
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f"Esiste già una scheda con il nome '{new_name}'."}), 409
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Si è verificato un errore interno.'}), 500
+
+@gym_bp.route('/scheda/aggiungi-esercizio', methods=['POST'])
+@login_required
+def aggiungi_esercizio_ajax():
+    user_id = session['user_id']
+    template_id = request.form.get('template_id')
+    exercise_id = request.form.get('exercise_id')
+    sets = request.form.get('sets')
+    csrf_token = request.form.get('csrf_token') # Passa il token per la nuova riga
+    if not all([template_id, exercise_id, sets]):
+        return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+    try:
+        query = "INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets) RETURNING id"
+        result = execute_query(query, {'tid': template_id, 'eid': exercise_id, 'sets': sets}, fetchone=True)
+        db.session.commit()
+        new_id = result['id']
+        exercise_name_result = execute_query("SELECT name FROM exercises WHERE id = :eid", {'eid': exercise_id}, fetchone=True)
+        return jsonify({
+            'success': True,
+            'exercise': { 'id': new_id, 'name': exercise_name_result['name'], 'sets': sets },
+            'csrf_token': csrf_token
+        })
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Errore durante il salvataggio.'}), 500
+
+@gym_bp.route('/scheda/elimina-esercizio', methods=['POST'])
+@login_required
+def elimina_esercizio_ajax():
+    user_id = session['user_id']
+    template_exercise_id = request.form.get('template_exercise_id')
+    if not template_exercise_id:
+        return jsonify({'success': False, 'error': 'ID Esercizio mancante.'}), 400
+    try:
+        query = "DELETE FROM template_exercises te WHERE te.id = :teid AND EXISTS (SELECT 1 FROM workout_templates wt WHERE wt.id = te.template_id AND wt.user_id = :uid)"
+        execute_query(query, {'teid': template_exercise_id, 'uid': user_id}, commit=True)
+        return jsonify({'success': True})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Errore durante l\'eliminazione.'}), 500
+
+@gym_bp.route('/esercizi/rinomina', methods=['POST'])
+@login_required
+def rinomina_esercizio_ajax():
+    user_id = session['user_id']
+    exercise_id = request.form.get('exercise_id')
+    new_name = request.form.get('new_exercise_name')
+    if not new_name or not exercise_id:
+        return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+    try:
+        query = "UPDATE exercises SET name = :name WHERE id = :id AND user_id = :user_id"
+        execute_query(query, {'name': new_name, 'id': exercise_id, 'user_id': user_id}, commit=True)
+        return jsonify({'success': True, 'newName': new_name, 'exerciseId': exercise_id})
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f"Esiste già un esercizio con il nome '{new_name}'."}), 409
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
+@gym_bp.route('/esercizi/aggiorna-note', methods=['POST'])
+@login_required
+def aggiorna_note_ajax():
+    user_id = session['user_id']
+    exercise_id = request.form.get('exercise_id')
+    notes = request.form.get('notes')
+    if exercise_id is None:
+        return jsonify({'success': False, 'error': 'ID Esercizio mancante.'}), 400
+    try:
+        query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes) ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes"
+        execute_query(query, {'user_id': user_id, 'eid': exercise_id, 'notes': notes}, commit=True)
+        return jsonify({'success': True})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+        
+@gym_bp.route('/esercizi/elimina', methods=['POST'])
+@login_required
+def elimina_esercizio_personale_ajax():
+    user_id = session['user_id']
+    exercise_id = request.form.get('exercise_id')
+    if not exercise_id:
+        return jsonify({'success': False, 'error': 'ID Esercizio mancante.'}), 400
+    try:
+        execute_query('DELETE FROM exercises WHERE id = :id AND user_id = :user_id', {'id': exercise_id, 'user_id': user_id}, commit=True)
+        return jsonify({'success': True})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
+# --- ROTTE TRADIZIONALI ---
 
 @gym_bp.route('/palestra')
 @login_required
@@ -21,31 +133,61 @@ def esercizi():
     user_id = session['user_id']
     if request.method == 'POST':
         action = request.form.get('action')
+        # MODIFICA: L'unica azione gestita qui è 'add_exercise'
         if action == 'add_exercise':
             name = request.form.get('name')
+            notes = request.form.get('notes')
             if name:
                 try:
-                    execute_query('INSERT INTO exercises (name, user_id) VALUES (:name, :user_id)', {'name': name, 'user_id': user_id}, commit=True)
+                    new_exercise_query = 'INSERT INTO exercises (name, user_id) VALUES (:name, :user_id) RETURNING id'
+                    result = execute_query(new_exercise_query, {'name': name, 'user_id': user_id}, fetchone=True)
+                    db.session.commit()
+                    new_exercise_id = result['id']
+                    if new_exercise_id and notes:
+                        notes_query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes)"
+                        execute_query(notes_query, {'user_id': user_id, 'eid': new_exercise_id, 'notes': notes}, commit=True)
                     flash('Esercizio personale aggiunto.', 'success')
                 except IntegrityError:
                     db.session.rollback()
                     flash(f"Errore: L'esercizio '{name}' esiste già.", 'danger')
-        elif action == 'delete_exercise':
-            exercise_id = request.form.get('exercise_id')
-            execute_query('DELETE FROM exercises WHERE id = :id AND user_id = :user_id', {'id': exercise_id, 'user_id': user_id}, commit=True)
-            flash('Esercizio personale eliminato.', 'success')
-        elif action == 'update_notes':
-            exercise_id = request.form.get('exercise_id')
-            notes = request.form.get('notes')
-            query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes) ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes"
-            execute_query(query, {'user_id': user_id, 'eid': exercise_id, 'notes': notes}, commit=True)
-            flash('Note personali aggiornate.', 'success')
         return redirect(url_for('gym.esercizi'))
     
     query = "SELECT e.id, e.name, e.user_id, uen.notes FROM exercises e LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE e.user_id IS NULL OR e.user_id = :user_id ORDER BY e.name"
     exercises = execute_query(query, {'user_id': user_id}, fetchall=True)
     return render_template('esercizi.html', title='Esercizi', exercises=exercises)
 
+@gym_bp.route('/scheda', methods=['GET', 'POST'])
+@login_required
+def scheda():
+    user_id = session['user_id']
+    if request.method == 'POST':
+        action = request.form.get('action')
+        template_id = request.form.get('template_id')
+        if action == 'add_template':
+            name = request.form.get('template_name')
+            if name:
+                try:
+                    execute_query('INSERT INTO workout_templates (user_id, name) VALUES (:uid, :name)', {'uid': user_id, 'name': name}, commit=True)
+                    flash('Scheda creata con successo.', 'success')
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
+        elif action == 'delete_template':
+            execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
+            flash('Scheda eliminata con successo.', 'success')
+        return redirect(url_for('gym.scheda'))
+        
+    templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
+    templates = []
+    for t in templates_raw:
+        template_dict = dict(t)
+        exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': t['id']}, fetchall=True)
+        template_dict['exercises'] = exercises
+        templates.append(template_dict)
+    all_exercises = execute_query('SELECT * FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
+    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, all_exercises=all_exercises)
+
+# ... le altre rotte (diario_palestra, ecc.) rimangono invariate ...
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required
 def esercizio_dettaglio(exercise_id):
@@ -61,7 +203,6 @@ def esercizio_dettaglio(exercise_id):
     for row in history_raw:
         ts = row['session_timestamp']
         if ts not in sessions:
-            # --- MODIFICA QUI ---
             sessions[ts] = { 'date_formatted': row['record_date'].strftime('%d %b %y'), 'comment': row['comment'], 'sets': [] }
         sessions[ts]['sets'].append(dict(row))
     return render_template('esercizio_dettaglio.html', title=f"Progressione - {exercise['name']}", exercise=exercise, sessions=sessions)
@@ -164,14 +305,12 @@ def sessione_palestra(date_param, session_ts=None):
                     ts = row['session_timestamp']
                     if ts not in history_grouped:
                         if len(history_grouped) >= 2: break
-                        # --- MODIFICA QUI ---
                         history_grouped[ts] = {'date_formatted': row['record_date'].strftime('%d %b'), 'sets': []}
                     history_grouped[ts]['sets'].append(f"{row['weight']}kg x {row['reps']}")
                 ex_dict['history'] = history_grouped
 
                 last_comment = last_comment_by_exercise.get(ex['exercise_id'])
                 ex_dict['last_comment'] = last_comment['comment'] if last_comment else None
-                # --- MODIFICA QUI ---
                 ex_dict['last_comment_date'] = last_comment['record_date'].strftime('%d %b') if last_comment else None
                 templates_dict[ex['template_id']]['exercises'].append(ex_dict)
 
@@ -184,47 +323,6 @@ def sessione_palestra(date_param, session_ts=None):
         for row in comment_rows: log_data[f"comment_{row['exercise_id']}"] = row['comment']
     
     return render_template('sessione_palestra.html', title='Sessione Palestra', templates=templates, log_data=log_data, record_date=record_date, date_formatted=date_formatted, prev_day=prev_day, next_day=next_day, is_today=is_today, is_editing=(session_ts is not None), session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'))
-
-@gym_bp.route('/scheda', methods=['GET', 'POST'])
-@login_required
-def scheda():
-    user_id = session['user_id']
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add_template':
-            name = request.form.get('template_name')
-            if name:
-                try:
-                    execute_query('INSERT INTO workout_templates (user_id, name) VALUES (:uid, :name)', {'uid': user_id, 'name': name}, commit=True)
-                    flash('Scheda creata con successo.', 'success')
-                except IntegrityError:
-                    db.session.rollback()
-                    flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
-        elif action == 'delete_template':
-            template_id = request.form.get('template_id')
-            execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
-            flash('Scheda eliminata con successo.', 'success')
-        elif action == 'add_exercise':
-            template_id = request.form.get('template_id'); exercise_id = request.form.get('exercise_id'); sets = request.form.get('sets')
-            if template_id and exercise_id and sets:
-                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)', 
-                              {'tid': template_id, 'eid': exercise_id, 'sets': sets}, commit=True)
-                flash('Esercizio aggiunto alla scheda.', 'success')
-        elif action == 'delete_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
-            flash('Esercizio rimosso dalla scheda.', 'success')
-        return redirect(url_for('gym.scheda'))
-        
-    templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    templates = []
-    for t in templates_raw:
-        template_dict = dict(t)
-        exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': t['id']}, fetchall=True)
-        template_dict['exercises'] = exercises
-        templates.append(template_dict)
-    all_exercises = execute_query('SELECT * FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, all_exercises=all_exercises)
 
 @gym_bp.route('/diario_palestra', methods=['GET', 'POST'])
 @login_required
@@ -243,7 +341,6 @@ def diario_palestra():
     workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'duration': None, 'template_name': 'N/D', 'exercises': defaultdict(list)})})
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
-        # --- MODIFICA QUI ---
         workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
         session_details = sessions_info.get(ts, {})
         s_data = workouts_by_day[day]['sessions'][ts]
