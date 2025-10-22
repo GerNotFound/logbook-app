@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta
 from flask import Flask
-from extensions import db, csrf, talisman # REINTRODUCIAMO L'IMPORT
+from extensions import db, csrf, talisman
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +16,14 @@ def create_app():
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
     
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+    
+    # --- MODIFICA QUI: SOLUZIONE PER L'ERRORE DEL DATABASE SU KOYEB ---
+    # Aggiungi queste opzioni per gestire meglio le connessioni al database
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+    }
+    
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-insecure') 
@@ -36,24 +44,24 @@ def create_app():
     db.init_app(app)
     csrf.init_app(app)
     
-    # --- CONFIGURAZIONE DI SICUREZZA TALISMAN CORRETTA ---
+    # Configurazione di Sicurezza Talisman (già corretta)
     csp = {
         'default-src': "'self'",
         'script-src': [
             "'self'",
             'https://cdn.jsdelivr.net',
-            "'unsafe-inline'"  # Permette gli script inline (LA NOSTRA SOLUZIONE)
+            "'unsafe-inline'"
         ],
         'style-src': [
             "'self'",
             'https://cdn.jsdelivr.net',
             'https://fonts.googleapis.com',
-            "'unsafe-inline'" # Aggiunto per massima compatibilità
+            "'unsafe-inline'"
         ],
         'font-src': [
             "'self'",
             'https://fonts.gstatic.com',
-            'https://cdn.jsdelivr.net' # Permette i font per le icone di Bootstrap
+            'https://cdn.jsdelivr.net'
         ],
         'img-src': [
             "'self'",
@@ -61,7 +69,6 @@ def create_app():
         ],
     }
     
-    # Inizializza Talisman (forza HTTPS solo in produzione)
     talisman.init_app(app, content_security_policy=csp, force_https=not app.debug)
 
 
