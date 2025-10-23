@@ -35,7 +35,7 @@
             <tr>
                 <td>{{ ex.name }}</td>
                 <td class="text-center align-middle">
-                    <form method="POST" onsubmit="return confirm('Sei sicuro di voler eliminare questo esercizio?');">
+                    <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_exercise">
                         <input type="hidden" name="exercise_id" value="{{ ex.id }}">
@@ -56,7 +56,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_ADD_EXERCISE = `admin_add_exercise_draft`;
     const addExerciseForm = document.getElementById('add-exercise-form');
     const exerciseInput = addExerciseForm.querySelector('input[name="name"]');

@@ -36,7 +36,7 @@
                     <td class="text-center align-middle">
                         <button type="submit" class="btn btn-sm btn-outline-light">Salva</button>
                 </form>
-                <form method="POST" class="d-inline" onsubmit="return confirm('Sei sicuro?');">
+                <form method="POST" class="d-inline" data-confirm="Sei sicuro?">
                     <!-- MODIFICA QUI: Aggiunto token CSRF -->
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="delete_food">
