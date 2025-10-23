@@ -35,7 +35,8 @@
                             <small class="text-muted">Ore: {{ session_data.time_formatted }} | Durata: {{ session_data.duration }} min</small>
                         </div>
                         <div>
-                            <a href="{{ url_for('gym.sessione_palestra', date_param=day, session_ts=ts) }}" class="btn btn-sm btn-outline-dark">✏️</a>
+                            <!-- MODIFICA QUI: btn-outline-dark -> btn-outline-light -->
+                            <a href="{{ url_for('gym.sessione_palestra', date_param=day, session_ts=ts) }}" class="btn btn-sm btn-outline-light">✏️</a>
                             <form method="POST" action="{{ url_for('gym.diario_palestra') }}" style="display: inline;" onsubmit="return confirm('Sei sicuro di voler eliminare questa sessione di allenamento?');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="session_to_delete" value="{{ ts }}">

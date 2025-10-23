@@ -83,7 +83,6 @@
     </div>
 </div>
 {% else %}
-<!-- MODIFICA QUI: Sostituito il link con un pulsante -->
 <div class="text-center p-3 border rounded">
     <p class="text-muted">Per visualizzare il riepilogo dei calcoli, inserisci almeno un valore per il tuo peso.</p>
     <a href="{{ url_for('main.misure') }}" class="btn btn-custom w-100" style="padding: 15px; min-height: auto;">VAI A MISURE</a>
@@ -94,27 +93,4 @@
     <button type="submit" form="macros-form" class="btn btn-custom action-btn">SALVA</button>
     <a href="{{ url_for('nutrition.alimentazione') }}" class="btn btn-custom action-btn">INDIETRO</a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    const DRAFT_KEY_MACROS = `macros_draft_{{ session['user_id'] }}`;
-    const macrosForm = document.getElementById('macros-form');
-    const macrosInputs = macrosForm.querySelectorAll('input');
-    function saveMacrosDraft() {
-        const draftData = {};
-        macrosInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
-        localStorage.setItem(DRAFT_KEY_MACROS, JSON.stringify(draftData));
-    }
-    function loadMacrosDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_MACROS);
-        if (draft) {
-            const draftData = JSON.parse(draft);
-            macrosInputs.forEach(input => { if (draftData[input.name]) input.value = draftData[input.name]; });
-        }
-    }
-    macrosInputs.forEach(input => input.addEventListener('input', saveMacrosDraft));
-    macrosForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_MACROS));
-    document.addEventListener('DOMContentLoaded', loadMacrosDraft);
-</script>
 {% endblock %}

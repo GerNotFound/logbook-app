@@ -31,7 +31,8 @@
         <div id="stopwatch" style="font-size: 2.5rem; font-weight: bold;">00:00</div>
         <button id="startBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 15px; line-height: 1;">▶</button>
         <button id="pauseBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px; font-size: 1.2rem;">❚❚</button>
-        <button id="stopBtn" class="btn btn-light btn-sm" style="border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px;">■</button>
+        <!-- MODIFICA QUI: btn-light -> btn-outline-light -->
+        <button id="stopBtn" class="btn btn-outline-light btn-sm" style="border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px;">■</button>
     </div>
 </div>
 
@@ -45,7 +46,6 @@
             {% endfor %}
         </select>
     {% else %}
-        <!-- MODIFICA QUI: Link trasformato in pulsante -->
         <p class="text-muted">Nessuna scheda creata. Vai alla sezione apposita per iniziare.</p>
         <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom w-100 d-block mt-2">VAI A SCHEDA</a>
     {% endif %}
@@ -76,7 +76,6 @@
 
 {% block scripts %}
 <script>
-    // ...tutto il codice javascript rimane invariato...
     const templatesData = {{ templates|tojson|safe }};
     const logData = {{ log_data|tojson|safe }};
     const templateSelector = document.getElementById('template-selector');
@@ -186,8 +185,9 @@
                 const draftRepsKey = `reps_${ex.exercise_id}_${i}`;
                 const repsValue = draftFields[draftRepsKey] || (logData[logKey] ? logData[logKey].reps : '');
                 const weightValue = draftFields[draftWeightKey] || (logData[logKey] ? logData[logKey].weight : '');
+                // MODIFICA QUI: bg-light text-dark -> bg-secondary
                 setsHtml += `<div class="row g-2 align-items-center mb-2">
-                                <div class="col-2 text-center"><span class="badge bg-light text-dark">Set ${i}</span></div>
+                                <div class="col-2 text-center"><span class="badge bg-secondary">Set ${i}</span></div>
                                 <div class="col-5"><input type="text" name="weight_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Peso (kg)" value="${weightValue}"></div>
                                 <div class="col-5"><input type="number" min="0" step="1" name="reps_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Reps" value="${repsValue}"></div>
                              </div>`;

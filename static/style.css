@@ -77,16 +77,26 @@ h1 {
     padding-right: 40px;
 }
 
+/* --- MODIFICA QUI: REGOLE GLOBALI PER LE TABELLE --- */
 .table {
-    color: white;
+    --bs-table-color: white;
+    --bs-table-bg: #111;
+    --bs-table-border-color: #444;
+    --bs-table-striped-color: white;
+    --bs-table-striped-bg: #1a1a1a;
+    --bs-table-hover-color: white;
+    --bs-table-hover-bg: #222;
 }
-.table-bordered {
+
+.table-bordered th,
+.table-bordered td {
     border-color: #444;
 }
-.table-striped>tbody>tr:nth-of-type(odd)>* {
-    --bs-table-accent-bg: #1a1a1a; 
-    color: white;
+
+.table thead th {
+    background-color: #212529;
 }
+/* --- FINE MODIFICA TABELLE --- */
 
 .accordion-button {
     background-color: #212529;
@@ -107,6 +117,10 @@ h1 {
 .modal-header, .modal-footer {
     border-bottom-color: #444;
     border-top-color: #444;
+}
+
+.modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
 }
 
 .alert {
@@ -160,7 +174,6 @@ hr {
 .sticky-bottom-nav .full-width-btn { width: 100%; margin: 0; padding: 12px; font-size: 16px; min-height: auto; }
 @media (max-width: 768px) { .btn-custom { font-size: 16px; padding: 18px; } .container-mobile { padding: 0 10px; } }
 
-/* NUOVO: Stile per il numero di versione */
 .app-version {
     position: fixed;
     bottom: 10px;

@@ -38,7 +38,8 @@
                 <td>{{ '%.1f' % entry.total_fat if entry.total_fat is not none else '' }}</td>
                 <td>{{ '%.0f' % entry.calories if entry.calories is not none else '' }}</td>
                 <td class="text-center">
-                    <a href="{{ url_for('nutrition.dieta', date_str=entry.record_date) }}" class="btn btn-sm btn-outline-dark">✏️</a>
+                    <!-- MODIFICA QUI: btn-outline-dark -> btn-outline-light -->
+                    <a href="{{ url_for('nutrition.dieta', date_str=entry.record_date) }}" class="btn btn-sm btn-outline-light">✏️</a>
                 </td>
             </tr>
             {% else %}

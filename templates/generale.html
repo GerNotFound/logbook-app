@@ -17,6 +17,7 @@
 </div>
 
 <div class="table-responsive">
+    <!-- MODIFICA: Ripristinata classe semplice 'table-bordered' -->
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -51,7 +52,6 @@
                 <td>{{ '%s%%' % (entry.bfp | round(1)) if entry.bfp is not none else '-' }}</td>
                 <td>{{ entry.bmi | round(1) if entry.bmi is not none else '-' }}</td>
                 <td>
-                    <!-- MODIFICHE QUI -->
                     <a href="{{ url_for('main.modifica_misure', record_date=entry.record_date) }}" class="btn btn-sm btn-outline-light">✏️</a>
                     <form method="POST" action="{{ url_for('main.elimina_giorno') }}" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -70,7 +70,6 @@
 </div>
 
 <div class="sticky-bottom-nav">
-    <!-- MODIFICA QUI -->
     <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
 {% endblock %}

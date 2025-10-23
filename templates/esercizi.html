@@ -11,7 +11,7 @@
 
 <div class="mb-4 p-3 border rounded">
     <h5>Aggiungi Nuovo Esercizio Personale</h5>
-    <form id="add-exercise-form" method="POST">
+    <form id="add-exercise-form" method="POST" action="{{ url_for('gym.esercizi') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add_exercise">
         <div class="row g-2">
@@ -23,8 +23,9 @@
 </div>
 
 <div class="table-responsive mb-4">
+    <!-- MODIFICA QUI: Ripristinata classe semplice 'table-bordered' -->
     <table class="table table-bordered">
-        <thead class="table-dark">
+        <thead>
             <tr>
                 <th>Esercizio</th>
                 <th>Le Tue Note</th>
@@ -39,10 +40,11 @@
                     {% if ex.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}
                 </td>
                 <td>
-                    <form method="POST" data-ajax-url="{{ url_for('gym.aggiorna_note_ajax') }}" data-ajax-success="onUpdateNotesSuccess">
+                    <form method="POST" action="{{ url_for('gym.esercizi') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_notes">
                         <input type="hidden" name="exercise_id" value="{{ ex.id }}">
-                        <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Aggiungi una nota personale...">{{ ex.notes or '' }}</textarea>
+                        <textarea name="notes" class="form-control form-control-sm" rows="2">{{ ex.notes or '' }}</textarea>
                         <button type="submit" class="btn btn-sm btn-outline-light mt-1 w-100">Salva Nota</button>
                     </form>
                 </td>
@@ -50,11 +52,10 @@
                     <div class="d-grid gap-2">
                         <a href="{{ url_for('gym.esercizio_dettaglio', exercise_id=ex.id) }}" class="btn btn-sm btn-outline-light">Progressione</a>
                         {% if ex.user_id == session.user_id %}
-                        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameExerciseModal-{{ ex.id }}">
-                            Rinomina
-                        </button>
-                        <form method="POST" data-ajax-url="{{ url_for('gym.elimina_esercizio_personale_ajax') }}" data-ajax-success="onDeleteExerciseSuccess" data-ajax-confirm="Sei sicuro?">
+                        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameExerciseModal-{{ ex.id }}">Rinomina</button>
+                        <form method="POST" action="{{ url_for('gym.esercizi') }}" onsubmit="return confirm('Sei sicuro?');" class="d-grid">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_exercise">
                             <input type="hidden" name="exercise_id" value="{{ ex.id }}">
                             <button type="submit" class="btn btn-sm btn-delete w-100">X</button>
                         </form>
@@ -67,14 +68,8 @@
             <div class="modal fade" id="renameExerciseModal-{{ ex.id }}" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Rinomina Esercizio</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <form method="POST"
-                              action="{{ url_for('gym.esercizi') }}"
-                              data-ajax-url="{{ url_for('gym.rinomina_esercizio_ajax') }}"
-                              data-ajax-success="onRenameExerciseSuccess">
+                        <div class="modal-header"><h5 class="modal-title">Rinomina Esercizio</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                        <form method="POST" action="{{ url_for('gym.esercizi') }}">
                             <div class="modal-body">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="action" value="rename_exercise">
@@ -97,36 +92,5 @@
         </tbody>
     </table>
 </div>
-
-<div class="sticky-bottom-nav">
-    <a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
-</div>
-{% endblock %}
-{% block scripts %}
-<script>
-    const DRAFT_KEY_ESERCIZI = `esercizi_draft_{{ session['user_id'] }}`;
-    const eserciziForm = document.getElementById('add-exercise-form');
-    const eserciziInputs = eserciziForm.querySelectorAll('input[name="name"], textarea[name="notes"]');
-    function saveEserciziDraft() {
-        const draftData = {};
-        eserciziInputs.forEach(input => {
-            if (input.value) { draftData[input.name] = input.value; }
-        });
-        localStorage.setItem(DRAFT_KEY_ESERCIZI, JSON.stringify(draftData));
-    }
-    function loadEserciziDraft() {
-        const draftJSON = localStorage.getItem(DRAFT_KEY_ESERCIZI);
-        if (draftJSON) {
-            const draftData = JSON.parse(draftJSON);
-            eserciziInputs.forEach(input => {
-                if(draftData[input.name]) {
-                    input.value = draftData[input.name];
-                }
-            });
-        }
-    }
-    eserciziInputs.forEach(input => input.addEventListener('input', saveEserciziDraft));
-    eserciziForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ESERCIZI));
-    document.addEventListener('DOMContentLoaded', loadEserciziDraft);
-</script>
+<div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
 {% endblock %}
