@@ -53,7 +53,6 @@ def diario_corsa():
     entries = []
     for entry in entries_raw:
         entry_dict = dict(entry)
-        # --- MODIFICA QUI ---
         entry_dict['date_formatted'] = entry['record_date'].strftime('%d %b %y')
         entries.append(entry_dict)
 
@@ -86,7 +85,6 @@ def modifica_corsa(entry_id):
         return redirect(url_for('cardio.diario_corsa'))
 
     entry_dict = dict(entry)
-    # --- MODIFICA QUI ---
     entry_dict['date_formatted'] = entry['record_date'].strftime('%d %b %y')
     return render_template('modifica_cardio.html', title='Modifica Corsa', entry=entry_dict)
 

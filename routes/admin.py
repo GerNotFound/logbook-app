@@ -12,8 +12,6 @@ import os
 
 admin_bp = Blueprint('admin', __name__)
 
-# ... (le rotte fino a admin_utente_diario_palestra rimangono invariate) ...
-
 @admin_bp.route('/')
 @login_required
 @admin_required
@@ -175,7 +173,6 @@ def admin_utente_diario_palestra(user_id):
     workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'exercises': defaultdict(list)})})
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
-        # --- MODIFICA QUI ---
         workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
         workouts_by_day[day]['sessions'][ts]['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
         workouts_by_day[day]['sessions'][ts]['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
@@ -189,7 +186,6 @@ def admin_utente_diario_corsa(user_id):
     user = execute_query('SELECT * FROM users WHERE id = :id', {'id': user_id}, fetchone=True)
     if not user: return redirect(url_for('admin.admin_utenti'))
     entries_raw = execute_query('SELECT * FROM cardio_log WHERE user_id = :user_id ORDER BY record_date DESC, id DESC', {'user_id': user_id}, fetchall=True)
-    # --- MODIFICA QUI ---
     entries = [{'date_formatted': entry['record_date'].strftime('%d %b %y'), **entry} for entry in entries_raw]
     return render_template('admin_utente_diario_corsa.html', title=f'Diario Corsa di {user["username"]}', user=user, entries=entries)
 

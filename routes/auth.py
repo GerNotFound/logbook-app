@@ -1,9 +1,9 @@
 # routes/auth.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 import bcrypt
 from functools import wraps
-from extensions import db
+from secrets import token_hex
 from utils import execute_query
 
 auth_bp = Blueprint('auth', __name__)
@@ -45,6 +45,7 @@ def login():
         
         if user and bcrypt.checkpw(password, user['password'].encode('utf-8')):
             session.clear()
+            session['session_nonce'] = token_hex(16)
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = user['is_admin']
@@ -54,7 +55,7 @@ def login():
                 session.permanent = True
             
             if not user['has_seen_welcome_message']:
-                flash('AVVISO: SE USI QUESTA APP L\'ADMIN PUÒ MODIFICARE O CANCELLARE I TUOI DATI PERCHÉ NON SA PROGRAMMARE. SE NON SEI D\'ACCORDO NON USARE QUESTA APP.', 'warning')
+                flash('Benvenuto in Logbook! Gli amministratori possono aiutarti a mantenere aggiornati i tuoi dati di allenamento. Puoi sempre gestire le autorizzazioni dalle impostazioni del tuo profilo.', 'info')
                 execute_query('UPDATE users SET has_seen_welcome_message = 1 WHERE id = :id', {'id': user['id']}, commit=True)
             
             if user['is_admin']:
@@ -62,6 +63,7 @@ def login():
             else:
                 return redirect(url_for('main.home'))
         else:
+            current_app.logger.warning('Tentativo di login fallito per username: %s', username)
             return render_template('login.html', title='Login', error='Credenziali non valide.')
     return render_template('login.html', title='Login')
 

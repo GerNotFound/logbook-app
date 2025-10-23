@@ -3,7 +3,7 @@
 <div class="row">
     <div class="col-12">
         <h1 class="mb-4">LOGBOOK - SCHEDA</h1>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -65,8 +65,10 @@
                     <td>{{ exercise.name }}</td>
                     <td>{{ exercise.sets }}</td>
                     <td class="text-center">
-                        <!-- MODIFICA QUI: Form convertito per usare AJAX -->
-                        <form onsubmit="handleDeleteExercise(event, '{{ url_for('gym.elimina_esercizio_ajax') }}')">
+                        <form method="POST"
+                              data-ajax-url="{{ url_for('gym.elimina_esercizio_ajax') }}"
+                              data-ajax-success="onTemplateExerciseDeleted"
+                              data-ajax-confirm="Sei sicuro di voler eliminare questo esercizio dalla scheda?">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                             <button type="submit" class="btn btn-sm btn-delete">X</button>
@@ -79,8 +81,9 @@
             </tbody>
         </table>
 
-        <!-- MODIFICA QUI: Form convertito per usare AJAX -->
-        <form id="add-exercise-form-{{ template.id }}" onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.aggiungi_esercizio_ajax') }}', onAddExerciseSuccess)">
+        <form id="add-exercise-form-{{ template.id }}"
+              data-ajax-url="{{ url_for('gym.aggiungi_esercizio_ajax') }}"
+              data-ajax-success="onAddExerciseSuccess">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="template_id" value="{{ template.id }}">
             <input type="hidden" name="exercise_id" class="exercise-id-input">
@@ -111,10 +114,13 @@
                     <h5 class="modal-title">Rinomina Scheda</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <!-- MODIFICA QUI: Form convertito per usare AJAX -->
-                <form onsubmit="handleAjaxFormSubmit(event, '{{ url_for('gym.rinomina_scheda_ajax') }}', onRenameTemplateSuccess)">
+                <form method="POST"
+                      action="{{ url_for('gym.scheda') }}"
+                      data-ajax-url="{{ url_for('gym.rinomina_scheda_ajax') }}"
+                      data-ajax-success="onRenameTemplateSuccess">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="rename_template">
                         <input type="hidden" name="template_id" value="{{ template.id }}">
                         <label for="new_template_name-{{ template.id }}" class="form-label">Nuovo nome</label>
                         <input type="text" name="new_template_name" id="new_template_name-{{ template.id }}" class="form-control" value="{{ template.name }}" required>
@@ -139,7 +145,6 @@
 
 {% block scripts %}
 <script>
-    // La logica di ricerca rimane qui perché specifica della pagina
     const exerciseList = {{ all_exercises|tojson|safe }};
 
     document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
@@ -177,7 +182,7 @@
             }
             showSuggestions(searchTerm);
         });
-        
+
         searchInput.addEventListener('focus', function() {
             const searchTerm = this.value.toLowerCase();
             if (searchTerm.length > 0) {
@@ -185,7 +190,7 @@
             }
         });
     });
-    
+
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.suggestions-container')) {
             document.querySelectorAll('.suggestions-list').forEach(div => {
@@ -194,16 +199,22 @@
         }
     });
 
-    // La logica delle bozze rimane qui
     const DRAFT_KEY_SCHEDA = `scheda_draft`;
     const schedaForm = document.getElementById('create-template-form');
     if (schedaForm) {
-        const schedaInput = schedaForm.querySelector('input[name="template_name"]');
-        function saveSchedaDraft() { if (schedaInput.value) localStorage.setItem(DRAFT_KEY_SCHEDA, schedaInput.value); }
-        function loadSchedaDraft() { const draft = localStorage.getItem(DRAFT_KEY_SCHEDA); if (draft) schedaInput.value = draft; }
-        schedaInput.addEventListener('input', saveSchedaDraft);
+        const draftInput = schedaForm.querySelector('input[name="template_name"]');
+        draftInput.addEventListener('input', () => {
+            if (draftInput.value) {
+                localStorage.setItem(DRAFT_KEY_SCHEDA, draftInput.value);
+            } else {
+                localStorage.removeItem(DRAFT_KEY_SCHEDA);
+            }
+        });
         schedaForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_SCHEDA));
-        document.addEventListener('DOMContentLoaded', loadSchedaDraft);
+        const savedDraft = localStorage.getItem(DRAFT_KEY_SCHEDA);
+        if (savedDraft) {
+            draftInput.value = savedDraft;
+        }
     }
 </script>
 {% endblock %}
