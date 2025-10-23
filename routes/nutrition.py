@@ -3,6 +3,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from datetime import date, datetime, timedelta
 from .auth import login_required
 from utils import execute_query
+from sqlalchemy.exc import IntegrityError
+from extensions import db
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -116,17 +118,39 @@ def alimenti():
     user_id = session['user_id']
     if request.method == 'POST':
         action = request.form.get('action')
+        food_id = request.form.get('food_id')
+
         if action == 'add':
             name = request.form.get('name'); protein = float(request.form.get('protein', 0)); carbs = float(request.form.get('carbs', 0)); fat = float(request.form.get('fat', 0))
             calories = (protein * 4) + (carbs * 4) + (fat * 9)
-            execute_query('INSERT INTO foods (name, protein, carbs, fat, calories, user_id) VALUES (:name, :p, :c, :f, :cal, :uid)',
-                          {'name': name, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'uid': user_id}, commit=True)
-            flash('Alimento personale aggiunto.', 'success')
+            try:
+                execute_query('INSERT INTO foods (name, protein, carbs, fat, calories, user_id) VALUES (:name, :p, :c, :f, :cal, :uid)',
+                              {'name': name, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'uid': user_id}, commit=True)
+                flash('Alimento personale aggiunto.', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                flash(f"Errore: L'alimento '{name}' esiste già.", 'danger')
+
         elif action == 'delete':
-            food_id = request.form.get('food_id')
             execute_query('DELETE FROM foods WHERE id = :id AND user_id = :uid', {'id': food_id, 'uid': user_id}, commit=True)
             flash('Alimento personale eliminato.', 'success')
+        
+        # NUOVA LOGICA: Rinomina Alimento
+        elif action == 'rename_food':
+            new_name = request.form.get('new_food_name')
+            if new_name and food_id:
+                try:
+                    query = "UPDATE foods SET name = :name WHERE id = :id AND user_id = :uid"
+                    execute_query(query, {'name': new_name, 'id': food_id, 'uid': user_id}, commit=True)
+                    flash('Alimento rinominato con successo.', 'success')
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(f"Errore: Esiste già un alimento con il nome '{new_name}'.", 'danger')
+
+        if food_id:
+            return redirect(url_for('nutrition.alimenti', _anchor=f"food-{food_id}"))
         return redirect(url_for('nutrition.alimenti'))
+
     foods = execute_query('SELECT * FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
     return render_template('alimenti.html', title='Database Alimenti', foods=foods)
 
@@ -165,7 +189,6 @@ def macros():
     targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
     targets = dict(targets_row) if targets_row else {'days_on': 3, 'days_off': 4, 'p_on': 1.8, 'c_on': 5.0, 'f_on': 0.55, 'p_off': 1.8, 'c_off': 3.0, 'f_off': 0.70}
     
-    # --- MODIFICA QUI: Inizializza calcs con valori di default ---
     calcs = {
         'p_on_g': 0, 'c_on_g': 0, 'f_on_g': 0, 'cal_on': 0,
         'p_off_g': 0, 'c_off_g': 0, 'f_off_g': 0, 'cal_off': 0,

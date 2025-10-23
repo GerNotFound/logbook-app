@@ -77,7 +77,6 @@ h1 {
     padding-right: 40px;
 }
 
-/* --- MODIFICA QUI: REGOLE GLOBALI PER LE TABELLE --- */
 .table {
     --bs-table-color: white;
     --bs-table-bg: #111;
@@ -96,7 +95,6 @@ h1 {
 .table thead th {
     background-color: #212529;
 }
-/* --- FINE MODIFICA TABELLE --- */
 
 .accordion-button {
     background-color: #212529;
@@ -122,6 +120,15 @@ h1 {
 .modal-header .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
 }
+
+/* --- MODIFICA QUI: Bug Fix per il layer grigio su mobile --- */
+.modal {
+    z-index: 1055; /* Assicura che il modal sia sopra lo sfondo */
+}
+.modal-backdrop {
+    z-index: 1050; /* Assicura che lo sfondo sia sotto il modal */
+}
+/* --- FINE MODIFICA --- */
 
 .alert {
     background-color: #343a40;

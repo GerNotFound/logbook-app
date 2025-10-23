@@ -31,7 +31,6 @@
         <div id="stopwatch" style="font-size: 2.5rem; font-weight: bold;">00:00</div>
         <button id="startBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 15px; line-height: 1;">▶</button>
         <button id="pauseBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px; font-size: 1.2rem;">❚❚</button>
-        <!-- MODIFICA QUI: btn-light -> btn-outline-light -->
         <button id="stopBtn" class="btn btn-outline-light btn-sm" style="border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px;">■</button>
     </div>
 </div>
@@ -67,7 +66,8 @@
 </form>
 
 <div class="sticky-bottom-nav">
-    <button type="submit" form="workout-form" class="btn btn-custom action-btn">
+    <!-- MODIFICA QUI: Aggiunto onclick con confirm per il salvataggio -->
+    <button type="submit" form="workout-form" class="btn btn-custom action-btn" onclick="return confirm('Sei sicuro di voler salvare la sessione?')">
         SALVA
     </button>
     <a href="#" id="cancel-workout-btn" class="btn btn-custom action-btn">ANNULLA</a>
@@ -76,6 +76,7 @@
 
 {% block scripts %}
 <script>
+    // La logica JavaScript di questa pagina rimane la stessa, ma con l'aggiunta della conferma su "Annulla"
     const templatesData = {{ templates|tojson|safe }};
     const logData = {{ log_data|tojson|safe }};
     const templateSelector = document.getElementById('template-selector');
@@ -125,12 +126,13 @@
         }
     }
 
-
     function saveDraft() {
         const inputs = document.querySelectorAll('#workout-section input, #workout-section textarea');
         let draftData = JSON.parse(localStorage.getItem(DRAFT_KEY)) || {};
         
-        draftData.selectedTemplateId = templateSelector.value;
+        if (templateSelector) {
+            draftData.selectedTemplateId = templateSelector.value;
+        }
         draftData.fields = {};
 
         inputs.forEach(input => {
@@ -185,7 +187,6 @@
                 const draftRepsKey = `reps_${ex.exercise_id}_${i}`;
                 const repsValue = draftFields[draftRepsKey] || (logData[logKey] ? logData[logKey].reps : '');
                 const weightValue = draftFields[draftWeightKey] || (logData[logKey] ? logData[logKey].weight : '');
-                // MODIFICA QUI: bg-light text-dark -> bg-secondary
                 setsHtml += `<div class="row g-2 align-items-center mb-2">
                                 <div class="col-2 text-center"><span class="badge bg-secondary">Set ${i}</span></div>
                                 <div class="col-5"><input type="text" name="weight_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Peso (kg)" value="${weightValue}"></div>
@@ -209,38 +210,21 @@
         }
         startTimestampInput.value = startTime;
 
-        if (draft.selectedTemplateId) {
+        if (draft.selectedTemplateId && templateSelector) {
             templateSelector.value = draft.selectedTemplateId;
-            renderWorkout(draft.selectedTemplateId);
-            updateUIForTemplateSelection(draft.selectedTemplateId, startTime);
-        } else {
-            renderWorkout(null);
-            updateUIForTemplateSelection(null, startTime);
-            const draftFields = draft.fields || {};
-            for (const [key, value] of Object.entries(draftFields)) {
-                const input = document.querySelector(`[name="${key}"]`);
-                if (input) input.value = value;
-            }
         }
+        renderWorkout(draft.selectedTemplateId);
+        updateUIForTemplateSelection(draft.selectedTemplateId, startTime);
     });
 
     if (templateSelector) {
         templateSelector.addEventListener('change', (event) => { 
             const templateId = event.target.value;
-            let draft = loadDraft();
-            let startTime = draft.startTime;
-
-            if (templateId) {
-                clearDraft();
-                startTime = Date.now();
-                let newDraft = { startTime: startTime, selectedTemplateId: templateId };
-                localStorage.setItem(DRAFT_KEY, JSON.stringify(newDraft));
-            } else {
-                clearDraft();
-                startTime = Date.now();
-                let newDraft = { startTime: startTime };
-                localStorage.setItem(DRAFT_KEY, JSON.stringify(newDraft));
-            }
+            let startTime = Date.now();
+            clearDraft();
+            
+            let newDraft = { startTime: startTime, selectedTemplateId: templateId };
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(newDraft));
 
             startTimestampInput.value = startTime;
             renderWorkout(templateId);
@@ -251,10 +235,13 @@
         });
     }
     
+    // MODIFICA QUI: Aggiunto onclick con confirm per l'annullamento
     document.getElementById('cancel-workout-btn').addEventListener('click', function(event) {
-        event.preventDefault(); 
-        clearDraft(); 
-        window.location.href = "{{ url_for('gym.palestra') }}";
+        event.preventDefault();
+        if (confirm('Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi.')) {
+            clearDraft(); 
+            window.location.href = "{{ url_for('gym.palestra') }}";
+        }
     });
 
     const stopwatchDisplay = document.getElementById('stopwatch'); const startBtn = document.getElementById('startBtn'); const pauseBtn = document.getElementById('pauseBtn'); const stopBtn = document.getElementById('stopBtn');
@@ -274,15 +261,12 @@
         window.addEventListener('scroll', function() { if (stopwatchWrapper.getBoundingClientRect().top <= 0) { stopwatchContainer.classList.add('stopwatch-sticky'); } else { stopwatchContainer.classList.remove('stopwatch-sticky'); } });
     });
 
-
     document.getElementById('workout-form').addEventListener('keydown', function(event) {
         if (event.key === 'Enter' || event.keyCode === 13) {
             const currentInput = event.target;
-            if (currentInput.tagName.toLowerCase() !== 'input') {
-                return;
-            }
+            if (currentInput.tagName.toLowerCase() !== 'input') { return; }
             event.preventDefault();
-            const inputs = Array.from(document.querySelectorAll('#workout-section input'));
+            const inputs = Array.from(document.querySelectorAll('#workout-section input:not([disabled])'));
             const currentIndex = inputs.indexOf(currentInput);
             const nextIndex = currentIndex + 1;
             if (nextIndex < inputs.length) {

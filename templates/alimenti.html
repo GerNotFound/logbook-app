@@ -10,7 +10,7 @@
     </div>
 </div>
 
-<form id="add-food-form" method="POST">
+<form id="add-food-form" method="POST" action="{{ url_for('nutrition.alimenti') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="add">
     <input type="text" name="name" class="form-control" placeholder="Nome alimento" required>
@@ -25,32 +25,64 @@
         <thead>
             <tr>
                 <th>Alimento</th>
-                <th>Proteine</th>
-                <th>Carboidrati</th>
-                <th>Grassi</th>
-                <th>Calorie</th>
+                <th>P</th>
+                <th>C</th>
+                <th>G</th>
+                <th>Cal</th>
                 <th>Azioni</th>
             </tr>
         </thead>
         <tbody>
         {% for food in foods %}
-            <tr>
+            <tr id="food-{{ food.id }}">
                 <td>{{ food.name }} {% if food.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}</td>
                 <td>{{ food.protein }}g</td>
                 <td>{{ food.carbs }}g</td>
                 <td>{{ food.fat }}g</td>
-                <td>{{ '%.0f' % food.calories }} kcal</td>
+                <td>{{ '%.0f' % food.calories }}</td>
                 <td class="text-center">
                     {% if food.user_id == session.user_id %}
-                    <form method="POST" style="display: inline;" data-confirm="Sei sicuro?">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="food_id" value="{{ food.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete">X</button>
-                    </form>
+                    <div class="btn-group">
+                        <!-- NUOVO: Pulsante Rinomina -->
+                        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameFoodModal-{{ food.id }}">✏️</button>
+                        <form method="POST" action="{{ url_for('nutrition.alimenti') }}" onsubmit="return confirm('Sei sicuro?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="food_id" value="{{ food.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete">X</button>
+                        </form>
+                    </div>
                     {% endif %}
                 </td>
             </tr>
+
+            <!-- NUOVO: Modal per rinominare l'alimento -->
+            {% if food.user_id == session.user_id %}
+            <div class="modal fade" id="renameFoodModal-{{ food.id }}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Rinomina Alimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('nutrition.alimenti') }}">
+                            <div class="modal-body">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="rename_food">
+                                <input type="hidden" name="food_id" value="{{ food.id }}">
+                                <label for="new_food_name-{{ food.id }}" class="form-label">Nuovo nome</label>
+                                <input type="text" name="new_food_name" id="new_food_name-{{ food.id }}" class="form-control" value="{{ food.name }}" required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                                <button type="submit" class="btn btn-custom" style="margin: 0; min-height: auto;">Salva</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
         {% endfor %}
         </tbody>
     </table>
@@ -62,7 +94,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script nonce="{{ csp_nonce() }}">
+<script>
     const DRAFT_KEY_ALIMENTI = `alimenti_draft_{{ session['user_id'] }}`;
     const alimentiForm = document.getElementById('add-food-form');
     const alimentiInputs = alimentiForm.querySelectorAll('input[type="text"], input[type="number"]');
