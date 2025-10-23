@@ -1,3 +1,5 @@
+# routes/main.py
+
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 import csv
@@ -295,25 +297,34 @@ def utente():
     if request.method == "POST":
         action = request.form.get("action")
         if action == "update_data":
-            birth_date = request.form.get("birth_date")
-            height = request.form.get("height")
+            # --- MODIFICA QUI: Gestione dei valori vuoti ---
+            birth_date = request.form.get("birth_date") or None
+            height_str = request.form.get("height")
+            
+            try:
+                # Converte l'altezza in float, o la imposta a None se vuota/invalida
+                height = float(height_str) if height_str else None
+            except (ValueError, TypeError):
+                flash("Il valore per l'altezza non è un numero valido.", 'danger')
+                return redirect(url_for('main.utente'))
+
             gender = request.form.get("gender")
+            
             query = (
                 "INSERT INTO user_profile (user_id, birth_date, height, gender) "
                 "VALUES (:user_id, :birth_date, :height, :gender) "
                 "ON CONFLICT(user_id) DO UPDATE SET birth_date = EXCLUDED.birth_date, "
                 "height = EXCLUDED.height, gender = EXCLUDED.gender"
             )
-            execute_query(
-                query,
-                {
-                    "user_id": user_id,
-                    "birth_date": birth_date,
-                    "height": height,
-                    "gender": gender,
-                },
-                commit=True,
-            )
+            
+            params = {
+                "user_id": user_id,
+                "birth_date": birth_date,
+                "height": height,
+                "gender": gender,
+            }
+            
+            execute_query(query, params, commit=True)
             flash("Dati anagrafici aggiornati.", "success")
         return redirect(url_for("main.utente"))
 
@@ -575,6 +586,9 @@ def modifica_misure(record_date):
     )
     gender = profile["gender"] if profile and profile.get("gender") else "M"
 
+    date_obj = datetime.strptime(record_date, "%Y-%m-%d").date()
+    date_formatted = date_obj.strftime("%d %b %y")
+
     if request.method == "POST":
         weight_time = request.form.get("weight_time")
         measure_time = request.form.get("measure_time")
@@ -585,12 +599,11 @@ def modifica_misure(record_date):
                 {"user_id": user_id, "date": record_date},
                 fetchone=True,
             )
-            date_obj = datetime.strptime(record_date, "%Y-%m-%d").date()
             return render_template(
                 "modifica_misure.html",
-                title=f"Modifica {date_obj.strftime('%d %b %y')}",
+                title=f"Modifica {date_formatted}",
                 misure=misure,
-                date_formatted=date_obj.strftime("%d %b %y"),
+                date_formatted=date_formatted,
                 record_date=record_date,
                 gender=gender,
             )
@@ -613,12 +626,11 @@ def modifica_misure(record_date):
                         {"user_id": user_id, "date": record_date},
                         fetchone=True,
                     )
-                    date_obj = datetime.strptime(record_date, "%Y-%m-%d").date()
                     return render_template(
                         "modifica_misure.html",
-                        title=f"Modifica {date_obj.strftime('%d %b %y')}",
+                        title=f"Modifica {date_formatted}",
                         misure=misure,
-                        date_formatted=date_obj.strftime("%d %b %y"),
+                        date_formatted=date_formatted,
                         record_date=record_date,
                         gender=gender,
                     )
@@ -657,12 +669,11 @@ def modifica_misure(record_date):
     if not misure:
         return redirect(url_for("main.generale"))
 
-    date_obj = datetime.strptime(record_date, "%Y-%m-%d").date()
     return render_template(
         "modifica_misure.html",
-        title=f"Modifica {date_obj.strftime('%d %b %y')}",
+        title=f"Modifica {date_formatted}",
         misure=misure,
-        date_formatted=date_obj.strftime("%d %b %y"),
+        date_formatted=date_formatted,
         record_date=record_date,
         gender=gender,
     )
