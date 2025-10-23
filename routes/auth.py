@@ -1,12 +1,16 @@
 # routes/auth.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-import bcrypt
 from functools import wraps
-from extensions import db
+from secrets import token_hex
+
+import bcrypt
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
+
+from extensions import limiter
 from utils import execute_query
 
 auth_bp = Blueprint('auth', __name__)
+
 
 def login_required(f):
     @wraps(f)
@@ -15,6 +19,7 @@ def login_required(f):
             return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
     return decorated_function
+
 
 def admin_required(f):
     @wraps(f)
@@ -25,6 +30,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
 @auth_bp.route('/')
 def index():
     if 'user_id' in session:
@@ -33,37 +39,42 @@ def index():
         return redirect(url_for('main.home'))
     return redirect(url_for('auth.login'))
 
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=['POST'])
 def login():
     if 'user_id' in session:
         return redirect(url_for('main.home'))
-        
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password'].encode('utf-8')
         user = execute_query('SELECT * FROM users WHERE username = :username', {'username': username}, fetchone=True)
-        
+
         if user and bcrypt.checkpw(password, user['password'].encode('utf-8')):
             session.clear()
+            session['session_nonce'] = token_hex(16)
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = user['is_admin']
-            
+
             remember_me = request.form.get('remember_me')
             if remember_me:
                 session.permanent = True
-            
+
             if not user['has_seen_welcome_message']:
-                flash('AVVISO: SE USI QUESTA APP L\'ADMIN PUÒ MODIFICARE O CANCELLARE I TUOI DATI PERCHÉ NON SA PROGRAMMARE. SE NON SEI D\'ACCORDO NON USARE QUESTA APP.', 'warning')
+                flash('Benvenuto in Logbook! Gli amministratori possono aiutarti a mantenere aggiornati i tuoi dati di allenamento. Puoi sempre gestire le autorizzazioni dalle impostazioni del tuo profilo.', 'info')
                 execute_query('UPDATE users SET has_seen_welcome_message = 1 WHERE id = :id', {'id': user['id']}, commit=True)
-            
+
             if user['is_admin']:
                 return redirect(url_for('admin.admin_generale'))
             else:
                 return redirect(url_for('main.home'))
         else:
+            current_app.logger.warning('Tentativo di login fallito per username: %s', username)
             return render_template('login.html', title='Login', error='Credenziali non valide.')
     return render_template('login.html', title='Login')
+
 
 @auth_bp.route('/logout')
 def logout():

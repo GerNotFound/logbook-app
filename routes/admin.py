@@ -122,10 +122,20 @@ def admin_utente_scheda_modifica(user_id, template_id):
         if action == 'add_exercise':
             exercise_id = request.form.get('exercise_id')
             sets = request.form.get('sets')
-            if exercise_id and sets:
-                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': sets}, commit=True)
-                flash('Esercizio aggiunto alla scheda.', 'success')
+            try:
+                exercise_id_int = int(exercise_id)
+                sets_int = int(sets)
+            except (TypeError, ValueError):
+                flash('Valori non validi per esercizio o serie.', 'danger')
+                return redirect(url_for('admin.admin_utente_scheda_modifica', user_id=user_id, template_id=template_id))
+
+            if sets_int <= 0:
+                flash('Le serie devono essere maggiori di zero.', 'danger')
+                return redirect(url_for('admin.admin_utente_scheda_modifica', user_id=user_id, template_id=template_id))
+
+            execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
+                          {'tid': template_id, 'eid': exercise_id_int, 'sets': sets_int}, commit=True)
+            flash('Esercizio aggiunto alla scheda.', 'success')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)

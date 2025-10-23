@@ -1,22 +1,36 @@
 # utils.py
 
-from extensions import db
-from sqlalchemy import text
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
-def execute_query(query, params=None, fetchall=False, fetchone=False, commit=False):
-    """
-    Funzione helper centralizzata per eseguire query SQL con SQLAlchemy.
-    """
+from sqlalchemy import text
+
+from extensions import db
+
+
+def execute_query(
+    query: str,
+    params: Optional[Dict[str, Any]] = None,
+    *,
+    fetchall: bool = False,
+    fetchone: bool = False,
+    commit: bool = False,
+) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
+    """Funzione helper centralizzata per eseguire query SQL con SQLAlchemy."""
+
     result = db.session.execute(text(query), params or {})
+    payload: Optional[Any] = None
+
     if fetchone:
         row = result.mappings().first()
-        return dict(row) if row else None
-    if fetchall:
-        return [dict(row) for row in result.mappings()]
+        payload = dict(row) if row else None
+    elif fetchall:
+        payload = [dict(row) for row in result.mappings()]
+
     if commit:
         db.session.commit()
-    return None
+
+    return payload
 
 def is_valid_time_format(time_str):
     """Controlla se una stringa è in formato HH:MM."""

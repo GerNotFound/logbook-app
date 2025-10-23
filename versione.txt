@@ -1,1 +1,1 @@
-v1.9.0
+logbook_app_v1.9.4

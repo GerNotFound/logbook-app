@@ -97,7 +97,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_MACROS = `macros_draft_{{ session['user_id'] }}`;
     const macrosForm = document.getElementById('macros-form');
     const macrosInputs = macrosForm.querySelectorAll('input');

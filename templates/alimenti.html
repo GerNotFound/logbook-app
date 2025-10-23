@@ -42,7 +42,7 @@
                 <td>{{ '%.0f' % food.calories }} kcal</td>
                 <td class="text-center">
                     {% if food.user_id == session.user_id %}
-                    <form method="POST" style="display: inline;" onsubmit="return confirm('Sei sicuro?')">
+                    <form method="POST" style="display: inline;" data-confirm="Sei sicuro?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="food_id" value="{{ food.id }}">
@@ -62,7 +62,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_ALIMENTI = `alimenti_draft_{{ session['user_id'] }}`;
     const alimentiForm = document.getElementById('add-food-form');
     const alimentiInputs = alimentiForm.querySelectorAll('input[type="text"], input[type="number"]');

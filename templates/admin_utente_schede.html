@@ -24,7 +24,8 @@
                 <td>{{ scheda.name }}</td>
                 <td class="text-center">
                     <a href="{{ url_for('admin.admin_utente_scheda_modifica', user_id=user.id, template_id=scheda.id) }}" class="btn btn-sm btn-outline-light">Modifica</a>
-                    <form method="POST" class="d-inline" onsubmit="return confirm('Sei sicuro di voler eliminare questa scheda?');">
+                    <form method="POST" class="d-inline" data-confirm="Sei sicuro di voler eliminare questa scheda?">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_template">
                         <input type="hidden" name="template_id" value="{{ scheda.id }}">
                         <button type="submit" class="btn btn-sm btn-delete">X</button>

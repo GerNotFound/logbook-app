@@ -75,7 +75,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     // ...tutto il codice javascript rimane invariato...
     const templatesData = {{ templates|tojson|safe }};
     const logData = {{ log_data|tojson|safe }};

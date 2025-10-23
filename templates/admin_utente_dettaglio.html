@@ -17,7 +17,7 @@
         <input type="hidden" name="action" value="change_password">
         <div class="password-wrapper">
             <input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;">
-            <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+            <i class="bi bi-eye-fill password-toggle-icon"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100 mt-2">IMPOSTA NUOVA PASSWORD</button>
     </form>
@@ -34,7 +34,7 @@
 
 <div class="my-4 p-3 border rounded">
     <h5>Elimina Utente</h5>
-    <form method="POST" action="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" onsubmit="return confirm('Sei assolutamente sicuro di voler eliminare questo utente e tutti i suoi dati? Questa azione è irreversibile.');">
+    <form method="POST" action="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" data-confirm="Sei assolutamente sicuro di voler eliminare questo utente e tutti i suoi dati? Questa azione è irreversibile.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="delete_account">
         <p class="text-muted small">L'eliminazione dell'utente cancellerà permanentemente il suo profilo, le immagini, le misurazioni, i diari alimentari e tutti gli allenamenti registrati.</p>
@@ -42,10 +42,7 @@
     </form>
 </div>
 
-
 <div class="sticky-bottom-nav">
     <a href="{{ url_for('admin.admin_utenti') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
 {% endblock %}
-
-<!-- MODIFICA: Il blocco scripts è stato rimosso -->

@@ -27,7 +27,7 @@ function addFormSubmitFeedback(formId, loadingText, timeout = 0) {
     const form = document.getElementById(formId);
     if (!form) return;
 
-    form.addEventListener('submit', function(event) {
+    form.addEventListener('submit', function () {
         if (form.dataset.ajax === "true") return;
 
         const submitButton = form.querySelector('button[type="submit"]');
@@ -47,83 +47,276 @@ function addFormSubmitFeedback(formId, loadingText, timeout = 0) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const preservedScroll = sessionStorage.getItem('preservedScrollY');
+    if (preservedScroll !== null) {
+        const scrollValue = parseInt(preservedScroll, 10);
+        if (!Number.isNaN(scrollValue)) {
+            window.scrollTo(0, scrollValue);
+        }
+        sessionStorage.removeItem('preservedScrollY');
+    }
+
+    if ('serviceWorker' in navigator) {
+        const serviceWorkerUrl = document.body?.dataset?.serviceWorker || '/service-worker.js';
+        navigator.serviceWorker
+            .register(serviceWorkerUrl)
+            .catch((error) => {
+                console.log('Registrazione del Service Worker fallita:', error);
+            });
+    }
+
+    if (window.location.hash) {
+        setTimeout(() => {
+            const targetElement = document.querySelector(window.location.hash);
+            if (targetElement) {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    }
+
     addFormSubmitFeedback('upload-pic-form', 'Caricamento...');
     addFormSubmitFeedback('export-data-form', 'Esportazione...', 3000);
+    bindAjaxForms();
 });
 
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) {
+        return;
+    }
 
-// --- NUOVA FUNZIONE AJAX GENERICA BASATA SU CLICK ---
-
-async function handleAjaxClick(button, url, successCallback) {
-    const form = button.closest('form');
-    if (!form) return;
-
-    const formData = new FormData(form);
-    const originalButtonHTML = button.innerHTML;
-    
-    button.disabled = true;
-    button.innerHTML = '...'; 
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-CSRFToken': formData.get('csrf_token') }
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            successCallback(result, form);
-        } else {
-            alert('Errore: ' + (result.error || 'Si è verificato un problema.'));
-        }
-
-    } catch (error) {
-        console.error('Errore durante la richiesta AJAX:', error);
-        alert('Si è verificato un errore di rete. Riprova.');
-    } finally {
-        // La funzione di successo è responsabile del ripristino del pulsante
-        // per gestire i feedback personalizzati (es. "Salvato!")
-        if (successCallback !== onUpdateNotesSuccess) {
-            button.disabled = false;
-            button.innerHTML = originalButtonHTML;
+    if (form.dataset.confirm) {
+        const message = form.dataset.confirm;
+        if (message && !confirm(message)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
         }
     }
+
+    if (form.dataset.preserveScroll === 'true' || !form.dataset.ajaxUrl) {
+        sessionStorage.setItem('preservedScrollY', String(window.scrollY));
+    }
+}, true);
+
+document.addEventListener('click', (event) => {
+    const toggleIcon = event.target.closest('.password-toggle-icon');
+    if (toggleIcon) {
+        event.preventDefault();
+        togglePasswordVisibility(toggleIcon);
+        return;
+    }
+
+    const confirmTarget = event.target.closest('[data-confirm]');
+    if (confirmTarget && !(confirmTarget instanceof HTMLFormElement)) {
+        const message = confirmTarget.dataset.confirm;
+        if (message && !confirm(message)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+    }
+
+    if (event.target.id === 'retry-connection') {
+        event.preventDefault();
+        window.location.reload();
+    } else if (event.target.id === 'offline-go-back') {
+        event.preventDefault();
+        history.back();
+    }
+});
+
+/**
+ * Risolve dinamicamente un callback che può essere fornito come funzione o come nome in stringa.
+ * @param {Function|string|undefined} callback Riferimento al callback di successo.
+ * @returns {Function|null}
+ */
+function resolveCallback(callback) {
+    if (typeof callback === 'function') {
+        return callback;
+    }
+    if (typeof callback === 'string' && typeof window[callback] === 'function') {
+        return window[callback];
+    }
+    return null;
 }
 
+/**
+ * Chiude la modale (se presente) che contiene il form passato.
+ * @param {HTMLFormElement} form
+ */
+function closeParentModal(form) {
+    if (!form) return;
+    const modalElement = form.closest('.modal');
+    if (!modalElement) return;
+    const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+    modalInstance.hide();
+}
 
-// --- FUNZIONI SPECIFICHE PER LA PAGINA SCHEDA ---
-// (Queste non sono più usate direttamente, ma la logica è simile)
+/**
+ * Esegue il binding dei form con attributo data-ajax-url per l'invio tramite fetch.
+ */
+function bindAjaxForms() {
+    const ajaxForms = document.querySelectorAll('form[data-ajax-url]');
+    ajaxForms.forEach((form) => {
+        if (form.dataset.ajaxBound === '1') {
+            return;
+        }
+        form.dataset.ajaxBound = '1';
+        form.dataset.ajax = 'true';
+
+        form.addEventListener('submit', async (event) => {
+            if (form.dataset.ajaxBypass === '1') {
+                form.dataset.ajaxBypass = '0';
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const confirmMessage = form.dataset.ajaxConfirm;
+            if (confirmMessage && !confirm(confirmMessage)) {
+                return;
+            }
+
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalContent = submitButton ? submitButton.innerHTML : null;
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = form.dataset.loadingText || '...';
+            }
+
+            const previousScroll = window.scrollY;
+            form.dataset.lastScrollPosition = String(previousScroll);
+
+            try {
+                const formData = new FormData(form);
+                const csrfToken = form.querySelector('input[name="csrf_token"]')?.value || '';
+                const response = await fetch(form.dataset.ajaxUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-CSRFToken': csrfToken },
+                    credentials: 'same-origin'
+                });
+
+                const isJson = response.headers.get('content-type')?.includes('application/json');
+                const payload = isJson ? await response.json() : null;
+
+                if (response.ok && payload?.success) {
+                    const successCallback = resolveCallback(form.dataset.ajaxSuccess);
+                    if (successCallback) {
+                        successCallback(payload, form);
+                    } else {
+                        window.location.reload();
+                    }
+
+                    const storedScroll = parseInt(form.dataset.lastScrollPosition || '', 10);
+                    if (!Number.isNaN(storedScroll)) {
+                        window.requestAnimationFrame(() => {
+                            window.scrollTo(0, storedScroll);
+                        });
+                    }
+
+                    sessionStorage.removeItem('preservedScrollY');
+                } else {
+                    const errorMessage = payload?.error || 'Si è verificato un problema.';
+                    if (form.dataset.ajaxFallback === 'true') {
+                        const storedScroll = form.dataset.lastScrollPosition || String(window.scrollY);
+                        sessionStorage.setItem('preservedScrollY', storedScroll);
+                        form.dataset.ajaxBypass = '1';
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = originalContent;
+                        }
+                        form.submit();
+                        return;
+                    }
+                    alert(errorMessage);
+                }
+            } catch (error) {
+                console.error('Errore durante la richiesta AJAX:', error);
+                if (form.dataset.ajaxFallback === 'true') {
+                    const storedScroll = form.dataset.lastScrollPosition || String(window.scrollY);
+                    sessionStorage.setItem('preservedScrollY', storedScroll);
+                    form.dataset.ajaxBypass = '1';
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalContent;
+                    }
+                    form.submit();
+                    return;
+                }
+                alert('Si è verificato un errore di rete. Riprova.');
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalContent;
+                }
+            }
+        });
+    });
+}
 
 // --- FUNZIONI SPECIFICHE PER LA PAGINA ESERCIZI ---
 
 function onRenameExerciseSuccess(result, form) {
     const exerciseId = result.exerciseId;
     const newName = result.newName;
-    const exerciseRow = document.querySelector(`#exercise-${exerciseId}`);
-    if (exerciseRow) {
-        const nameSpan = exerciseRow.querySelector('.exercise-name');
+    const row = document.querySelector(`#exercise-${exerciseId}`);
+    if (row) {
+        const nameSpan = row.querySelector('.exercise-name');
         if (nameSpan) {
             nameSpan.textContent = newName;
         }
+    } else {
+        window.location.reload();
+        return;
     }
-    
-    const modalElement = form.closest('.modal');
-    const modalInstance = bootstrap.Modal.getInstance(modalElement);
-    modalInstance.hide();
+    closeParentModal(form);
 }
 
-function onUpdateNotesSuccess(result, form) {
+function onUpdateNotesSuccess(_, form) {
     const button = form.querySelector('button[type="submit"]');
-    const originalText = "Salva Nota"; // Testo originale
-    button.innerHTML = 'Salvato!';
+    if (!button) return;
+    const originalText = button.dataset.originalText || button.textContent;
+    button.dataset.originalText = originalText;
+    button.textContent = 'Salvato!';
+    button.disabled = true;
     setTimeout(() => {
-        button.innerHTML = originalText;
+        button.textContent = originalText;
         button.disabled = false;
     }, 1500);
 }
 
-function onDeleteExerciseSuccess(result, form) {
-    form.closest('tr').remove();
+function onDeleteExerciseSuccess(_, form) {
+    const row = form.closest('tr');
+    if (row) {
+        row.remove();
+    }
+}
+
+// --- FUNZIONI SPECIFICHE PER LA PAGINA SCHEDA ---
+
+function onRenameTemplateSuccess(result, form) {
+    const templateId = result.templateId;
+    const newName = result.newName;
+    const container = document.querySelector(`#template-${templateId}`);
+    if (container) {
+        const heading = container.querySelector('h4');
+        if (heading) {
+            heading.textContent = newName;
+        }
+    } else {
+        window.location.reload();
+        return;
+    }
+    closeParentModal(form);
+}
+
+function onAddExerciseSuccess() {
+    window.location.reload();
+}
+
+function onTemplateExerciseDeleted() {
+    window.location.reload();
 }

@@ -1,6 +1,6 @@
 # routes/gym.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 from .auth import login_required
@@ -17,19 +17,45 @@ gym_bp = Blueprint('gym', __name__)
 def rinomina_scheda_ajax():
     user_id = session['user_id']
     template_id = request.form.get('template_id')
-    new_name = request.form.get('new_template_name')
+    new_name = (request.form.get('new_template_name') or '').strip()
+
     if not new_name or not template_id:
         return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+
     try:
-        query = "UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid"
-        execute_query(query, {'name': new_name, 'id': template_id, 'uid': user_id}, commit=True)
-        return jsonify({'success': True, 'newName': new_name, 'templateId': template_id})
+        template_id_int = int(template_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Identificativo scheda non valido.'}), 400
+
+    if len(new_name) > 120:
+        return jsonify({'success': False, 'error': 'Il nome è troppo lungo (max 120 caratteri).'}), 400
+
+    template = execute_query(
+        'SELECT id, name FROM workout_templates WHERE id = :id AND user_id = :user_id',
+        {'id': template_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+
+    if not template:
+        return jsonify({'success': False, 'error': 'Scheda non trovata o non autorizzata.'}), 404
+
+    if template['name'] == new_name:
+        return jsonify({'success': True, 'newName': new_name, 'templateId': template_id_int})
+
+    try:
+        execute_query(
+            'UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :user_id',
+            {'name': new_name, 'id': template_id_int, 'user_id': user_id},
+            commit=True,
+        )
     except IntegrityError:
         db.session.rollback()
         return jsonify({'success': False, 'error': f"Esiste già una scheda con il nome '{new_name}'."}), 409
     except Exception:
         db.session.rollback()
         return jsonify({'success': False, 'error': 'Si è verificato un errore interno.'}), 500
+
+    return jsonify({'success': True, 'newName': new_name, 'templateId': template_id_int})
 
 @gym_bp.route('/scheda/aggiungi-esercizio', methods=['POST'])
 @login_required
@@ -42,14 +68,39 @@ def aggiungi_esercizio_ajax():
     if not all([template_id, exercise_id, sets]):
         return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
     try:
+        template_id_int = int(template_id)
+        exercise_id_int = int(exercise_id)
+        sets_int = int(sets)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Valori numerici non validi.'}), 400
+
+    if sets_int <= 0:
+        return jsonify({'success': False, 'error': 'Le serie devono essere un numero positivo.'}), 400
+
+    template = execute_query(
+        'SELECT id FROM workout_templates WHERE id = :id AND user_id = :user_id',
+        {'id': template_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+    if not template:
+        return jsonify({'success': False, 'error': 'Scheda non trovata o non autorizzata.'}), 404
+
+    exercise_row = execute_query(
+        'SELECT id, name FROM exercises WHERE id = :id AND (user_id IS NULL OR user_id = :user_id)',
+        {'id': exercise_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+    if not exercise_row:
+        return jsonify({'success': False, 'error': 'Esercizio non disponibile.'}), 404
+
+    try:
         query = "INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets) RETURNING id"
-        result = execute_query(query, {'tid': template_id, 'eid': exercise_id, 'sets': sets}, fetchone=True)
+        result = execute_query(query, {'tid': template_id_int, 'eid': exercise_id_int, 'sets': sets_int}, fetchone=True)
         db.session.commit()
         new_id = result['id']
-        exercise_name_result = execute_query("SELECT name FROM exercises WHERE id = :eid", {'eid': exercise_id}, fetchone=True)
         return jsonify({
             'success': True,
-            'exercise': { 'id': new_id, 'name': exercise_name_result['name'], 'sets': sets },
+            'exercise': {'id': new_id, 'name': exercise_row['name'], 'sets': sets_int},
             'csrf_token': csrf_token
         })
     except Exception:
@@ -64,8 +115,22 @@ def elimina_esercizio_ajax():
     if not template_exercise_id:
         return jsonify({'success': False, 'error': 'ID Esercizio mancante.'}), 400
     try:
-        query = "DELETE FROM template_exercises te WHERE te.id = :teid AND EXISTS (SELECT 1 FROM workout_templates wt WHERE wt.id = te.template_id AND wt.user_id = :uid)"
-        execute_query(query, {'teid': template_exercise_id, 'uid': user_id}, commit=True)
+        template_exercise_id_int = int(template_exercise_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Identificativo esercizio non valido.'}), 400
+    try:
+        query = (
+            "DELETE FROM template_exercises te "
+            "WHERE te.id = :teid AND EXISTS ("
+            "    SELECT 1 FROM workout_templates wt "
+            "    WHERE wt.id = te.template_id AND wt.user_id = :uid"
+            ") RETURNING te.id"
+        )
+        deleted = execute_query(query, {'teid': template_exercise_id_int, 'uid': user_id}, fetchone=True)
+        if not deleted:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Esercizio non trovato o non autorizzato.'}), 404
+        db.session.commit()
         return jsonify({'success': True})
     except Exception:
         db.session.rollback()
@@ -76,19 +141,45 @@ def elimina_esercizio_ajax():
 def rinomina_esercizio_ajax():
     user_id = session['user_id']
     exercise_id = request.form.get('exercise_id')
-    new_name = request.form.get('new_exercise_name')
+    new_name = (request.form.get('new_exercise_name') or '').strip()
+
     if not new_name or not exercise_id:
         return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+
     try:
-        query = "UPDATE exercises SET name = :name WHERE id = :id AND user_id = :user_id"
-        execute_query(query, {'name': new_name, 'id': exercise_id, 'user_id': user_id}, commit=True)
-        return jsonify({'success': True, 'newName': new_name, 'exerciseId': exercise_id})
+        exercise_id_int = int(exercise_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Identificativo esercizio non valido.'}), 400
+
+    if len(new_name) > 120:
+        return jsonify({'success': False, 'error': 'Il nome è troppo lungo (max 120 caratteri).'}), 400
+
+    exercise = execute_query(
+        'SELECT id, name FROM exercises WHERE id = :id AND user_id = :user_id',
+        {'id': exercise_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+
+    if not exercise:
+        return jsonify({'success': False, 'error': 'Esercizio non trovato o non autorizzato.'}), 404
+
+    if exercise['name'] == new_name:
+        return jsonify({'success': True, 'newName': new_name, 'exerciseId': exercise_id_int})
+
+    try:
+        execute_query(
+            'UPDATE exercises SET name = :name WHERE id = :id AND user_id = :user_id',
+            {'name': new_name, 'id': exercise_id_int, 'user_id': user_id},
+            commit=True,
+        )
     except IntegrityError:
         db.session.rollback()
         return jsonify({'success': False, 'error': f"Esiste già un esercizio con il nome '{new_name}'."}), 409
     except Exception:
         db.session.rollback()
         return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
+    return jsonify({'success': True, 'newName': new_name, 'exerciseId': exercise_id_int})
 
 @gym_bp.route('/esercizi/aggiorna-note', methods=['POST'])
 @login_required
@@ -149,6 +240,48 @@ def esercizi():
                 except IntegrityError:
                     db.session.rollback()
                     flash(f"Errore: L'esercizio '{name}' esiste già.", 'danger')
+        elif action == 'rename_exercise':
+            exercise_id = request.form.get('exercise_id')
+            new_name = (request.form.get('new_exercise_name') or '').strip()
+
+            if not exercise_id or not new_name:
+                flash('Completa tutti i campi per rinominare l\'esercizio.', 'danger')
+                return redirect(url_for('gym.esercizi'))
+
+            if len(new_name) > 120:
+                flash('Il nome è troppo lungo (massimo 120 caratteri).', 'danger')
+                return redirect(url_for('gym.esercizi'))
+
+            try:
+                exercise_id_int = int(exercise_id)
+            except (TypeError, ValueError):
+                flash('Identificativo esercizio non valido.', 'danger')
+                return redirect(url_for('gym.esercizi'))
+
+            exercise = execute_query(
+                'SELECT id FROM exercises WHERE id = :id AND user_id = :user_id',
+                {'id': exercise_id_int, 'user_id': user_id},
+                fetchone=True,
+            )
+
+            if not exercise:
+                flash('Esercizio non trovato o non autorizzato.', 'danger')
+                return redirect(url_for('gym.esercizi'))
+
+            try:
+                execute_query(
+                    'UPDATE exercises SET name = :name WHERE id = :id AND user_id = :user_id',
+                    {'name': new_name, 'id': exercise_id_int, 'user_id': user_id},
+                    commit=True,
+                )
+                flash('Esercizio rinominato con successo.', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                flash(f"Errore: esiste già un esercizio chiamato '{new_name}'.", 'danger')
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.exception('Errore durante la rinomina esercizio %s', exercise_id_int)
+                flash('Si è verificato un errore durante il salvataggio.', 'danger')
         return redirect(url_for('gym.esercizi'))
     
     query = "SELECT e.id, e.name, e.user_id, uen.notes FROM exercises e LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE e.user_id IS NULL OR e.user_id = :user_id ORDER BY e.name"
@@ -171,6 +304,48 @@ def scheda():
                 except IntegrityError:
                     db.session.rollback()
                     flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
+        elif action == 'rename_template':
+            template_id = request.form.get('template_id')
+            new_name = (request.form.get('new_template_name') or '').strip()
+
+            if not template_id or not new_name:
+                flash('Completa tutti i campi per rinominare la scheda.', 'danger')
+                return redirect(url_for('gym.scheda'))
+
+            if len(new_name) > 120:
+                flash('Il nome è troppo lungo (massimo 120 caratteri).', 'danger')
+                return redirect(url_for('gym.scheda'))
+
+            try:
+                template_id_int = int(template_id)
+            except (TypeError, ValueError):
+                flash('Identificativo scheda non valido.', 'danger')
+                return redirect(url_for('gym.scheda'))
+
+            template = execute_query(
+                'SELECT id FROM workout_templates WHERE id = :id AND user_id = :user_id',
+                {'id': template_id_int, 'user_id': user_id},
+                fetchone=True,
+            )
+
+            if not template:
+                flash('Scheda non trovata o non autorizzata.', 'danger')
+                return redirect(url_for('gym.scheda'))
+
+            try:
+                execute_query(
+                    'UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :user_id',
+                    {'name': new_name, 'id': template_id_int, 'user_id': user_id},
+                    commit=True,
+                )
+                flash('Scheda rinominata con successo.', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                flash(f"Errore: esiste già una scheda chiamata '{new_name}'.", 'danger')
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.exception('Errore durante la rinomina scheda %s', template_id_int)
+                flash('Si è verificato un errore durante il salvataggio.', 'danger')
         elif action == 'delete_template':
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
             flash('Scheda eliminata con successo.', 'success')

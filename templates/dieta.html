@@ -75,11 +75,11 @@
                 <td>{{ item.fat | round(1) }}g</td>
                 <td>{{ item.calories | round(0) }} kcal</td>
                 <td>
-                    <form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" style="display: inline;">
+                    <form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" style="display: inline;" data-confirm="Sei sicuro?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_entry">
                         <input type="hidden" name="entry_id" value="{{ item.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Sei sicuro?')">X</button>
+                        <button type="submit" class="btn btn-sm btn-delete">X</button>
                     </form>
                 </td>
             </tr>
@@ -96,7 +96,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const foodList = {{ food_names|tojson|safe }};
     const searchInput = document.getElementById('alimento-search');
     const suggestionsDiv = document.getElementById('suggestions');

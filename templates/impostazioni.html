@@ -3,7 +3,7 @@
 <div class="row">
     <div class="col-12">
         <h1 class="mb-4">LOGBOOK - IMPOSTAZIONI</h1>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -24,10 +24,10 @@
     </form>
 
     {% if profile and profile.profile_image_file %}
-    <form method="POST" action="{{ url_for('main.impostazioni') }}" class="mt-3">
+    <form method="POST" action="{{ url_for('main.impostazioni') }}" class="mt-3" data-confirm="Sei sicuro di voler eliminare l'immagine del profilo?">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="delete_pic">
-        <button type="submit" class="btn btn-delete w-100" onclick="return confirm('Sei sicuro di voler eliminare l\'immagine del profilo?')">ELIMINA IMMAGINE</button>
+        <button type="submit" class="btn btn-delete w-100">ELIMINA IMMAGINE</button>
     </form>
     {% endif %}
 </div>
@@ -39,11 +39,11 @@
         <input type="hidden" name="action" value="change_password">
         <div class="password-wrapper">
             <input type="password" name="current_password" class="form-control" placeholder="Password attuale" required style="margin-bottom: 0;">
-            <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+            <i class="bi bi-eye-fill password-toggle-icon"></i>
         </div>
         <div class="password-wrapper">
             <input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;">
-            <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+            <i class="bi bi-eye-fill password-toggle-icon"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100">AGGIORNA PASSWORD</button>
     </form>
@@ -61,12 +61,12 @@
 {% if not session.get('is_admin') %}
 <div class="mb-4 p-3 border rounded">
     <h5>Elimina Account</h5>
-    <form method="POST" action="{{ url_for('main.impostazioni') }}" onsubmit="return confirm('ATTENZIONE: Questa azione è irreversibile. Sei assolutamente sicuro di voler eliminare il tuo account e tutti i tuoi dati?');">
+    <form method="POST" action="{{ url_for('main.impostazioni') }}" data-confirm="ATTENZIONE: Questa azione è irreversibile. Sei assolutamente sicuro di voler eliminare il tuo account e tutti i tuoi dati?">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="delete_account">
         <div class="password-wrapper">
             <input type="password" name="password_confirm" class="form-control" placeholder="Conferma la tua password" required style="margin-bottom: 0;">
-            <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+            <i class="bi bi-eye-fill password-toggle-icon"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100">ELIMINA ACCOUNT DEFINITIVAMENTE</button>
     </form>
@@ -75,5 +75,3 @@
 
 <a href="{{ url_for('main.home') }}" class="btn btn-custom w-100 mt-2">INDIETRO</a>
 {% endblock %}
-
-<!-- MODIFICA: Il blocco scripts è stato rimosso -->

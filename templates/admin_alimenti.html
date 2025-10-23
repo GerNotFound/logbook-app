@@ -38,7 +38,7 @@
                 <td>{{ food.fat }}g</td>
                 <td>{{ '%.0f' % food.calories }} kcal</td>
                 <td>
-                    <form method="POST" style="display: inline;" onsubmit="return confirm('Sei sicuro?')">
+                    <form method="POST" style="display: inline;" data-confirm="Sei sicuro?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="food_id" value="{{ food.id }}">
@@ -57,11 +57,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_ADD_FOOD = `admin_add_food_draft`;
     const addFoodForm = document.getElementById('add-food-form');
     const foodInputs = addFoodForm.querySelectorAll('input[type="text"], input[type="number"]');
-    
+
     function saveDraft() {
         const draftData = {};
         foodInputs.forEach(input => {

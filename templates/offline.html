@@ -5,11 +5,11 @@
     <div class="col-12 text-center">
         <h1 class="mb-4">LOGBOOK - SEI OFFLINE</h1>
         <p class="text-muted">Questa pagina non è ancora stata salvata per l'uso offline. Connettiti a internet per visualizzarla oppure torna alla pagina precedente.</p>
-        
+
         <!-- MODIFICA QUI: Aggiunto un contenitore e un nuovo pulsante "Indietro" -->
         <div class="d-grid gap-2 col-10 mx-auto mt-4">
-            <button onclick="window.location.reload();" class="btn btn-custom">Riprova Connessione</button>
-            <button onclick="history.back();" class="btn btn-outline-light">Indietro</button>
+            <button class="btn btn-custom" id="retry-connection">Riprova Connessione</button>
+            <button class="btn btn-outline-light" id="offline-go-back">Indietro</button>
         </div>
     </div>
 </div>

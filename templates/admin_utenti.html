@@ -15,8 +15,8 @@
     <h5>Aggiungi Nuovo Utente</h5>
     <div class="row g-2">
         <div class="col-12"><input type="text" name="new_username" class="form-control" placeholder="Nuovo username" required></div>
-        <div class="col-12 password-wrapper"><input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i></div>
-        <div class="col-12 password-wrapper"><input type="password" name="new_password_confirm" class="form-control" placeholder="Conferma password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i></div>
+        <div class="col-12 password-wrapper"><input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon"></i></div>
+        <div class="col-12 password-wrapper"><input type="password" name="new_password_confirm" class="form-control" placeholder="Conferma password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon"></i></div>
         <div class="col-12"><button type="submit" class="btn btn-custom w-100">Aggiungi</button></div>
     </div>
 </form>
@@ -61,12 +61,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // La logica per le bozze rimane qui perché è specifica di questa pagina
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_ADD_USER = `admin_add_user_draft`;
     const addUserForm = document.getElementById('add-user-form');
     const addUserInputs = addUserForm.querySelectorAll('input[type="text"], input[type="password"]');
-    
+
     function saveAddUserDraft() {
         const draftData = {};
         addUserInputs.forEach(input => {
