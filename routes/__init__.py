@@ -6,3 +6,4 @@ from .nutrition import nutrition_bp
 from .gym import gym_bp
 from .cardio import cardio_bp
 from .admin import admin_bp
+from .health import health_bp
