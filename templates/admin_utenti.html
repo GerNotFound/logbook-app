@@ -1,95 +1,98 @@
 {% extends 'layout.html' %}
 {% block content %}
 <div class="row">
-    <div class="col-12">
-        <h1 class="mb-4">ADMIN - GESTIONE UTENTI</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
-        {% endwith %}
-    </div>
+<div class="col-12">
+<h1 class="mb-4">ADMIN - GESTIONE UTENTI</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+{% endwith %}
 </div>
-
+</div>
 <form method="POST" action="{{ url_for('admin.admin_utenti') }}" class="mb-4 p-3 border rounded" id="add-user-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="add">
-    <h5>Aggiungi Nuovo Utente</h5>
-    <div class="row g-2">
-        <div class="col-12"><input type="text" name="new_username" class="form-control" placeholder="Nuovo username" required></div>
-        <div class="col-12 password-wrapper"><input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon"></i></div>
-        <div class="col-12 password-wrapper"><input type="password" name="new_password_confirm" class="form-control" placeholder="Conferma password" required style="margin-bottom: 0;"><i class="bi bi-eye-fill password-toggle-icon"></i></div>
-        <div class="col-12"><button type="submit" class="btn btn-custom w-100">Aggiungi</button></div>
-    </div>
-</form>
-
-<form method="GET" action="{{ url_for('admin.admin_utenti') }}" class="mb-4">
-    <div class="input-group">
-        <input type="text" name="search" class="form-control" placeholder="Cerca per nome o ID..." value="{{ search_term or '' }}">
-        <button class="btn btn-outline-light" type="submit">Cerca</button>
-    </div>
-</form>
-
-<div class="table-responsive">
-    <table class="table table-bordered">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Gestisci</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.username }}</td>
-                <td class="text-center">
-                    <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-sm btn-outline-light">Gestisci</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="3" class="text-center">Nessun utente trovato.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="add">
+<h5>Aggiungi Nuovo Utente</h5>
+<div class="row g-2">
+<div class="col-12"><input type="text" name="new_username" class="form-control" placeholder="Nuovo username" required></div>
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
+<div class="col-12 password-wrapper">
+<input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;">
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
 </div>
-
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
+<div class="col-12 password-wrapper">
+<input type="password" name="new_password_confirm" class="form-control" placeholder="Conferma password" required style="margin-bottom: 0;">
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+</div>
+<div class="col-12"><button type="submit" class="btn btn-custom w-100">Aggiungi</button></div>
+</div>
+</form>
+<form method="GET" action="{{ url_for('admin.admin_utenti') }}" class="mb-4">
+<div class="input-group">
+<input type="text" name="search" class="form-control" placeholder="Cerca per nome o ID..." value="{{ search_term or '' }}">
+<button class="btn btn-outline-light" type="submit">Cerca</button>
+</div>
+</form>
+<div class="table-responsive">
+<table class="table table-bordered">
+<thead>
+<tr>
+<th>ID</th>
+<th>Username</th>
+<th>Gestisci</th>
+</tr>
+</thead>
+<tbody>
+{% for user in users %}
+<tr>
+<td>{{ user.id }}</td>
+<td>{{ user.username }}</td>
+<td class="text-center">
+<a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-sm btn-outline-light">Gestisci</a>
+</td>
+</tr>
+{% else %}
+<tr>
+<td colspan="3" class="text-center">Nessun utente trovato.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
 <div class="sticky-bottom-nav">
-    <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+<a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
 {% endblock %}
-
 {% block scripts %}
-<script nonce="{{ csp_nonce() }}">
-    const DRAFT_KEY_ADD_USER = `admin_add_user_draft`;
-    const addUserForm = document.getElementById('add-user-form');
-    const addUserInputs = addUserForm.querySelectorAll('input[type="text"], input[type="password"]');
+<script>
+const DRAFT_KEY_ADD_USER = `admin_add_user_draft`;
+const addUserForm = document.getElementById('add-user-form');
+const addUserInputs = addUserForm.querySelectorAll('input[type="text"], input[type="password"]');
 
-    function saveAddUserDraft() {
-        const draftData = {};
-        addUserInputs.forEach(input => {
-            if (input.value && input.name) {
-                draftData[input.name] = input.value;
-            }
-        });
-        localStorage.setItem(DRAFT_KEY_ADD_USER, JSON.stringify(draftData));
-    }
+function saveAddUserDraft() {
+const draftData = {};
+addUserInputs.forEach(input => {
+if (input.value && input.name) {
+draftData[input.name] = input.value;
+}
+});
+localStorage.setItem(DRAFT_KEY_ADD_USER, JSON.stringify(draftData));
+}
 
-    function loadAddUserDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_ADD_USER);
-        if (draft) {
-            const draftData = JSON.parse(draft);
-            addUserInputs.forEach(input => {
-                if (draftData[input.name]) {
-                    input.value = draftData[input.name];
-                }
-            });
-        }
-    }
+function loadAddUserDraft() {
+const draft = localStorage.getItem(DRAFT_KEY_ADD_USER);
+if (draft) {
+const draftData = JSON.parse(draft);
+addUserInputs.forEach(input => {
+if (draftData[input.name]) {
+input.value = draftData[input.name];
+}
+});
+}
+}
 
-    addUserInputs.forEach(input => input.addEventListener('input', saveAddUserDraft));
-    addUserForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_USER));
-    document.addEventListener('DOMContentLoaded', loadAddUserDraft);
+addUserInputs.forEach(input => input.addEventListener('input', saveAddUserDraft));
+addUserForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_USER));
+document.addEventListener('DOMContentLoaded', loadAddUserDraft);
 </script>
 {% endblock %}
