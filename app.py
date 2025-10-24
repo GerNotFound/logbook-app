@@ -3,6 +3,7 @@ from datetime import timedelta
 from flask import Flask
 from extensions import db, csrf, talisman
 from dotenv import load_dotenv
+import commands # NUOVA IMPORTAZIONE
 
 load_dotenv()
 
@@ -17,8 +18,6 @@ def create_app():
     
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     
-    # --- MODIFICA QUI: SOLUZIONE PER L'ERRORE DEL DATABASE SU KOYEB ---
-    # Aggiungi queste opzioni per gestire meglio le connessioni al database
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
         'pool_recycle': 280,
@@ -26,6 +25,9 @@ def create_app():
     
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
+    # MODIFICA: Fallisce se la SECRET_KEY non è impostata in produzione
+    if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('SECRET_KEY'):
+        raise ValueError("Nessuna SECRET_KEY impostata per l'ambiente di produzione")
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-insecure') 
     
     app.debug = os.environ.get('FLASK_ENV') == 'development'
@@ -40,37 +42,21 @@ def create_app():
         SESSION_COOKIE_SAMESITE='Lax',
     )
 
-    # Inizializza le estensioni
     db.init_app(app)
     csrf.init_app(app)
     
-    # Configurazione di Sicurezza Talisman (già corretta)
     csp = {
         'default-src': "'self'",
-        'script-src': [
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            "'unsafe-inline'"
-        ],
-        'style-src': [
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            'https://fonts.googleapis.com',
-            "'unsafe-inline'"
-        ],
-        'font-src': [
-            "'self'",
-            'https://fonts.gstatic.com',
-            'https://cdn.jsdelivr.net'
-        ],
-        'img-src': [
-            "'self'",
-            'data:'
-        ],
+        'script-src': ["'self'", 'https://cdn.jsdelivr.net', "'unsafe-inline'"],
+        'style-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com', "'unsafe-inline'"],
+        'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+        'img-src': ["'self'", 'data:']
     }
     
     talisman.init_app(app, content_security_policy=csp, force_https=not app.debug)
 
+    # NUOVA SEZIONE: Registra i comandi CLI
+    commands.init_app(app)
 
     with app.app_context():
         
