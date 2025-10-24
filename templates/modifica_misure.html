@@ -18,11 +18,11 @@
     
     <div class="row">
         <div class="col-6">
-            <label for="weight" class="form-label" style="min-height: 40px;">Peso (kg)</label>
+            <label for="weight" class="form-label label-tall">Peso (kg)</label>
             <input type="number" step="0.1" min="0" name="weight" id="weight" class="form-control" value="{{ misure.weight or '' }}">
         </div>
         <div class="col-6">
-            <label for="weight_time" class="form-label" style="min-height: 40px;">Orario Peso</label>
+            <label for="weight_time" class="form-label label-tall">Orario Peso</label>
             <input type="text" name="weight_time" id="weight_time" class="form-control" value="{{ misure.weight_time or '' }}" placeholder="HH:MM">
         </div>
     </div>
@@ -31,11 +31,11 @@
 
     <div class="row">
         <div class="col-6">
-            <label for="sleep" class="form-label" style="min-height: 40px;">Sonno</label>
+            <label for="sleep" class="form-label label-tall">Sonno</label>
             <input type="text" name="sleep" id="sleep" class="form-control" value="{{ misure.sleep or '' }}" placeholder="ore:min">
         </div>
         <div class="col-6">
-            <label for="sleep_quality" class="form-label" style="min-height: 40px;">Qualità Sonno</label>
+            <label for="sleep_quality" class="form-label label-tall">Qualità Sonno</label>
             <input type="number" min="1" max="10" step="1" name="sleep_quality" id="sleep_quality" class="form-control" value="{{ misure.sleep_quality or '' }}" placeholder="1-10">
         </div>
     </div>
@@ -58,16 +58,16 @@
     <div id="bfp-formula-group">
         <div class="row">
             <div class="col-4">
-                <label for="neck" class="form-label" style="min-height: 40px;">Collo (cm)</label>
+                <label for="neck" class="form-label label-tall">Collo (cm)</label>
                 <input type="number" step="0.1" min="0" name="neck" id="neck" class="form-control" value="{{ misure.neck or '' }}">
             </div>
             <div class="col-4">
-                <label for="waist" class="form-label" style="min-height: 40px;">Vita (cm)</label>
+                <label for="waist" class="form-label label-tall">Vita (cm)</label>
                 <input type="number" step="0.1" min="0" name="waist" id="waist" class="form-control" value="{{ misure.waist or '' }}">
             </div>
             {% if gender == 'F' %}
             <div class="col-4" id="hip-container">
-                <label for="hip" class="form-label" style="min-height: 40px;">Fianchi (cm)</label>
+                <label for="hip" class="form-label label-tall">Fianchi (cm)</label>
                 <input type="number" step="0.1" min="0" name="hip" id="hip" class="form-control" value="{{ misure.hip or '' }}">
             </div>
             {% endif %}
@@ -86,7 +86,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
         const bfpModeSelector = document.getElementById('bfp-mode-selector');
         const manualGroup = document.getElementById('bfp-manual-group');

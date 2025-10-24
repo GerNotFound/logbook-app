@@ -7,6 +7,7 @@ from .auth import login_required
 from utils import execute_query
 from sqlalchemy.exc import IntegrityError
 from extensions import db
+from services.workout_service import get_templates_with_history, get_session_log_data
 
 gym_bp = Blueprint('gym', __name__)
 
@@ -441,66 +442,8 @@ def sessione_palestra(date_param, session_ts=None):
         flash('Allenamento salvato con successo!', 'success')
         return redirect(url_for('gym.diario_palestra'))
 
-    templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True)
-    templates_dict = {t['id']: {**dict(t), 'exercises': []} for t in templates_raw}
-    template_ids = list(templates_dict.keys())
-
-    if template_ids:
-        all_template_exercises_raw = execute_query(f'SELECT te.id, te.template_id, e.id as exercise_id, e.name, uen.notes, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE te.template_id = ANY(:template_ids) ORDER BY te.id', {'user_id': user_id, 'template_ids': template_ids}, fetchall=True)
-
-        exercise_ids = list(set(ex['exercise_id'] for ex in all_template_exercises_raw))
-        if exercise_ids:
-            history_raw = execute_query(
-                'SELECT record_date, session_timestamp, exercise_id, set_number, reps, weight '
-                'FROM workout_log '
-                'WHERE user_id = :user_id AND exercise_id = ANY(:eids) AND record_date < :rd '
-                'ORDER BY record_date DESC, session_timestamp DESC, id ASC',
-                {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date},
-                fetchall=True,
-            )
-            comments_raw = execute_query(
-                "SELECT wsc.comment, wl.record_date, wsc.exercise_id "
-                "FROM workout_session_comments wsc "
-                "JOIN workout_log wl ON wsc.session_timestamp = wl.session_timestamp "
-                "WHERE wsc.user_id = :user_id AND wsc.exercise_id = ANY(:eids) AND wl.record_date < :rd "
-                "ORDER BY wl.record_date DESC, wsc.id DESC",
-                {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date},
-                fetchall=True,
-            )
-
-            history_by_exercise = defaultdict(list); last_comment_by_exercise = {}
-            for row in history_raw:
-                history_by_exercise[row['exercise_id']].append(row)
-            for row in comments_raw:
-                if row['exercise_id'] not in last_comment_by_exercise: last_comment_by_exercise[row['exercise_id']] = row
-
-            for ex in all_template_exercises_raw:
-                ex_dict = dict(ex)
-                sessions_history = []
-                for row in history_by_exercise.get(ex['exercise_id'], []):
-                    if not sessions_history or sessions_history[-1]['timestamp'] != row['session_timestamp']:
-                        if len(sessions_history) == 2:
-                            break
-                        sessions_history.append({
-                            'timestamp': row['session_timestamp'],
-                            'date_formatted': row['record_date'].strftime('%d %b'),
-                            'sets': [],
-                        })
-                    sessions_history[-1]['sets'].append(f"{row['weight']}kg x {row['reps']}")
-                ex_dict['history'] = sessions_history
-
-                last_comment = last_comment_by_exercise.get(ex['exercise_id'])
-                ex_dict['last_comment'] = last_comment['comment'] if last_comment else None
-                ex_dict['last_comment_date'] = last_comment['record_date'].strftime('%d %b') if last_comment else None
-                templates_dict[ex['template_id']]['exercises'].append(ex_dict)
-
-    templates = list(templates_dict.values())
-    log_data = {}
-    if session_ts:
-        log_rows = execute_query('SELECT * FROM workout_log WHERE user_id = :uid AND session_timestamp = :ts', {'uid': user_id, 'ts': session_ts}, fetchall=True)
-        for row in log_rows: log_data[f"{row['exercise_id']}_{row['set_number']}"] = {'reps': row['reps'], 'weight': row['weight']}
-        comment_rows = execute_query('SELECT exercise_id, comment FROM workout_session_comments WHERE user_id = :uid AND session_timestamp = :ts', {'uid': user_id, 'ts': session_ts}, fetchall=True)
-        for row in comment_rows: log_data[f"comment_{row['exercise_id']}"] = row['comment']
+    templates = get_templates_with_history(user_id, current_date)
+    log_data = get_session_log_data(user_id, session_ts) if session_ts else {}
 
     return render_template('sessione_palestra.html', title='Sessione Palestra', templates=templates, log_data=log_data, record_date=record_date, date_formatted=date_formatted, prev_day=prev_day, next_day=next_day, is_today=is_today, is_editing=(session_ts is not None), session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'))
 

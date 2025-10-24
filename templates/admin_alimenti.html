@@ -38,7 +38,7 @@
                 <td>{{ food.fat }}g</td>
                 <td>{{ '%.0f' % food.calories }} kcal</td>
                 <td>
-                    <form method="POST" style="display: inline;" data-confirm="Sei sicuro?">
+                    <form method="POST" class="d-inline" data-confirm="Sei sicuro?">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="food_id" value="{{ food.id }}">

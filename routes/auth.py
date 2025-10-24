@@ -9,9 +9,6 @@ from utils import execute_query
 
 auth_bp = Blueprint('auth', __name__)
 
-MAX_FAILED_ATTEMPTS = 5
-LOCKOUT_MINUTES = 15
-
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -43,6 +40,8 @@ def login():
         return redirect(url_for('main.home'))
         
     if request.method == 'POST':
+        max_attempts = current_app.config.get('SECURITY_MAX_FAILED_LOGINS', 5)
+        lockout_minutes = current_app.config.get('SECURITY_LOCKOUT_MINUTES', 15)
         username = request.form['username']
         password_raw = request.form['password']
         password = password_raw.encode('utf-8')
@@ -88,8 +87,8 @@ def login():
                 attempts = (user.get('failed_login_attempts') or 0) + 1
                 lock_until_val = None
                 error_message = 'Credenziali non valide.'
-                if attempts >= MAX_FAILED_ATTEMPTS:
-                    lock_until_val = now + timedelta(minutes=LOCKOUT_MINUTES)
+                if attempts >= max_attempts:
+                    lock_until_val = now + timedelta(minutes=lockout_minutes)
                     error_message = 'Account temporaneamente bloccato per troppi tentativi falliti. Riprova più tardi.'
                     attempts = 0
                 execute_query(

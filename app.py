@@ -4,7 +4,8 @@ from flask import Flask, session
 from extensions import db, csrf, talisman
 from dotenv import load_dotenv
 import commands # NUOVA IMPORTAZIONE
-from utils import ensure_user_security_columns, execute_query
+from migrations import run_migrations
+from utils import execute_query
 
 load_dotenv()
 
@@ -36,6 +37,9 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = 'static/profile_pics'
     app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+    app.config['SECURITY_MAX_FAILED_LOGINS'] = int(os.environ.get('SECURITY_MAX_FAILED_LOGINS', 5))
+    app.config['SECURITY_LOCKOUT_MINUTES'] = int(os.environ.get('SECURITY_LOCKOUT_MINUTES', 15))
+    app.config['SECURITY_ONLINE_THRESHOLD_MINUTES'] = int(os.environ.get('SECURITY_ONLINE_THRESHOLD_MINUTES', 5))
     
     app.config.update(
         SESSION_COOKIE_SECURE=not app.debug,
@@ -48,19 +52,24 @@ def create_app():
     
     csp = {
         'default-src': "'self'",
-        'script-src': ["'self'", 'https://cdn.jsdelivr.net', "'unsafe-inline'"],
-        'style-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com', "'unsafe-inline'"],
+        'script-src': ["'self'", 'https://cdn.jsdelivr.net'],
+        'style-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
         'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
         'img-src': ["'self'", 'data:']
     }
-    
-    talisman.init_app(app, content_security_policy=csp, force_https=not app.debug)
+
+    talisman.init_app(
+        app,
+        content_security_policy=csp,
+        force_https=not app.debug,
+        content_security_policy_nonce_in=['script-src']
+    )
 
     # NUOVA SEZIONE: Registra i comandi CLI
     commands.init_app(app)
 
     with app.app_context():
-        ensure_user_security_columns()
+        run_migrations()
 
         @app.before_request
         def update_last_active_timestamp():

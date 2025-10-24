@@ -1,7 +1,7 @@
 # utils.py
 
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from sqlalchemy import text
 
@@ -46,19 +46,4 @@ def allowed_file(filename):
     """Controlla se l'estensione di un file è permessa."""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def ensure_user_security_columns() -> None:
-    """Garantisce la presenza delle colonne legate alla sicurezza nella tabella utenti."""
-
-    statements: Iterable[str] = (
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS lock_until TIMESTAMP",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP",
-    )
-
-    for statement in statements:
-        db.session.execute(text(statement))
-    db.session.commit()
 

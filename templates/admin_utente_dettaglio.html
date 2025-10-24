@@ -16,7 +16,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="change_password">
         <div class="password-wrapper">
-            <input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;">
+            <input type="password" name="new_password" class="form-control mb-0" placeholder="Nuova password" required>
             <i class="bi bi-eye-fill password-toggle-icon"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100 mt-2">IMPOSTA NUOVA PASSWORD</button>
@@ -29,7 +29,7 @@
         <a href="{{ url_for('admin.admin_utente_alimenti', user_id=user.id) }}" class="btn btn-custom w-100 d-block">GESTISCI ALIMENTI</a>
         <a href="{{ url_for('admin.admin_utente_diario_palestra', user_id=user.id) }}" class="btn btn-custom w-100 d-block">VEDI DIARIO PALESTRA</a>
         <a href="{{ url_for('admin.admin_utente_diario_corsa', user_id=user.id) }}" class="btn btn-custom w-100 d-block">VEDI DIARIO CORSA</a>
-        <form method="POST" action="{{ url_for('admin.admin_utente_export', user_id=user.id) }}" class="mt-2">
+        <form id="export-data-form" method="POST" action="{{ url_for('admin.admin_utente_export', user_id=user.id) }}" class="mt-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline-light w-100">ESPORTA I DATI</button>
         </form>

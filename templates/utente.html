@@ -40,7 +40,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_UTENTE = `utente_draft_{{ session['user_id'] }}`;
     const utenteForm = document.getElementById('user-data-form');
     const utenteInputs = utenteForm.querySelectorAll('input[type="date"], input[type="number"], select');

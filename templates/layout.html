@@ -33,7 +33,7 @@
     
     <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
     
-    <script>
+    <script nonce="{{ csp_nonce() }}">
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register("{{ url_for('main.service_worker') }}")

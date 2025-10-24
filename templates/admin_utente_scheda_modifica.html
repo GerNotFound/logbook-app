@@ -19,7 +19,7 @@
                 <td>{{ exercise.name }}</td>
                 <td>{{ exercise.sets }} serie</td>
                 <td class="text-center">
-                    <form method="POST" style="display: inline;">
+                    <form method="POST" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
@@ -44,18 +44,18 @@
 
         <div class="row g-2 d-flex align-items-end">
             <div class="col">
-                <label class="form-label mb-1" style="font-size: 0.8rem;">Esercizio</label>
+                <label class="form-label mb-1 label-sm">Esercizio</label>
                 <div class="suggestions-container">
-                    <input type="text" class="form-control exercise-search-input" placeholder="Cerca tra esercizi globali e personali..." autocomplete="off" required style="margin-bottom: 0;">
+                    <input type="text" class="form-control exercise-search-input mb-0" placeholder="Cerca tra esercizi globali e personali..." autocomplete="off" required>
                     <div class="suggestions-list"></div>
                 </div>
             </div>
-            <div class="col-auto" style="width: 80px;">
-                <label class="form-label mb-1" style="font-size: 0.8rem;">Serie</label>
-                <input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control" required style="margin-bottom: 0;">
+            <div class="col-auto w-80">
+                <label class="form-label mb-1 label-sm">Serie</label>
+                <input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control mb-0" required>
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-custom" style="padding: 12px 15px; min-height: auto; height: 44px;">Aggiungi</button>
+                <button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button>
             </div>
         </div>
     </form>

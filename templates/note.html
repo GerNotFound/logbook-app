@@ -37,7 +37,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_NOTES_PERSONAL = `notes_draft_personal_{{ session['user_id'] }}`;
     const personalNoteForm = document.getElementById('personal-note-form');
     const personalNoteTextarea = personalNoteForm.querySelector('textarea');

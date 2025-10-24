@@ -58,7 +58,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const locationSelect = document.getElementById('location'); const inclineInput = document.getElementById('incline');
     locationSelect.addEventListener('change', function() { if (this.value === 'TAPPETO') { inclineInput.disabled = false; } else { inclineInput.disabled = true; inclineInput.value = ''; } });
     if (locationSelect.value !== 'TAPPETO') { inclineInput.disabled = true; }
