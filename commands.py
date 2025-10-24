@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 import bcrypt
 
 from extensions import db
+from migrations import run_migrations
 from utils import execute_query
 
 @click.command(name='create-admin')
@@ -39,6 +40,17 @@ def create_admin_command():
         db.session.rollback()
         click.echo(f"Si è verificato un errore imprevisto: {e}")
 
+
+@click.command(name='db-upgrade')
+@with_appcontext
+def db_upgrade_command():
+    """Esegue le migrazioni del database."""
+
+    run_migrations()
+    click.echo('Migrazioni applicate con successo.')
+
+
 def init_app(app):
     """Registra i comandi CLI con l'applicazione Flask."""
     app.cli.add_command(create_admin_command)
+    app.cli.add_command(db_upgrade_command)

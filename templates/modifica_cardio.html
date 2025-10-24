@@ -45,7 +45,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const locationSelect = document.getElementById('location');
     const inclineInput = document.getElementById('incline');
     function toggleIncline() {

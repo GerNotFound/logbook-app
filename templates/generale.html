@@ -53,7 +53,7 @@
                 <td>{{ entry.bmi | round(1) if entry.bmi is not none else '-' }}</td>
                 <td>
                     <a href="{{ url_for('main.modifica_misure', record_date=entry.record_date) }}" class="btn btn-sm btn-outline-light">✏️</a>
-                    <form method="POST" action="{{ url_for('main.elimina_giorno') }}" style="display: inline;">
+                    <form method="POST" action="{{ url_for('main.elimina_giorno') }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="date" value="{{ entry.record_date }}">
                         <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Sei sicuro di voler eliminare TUTTI i dati di questo giorno (misure, dieta e allenamenti)?')">X</button>

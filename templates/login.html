@@ -1,6 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="row justify-content-center" style="min-height: 100vh; align-items: center;">
+<div class="row justify-content-center align-items-center min-vh-100">
     <div class="col-12 col-md-6">
         <h1 class="text-center mb-4">LOGBOOK - LOGIN</h1>
         {% if error %}
@@ -17,7 +17,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="username" class="form-control" placeholder="Nome utente" value="{{ username|default('') }}" required>
             <div class="password-wrapper mb-3">
-                <input type="password" name="password" class="form-control" placeholder="Password" required style="margin-bottom: 0;">
+                <input type="password" name="password" class="form-control mb-0" placeholder="Password" required>
                 <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
             </div>
             

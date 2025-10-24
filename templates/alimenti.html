@@ -75,7 +75,7 @@
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                                <button type="submit" class="btn btn-custom" style="margin: 0; min-height: auto;">Salva</button>
+                                <button type="submit" class="btn btn-custom btn-custom-tight m-0">Salva</button>
                             </div>
                         </form>
                     </div>
@@ -94,7 +94,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     const DRAFT_KEY_ALIMENTI = `alimenti_draft_{{ session['user_id'] }}`;
     const alimentiForm = document.getElementById('add-food-form');
     const alimentiInputs = alimentiForm.querySelectorAll('input[type="text"], input[type="number"]');

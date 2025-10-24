@@ -28,10 +28,10 @@
 
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
     <div id="stopwatch-container" class="stopwatch-container">
-        <div id="stopwatch" style="font-size: 2.5rem; font-weight: bold;">00:00</div>
-        <button id="startBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 15px; line-height: 1;">▶</button>
-        <button id="pauseBtn" class="btn btn-sm" style="background-color: white; color: black; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px; font-size: 1.2rem;">❚❚</button>
-        <button id="stopBtn" class="btn btn-outline-light btn-sm" style="border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; margin-left: 8px;">■</button>
+        <div id="stopwatch" class="stopwatch-display">00:00</div>
+        <button id="startBtn" class="btn btn-sm btn-circle ms-3">▶</button>
+        <button id="pauseBtn" class="btn btn-sm btn-circle ms-2 fs-4">❚❚</button>
+        <button id="stopBtn" class="btn btn-outline-light btn-sm btn-circle-outline ms-2">■</button>
     </div>
 </div>
 
@@ -50,9 +50,9 @@
     {% endif %}
 </div>
 
-<div id="workout-status-box" class="mb-4 p-3 border rounded" style="display: none;">
+<div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
     <h5 id="status-template-name" class="mb-1"></h5>
-    <p class="mb-0 text-muted">Durata: <span id="running-timer" style="font-weight: bold;">00:00:00</span></p>
+    <p class="mb-0 text-muted">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
 </div>
 
 
@@ -75,7 +75,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
     // La logica JavaScript di questa pagina rimane la stessa, ma con l'aggiunta della conferma su "Annulla"
     const templatesData = {{ templates|tojson|safe }};
     const logData = {{ log_data|tojson|safe }};
@@ -115,13 +115,13 @@
             const selectedTemplate = templatesData.find(t => t.id == templateId);
             if (selectedTemplate) {
                 statusTemplateName.textContent = selectedTemplate.name;
-                templateSelectionBox.style.display = 'none';
-                workoutStatusBox.style.display = 'block';
+                templateSelectionBox.classList.add('d-none');
+                workoutStatusBox.classList.remove('d-none');
                 startRunningTimer(startTime);
             }
         } else {
-            templateSelectionBox.style.display = 'block';
-            workoutStatusBox.style.display = 'none';
+            templateSelectionBox.classList.remove('d-none');
+            workoutStatusBox.classList.add('d-none');
             if (durationTimerInterval) clearInterval(durationTimerInterval);
         }
     }
@@ -171,18 +171,18 @@
         selectedTemplate.exercises.forEach(ex => {
             const parentId = `exercise-group-${ex.id}`;
             let lastCommentText = ex.last_comment ? `<strong>${ex.last_comment_date}:</strong> ${ex.last_comment}` : 'Nessun commento precedente.';
-            const commentsHtml = `<div id="comments-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem;">${lastCommentText}</div></div>`;
-            const notesHtml = ex.notes ? `<div id="notes-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem; white-space: pre-wrap;">${ex.notes}</div></div>` : '';
-            const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem;">` + ((ex.history && ex.history.length > 0)
+            const commentsHtml = `<div id="comments-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${lastCommentText}</div></div>`;
+            const notesHtml = ex.notes ? `<div id="notes-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm text-prewrap">${ex.notes}</div></div>` : '';
+            const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">` + ((ex.history && ex.history.length > 0)
                 ? ex.history.map(session => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`).join('')
                 : `<small class="text-muted">Nessuno storico precedente.</small>`)
                 + `</div></div>`;
             const draftCommentKey = `comment_${ex.exercise_id}`;
             const currentCommentValue = draftFields[draftCommentKey] || (logData[draftCommentKey] || '');
             const commentBoxHtml = `<div id="comment-box-${ex.id}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${ex.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${currentCommentValue}</textarea></div>`;
-            const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#comments-${ex.id}" style="font-size: 0.7rem; padding: 2px 6px;">Commenti</button>`;
-            const notesButtonHtml = ex.notes ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#notes-${ex.id}" style="font-size: 0.7rem; padding: 2px 6px;">Note</button>` : '';
-            const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#history-${ex.id}" style="font-size: 0.7rem; padding: 2px 6px;">Storico</button>`;
+            const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comments-${ex.id}">Commenti</button>`;
+            const notesButtonHtml = ex.notes ? `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#notes-${ex.id}">Note</button>` : '';
+            const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#history-${ex.id}">Storico</button>`;
             let setsHtml = '';
             for (let i = 1; i <= parseInt(ex.sets); i++) {
                 const logKey = `${ex.exercise_id}_${i}`;
@@ -196,7 +196,7 @@
                                 <div class="col-5"><input type="number" min="0" step="1" name="reps_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Reps" value="${repsValue}"></div>
                              </div>`;
             }
-            const exerciseHtml = `<div class="mb-3 p-3 border rounded" id="${parentId}"><div class="d-flex justify-content-between align-items-center"><h5>${ex.name}</h5><div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div></div>${commentsHtml}${notesHtml}${historyHtml}<hr class="my-2">${setsHtml}<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#comment-box-${ex.id}" style="font-size: 0.7rem; padding: 2px 6px;">+ Commento</button></div>${commentBoxHtml}</div>`;
+            const exerciseHtml = `<div class="mb-3 p-3 border rounded" id="${parentId}"><div class="d-flex justify-content-between align-items-center"><h5>${ex.name}</h5><div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div></div>${commentsHtml}${notesHtml}${historyHtml}<hr class="my-2">${setsHtml}<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comment-box-${ex.id}">+ Commento</button></div>${commentBoxHtml}</div>`;
             workoutSection.innerHTML += exerciseHtml;
         });
         attachInputListeners();

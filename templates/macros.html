@@ -26,7 +26,7 @@
                 <label for="days_on" class="form-label mb-0 text-center d-block">GIORNI ON</label>
                 <input type="number" id="days_on" name="days_on" class="form-control text-center" value="{{ targets.days_on }}" min="0" max="7">
             </div>
-            <div class="col-2 text-center" style="font-size: 1.5rem;">+</div>
+            <div class="col-2 text-center text-xl">+</div>
             <div class="col-5">
                 <label for="days_off" class="form-label mb-0 text-center d-block">GIORNI OFF</label>
                 <input type="number" id="days_off" name="days_off" class="form-control text-center" value="{{ targets.days_off }}" min="0" max="7">
@@ -36,15 +36,15 @@
         <h6>Giorno ON <small class="text-muted">(g/kg)</small></h6>
         <div class="row g-2">
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Proteine</label>
+                <label class="form-label label-sm">Proteine</label>
                 <input type="number" step="0.01" name="p_on" class="form-control" value="{{ targets.p_on }}">
             </div>
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Carboidrati</label>
+                <label class="form-label label-sm">Carboidrati</label>
                 <input type="number" step="0.01" name="c_on" class="form-control" value="{{ targets.c_on }}">
             </div>
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Grassi</label>
+                <label class="form-label label-sm">Grassi</label>
                 <input type="number" step="0.01" name="f_on" class="form-control" value="{{ targets.f_on }}">
             </div>
         </div>
@@ -52,15 +52,15 @@
         <h6>Giorno OFF <small class="text-muted">(g/kg)</small></h6>
         <div class="row g-2">
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Proteine</label>
+                <label class="form-label label-sm">Proteine</label>
                 <input type="number" step="0.01" name="p_off" class="form-control" value="{{ targets.p_off }}">
             </div>
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Carboidrati</label>
+                <label class="form-label label-sm">Carboidrati</label>
                 <input type="number" step="0.01" name="c_off" class="form-control" value="{{ targets.c_off }}">
             </div>
             <div class="col-4">
-                <label class="form-label" style="font-size: 0.8rem;">Grassi</label>
+                <label class="form-label label-sm">Grassi</label>
                 <input type="number" step="0.01" name="f_off" class="form-control" value="{{ targets.f_off }}">
             </div>
         </div>
@@ -85,7 +85,7 @@
 {% else %}
 <div class="text-center p-3 border rounded">
     <p class="text-muted">Per visualizzare il riepilogo dei calcoli, inserisci almeno un valore per il tuo peso.</p>
-    <a href="{{ url_for('main.misure') }}" class="btn btn-custom w-100" style="padding: 15px; min-height: auto;">VAI A MISURE</a>
+    <a href="{{ url_for('main.misure') }}" class="btn btn-custom btn-custom-tight w-100">VAI A MISURE</a>
 </div>
 {% endif %}
 

@@ -38,11 +38,11 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="change_password">
         <div class="password-wrapper">
-            <input type="password" name="current_password" class="form-control" placeholder="Password attuale" required style="margin-bottom: 0;">
+            <input type="password" name="current_password" class="form-control mb-0" placeholder="Password attuale" required>
             <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
         </div>
         <div class="password-wrapper">
-            <input type="password" name="new_password" class="form-control" placeholder="Nuova password" required style="margin-bottom: 0;">
+            <input type="password" name="new_password" class="form-control mb-0" placeholder="Nuova password" required>
             <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100">AGGIORNA PASSWORD</button>
@@ -65,7 +65,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="delete_account">
         <div class="password-wrapper">
-            <input type="password" name="password_confirm" class="form-control" placeholder="Conferma la tua password" required style="margin-bottom: 0;">
+            <input type="password" name="password_confirm" class="form-control mb-0" placeholder="Conferma la tua password" required>
             <i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
         </div>
         <button type="submit" class="btn btn-custom w-100">ELIMINA ACCOUNT DEFINITIVAMENTE</button>
