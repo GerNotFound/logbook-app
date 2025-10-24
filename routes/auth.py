@@ -2,11 +2,15 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
 import bcrypt
+from datetime import datetime, timedelta
 from functools import wraps
 from secrets import token_hex
 from utils import execute_query
 
 auth_bp = Blueprint('auth', __name__)
+
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
 
 def login_required(f):
     @wraps(f)
@@ -40,16 +44,33 @@ def login():
         
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password'].encode('utf-8')
+        password_raw = request.form['password']
+        password = password_raw.encode('utf-8')
         user = execute_query('SELECT * FROM users WHERE username = :username', {'username': username}, fetchone=True)
-        
+        now = datetime.utcnow()
+
+        if user:
+            lock_until = user.get('lock_until')
+            if lock_until and lock_until > now:
+                remaining = lock_until - now
+                minutes = max(1, int(remaining.total_seconds() // 60) + (1 if remaining.total_seconds() % 60 else 0))
+                message = f"Account temporaneamente bloccato. Riprova tra circa {minutes} minuti."
+                return render_template('login.html', title='Login', error=message, username=username)
+
         if user and bcrypt.checkpw(password, user['password'].encode('utf-8')):
             session.clear()
             session['session_nonce'] = token_hex(16)
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = user['is_admin']
-            
+            session['last_activity_update'] = now.isoformat()
+
+            execute_query(
+                'UPDATE users SET failed_login_attempts = 0, lock_until = NULL, last_login_at = :now, last_active_at = :now WHERE id = :id',
+                {'now': now, 'id': user['id']},
+                commit=True,
+            )
+
             remember_me = request.form.get('remember_me')
             if remember_me:
                 session.permanent = True
@@ -63,12 +84,29 @@ def login():
             else:
                 return redirect(url_for('main.home'))
         else:
-            current_app.logger.warning('Tentativo di login fallito per username: %s', username)
-            return render_template('login.html', title='Login', error='Credenziali non valide.')
+            if user:
+                attempts = (user.get('failed_login_attempts') or 0) + 1
+                lock_until_val = None
+                error_message = 'Credenziali non valide.'
+                if attempts >= MAX_FAILED_ATTEMPTS:
+                    lock_until_val = now + timedelta(minutes=LOCKOUT_MINUTES)
+                    error_message = 'Account temporaneamente bloccato per troppi tentativi falliti. Riprova più tardi.'
+                    attempts = 0
+                execute_query(
+                    'UPDATE users SET failed_login_attempts = :attempts, lock_until = :lock_until WHERE id = :id',
+                    {'attempts': attempts, 'lock_until': lock_until_val, 'id': user['id']},
+                    commit=True,
+                )
+                current_app.logger.warning('Tentativo di login fallito per username: %s', username)
+                return render_template('login.html', title='Login', error=error_message, username=username)
+
+            current_app.logger.warning('Tentativo di login fallito per username inesistente: %s', username)
+            return render_template('login.html', title='Login', error='Credenziali non valide.', username=username)
     return render_template('login.html', title='Login')
 
 @auth_bp.route('/logout')
 def logout():
     session.clear()
+    session.pop('last_activity_update', None)
     flash('Logout effettuato con successo.', 'success')
     return redirect(url_for('auth.login'))

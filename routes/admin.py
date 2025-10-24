@@ -1,14 +1,17 @@
 # routes/admin.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_file
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 from .auth import login_required, admin_required
 from extensions import db
 from utils import execute_query
+import io
 import os
+import csv
+import zipfile
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -42,7 +45,7 @@ def admin_utenti():
         return redirect(url_for('admin.admin_utenti'))
 
     search_term = request.args.get('search', '')
-    query = "SELECT id, username FROM users WHERE is_admin = 0"
+    query = "SELECT id, username, last_active_at FROM users WHERE is_admin = 0"
     params = {}
     if search_term:
         query += " AND (username ILIKE :search OR CAST(id AS TEXT) ILIKE :search)"
@@ -50,6 +53,15 @@ def admin_utenti():
     query += " ORDER BY username"
     
     users = execute_query(query, params, fetchall=True)
+    online_cutoff = datetime.utcnow() - timedelta(minutes=5)
+    for user in users:
+        last_active = user.get('last_active_at')
+        if isinstance(last_active, str):
+            try:
+                last_active = datetime.fromisoformat(last_active)
+            except ValueError:
+                last_active = None
+        user['is_online'] = bool(last_active and last_active >= online_cutoff)
     return render_template('admin_utenti.html', title='Admin Utenti', users=users, search_term=search_term)
 
 @admin_bp.route('/utente/<int:user_id>', methods=['GET', 'POST'])
@@ -88,6 +100,58 @@ def admin_utente_dettaglio(user_id):
             return redirect(url_for('admin.admin_utenti'))
 
     return render_template('admin_utente_dettaglio.html', title=f'Gestione {user["username"]}', user=user)
+
+
+@admin_bp.route('/utente/<int:user_id>/export', methods=['POST'])
+@login_required
+@admin_required
+def admin_utente_export(user_id):
+    user = execute_query('SELECT username FROM users WHERE id = :id AND is_admin = 0', {'id': user_id}, fetchone=True)
+    if not user:
+        flash('Utente non trovato.', 'danger')
+        return redirect(url_for('admin.admin_utenti'))
+
+    datasets = {
+        'user_profile.csv': execute_query('SELECT * FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchall=True),
+        'user_notes.csv': execute_query('SELECT * FROM user_notes WHERE user_id = :user_id', {'user_id': user_id}, fetchall=True),
+        'daily_data.csv': execute_query('SELECT * FROM daily_data WHERE user_id = :user_id ORDER BY record_date', {'user_id': user_id}, fetchall=True),
+        'diet_log.csv': execute_query('SELECT * FROM diet_log WHERE user_id = :user_id ORDER BY log_date', {'user_id': user_id}, fetchall=True),
+        'cardio_log.csv': execute_query('SELECT * FROM cardio_log WHERE user_id = :user_id ORDER BY record_date', {'user_id': user_id}, fetchall=True),
+        'workout_sessions.csv': execute_query('SELECT * FROM workout_sessions WHERE user_id = :user_id ORDER BY record_date', {'user_id': user_id}, fetchall=True),
+        'workout_log.csv': execute_query('SELECT * FROM workout_log WHERE user_id = :user_id ORDER BY record_date, session_timestamp, set_number', {'user_id': user_id}, fetchall=True),
+        'workout_session_comments.csv': execute_query('SELECT * FROM workout_session_comments WHERE user_id = :user_id ORDER BY id', {'user_id': user_id}, fetchall=True),
+        'foods.csv': execute_query('SELECT * FROM foods WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True),
+        'workout_templates.csv': execute_query('SELECT * FROM workout_templates WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True),
+        'template_exercises.csv': execute_query('SELECT * FROM template_exercises WHERE template_id IN (SELECT id FROM workout_templates WHERE user_id = :user_id) ORDER BY template_id, id', {'user_id': user_id}, fetchall=True),
+    }
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for filename, rows in datasets.items():
+            output = io.StringIO()
+            if rows:
+                fieldnames = list(rows[0].keys())
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in rows:
+                    serialised_row = {}
+                    for key, value in row.items():
+                        if isinstance(value, (datetime, date)):
+                            serialised_row[key] = value.isoformat()
+                        else:
+                            serialised_row[key] = value
+                    writer.writerow(serialised_row)
+            else:
+                output.write('')
+            zip_file.writestr(filename, output.getvalue())
+
+    zip_buffer.seek(0)
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f"{user['username']}_export.zip",
+    )
 
 @admin_bp.route('/utente/<int:user_id>/schede', methods=['GET', 'POST'])
 @login_required
