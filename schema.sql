@@ -7,7 +7,11 @@ CREATE TABLE users (
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     is_admin INTEGER NOT NULL DEFAULT 0,
-    has_seen_welcome_message INTEGER NOT NULL DEFAULT 0
+    has_seen_welcome_message INTEGER NOT NULL DEFAULT 0,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    lock_until TIMESTAMP,
+    last_login_at TIMESTAMP,
+    last_active_at TIMESTAMP
 );
 
 CREATE TABLE user_profile (

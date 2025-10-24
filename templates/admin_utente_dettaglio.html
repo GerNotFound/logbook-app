@@ -29,6 +29,10 @@
         <a href="{{ url_for('admin.admin_utente_alimenti', user_id=user.id) }}" class="btn btn-custom w-100 d-block">GESTISCI ALIMENTI</a>
         <a href="{{ url_for('admin.admin_utente_diario_palestra', user_id=user.id) }}" class="btn btn-custom w-100 d-block">VEDI DIARIO PALESTRA</a>
         <a href="{{ url_for('admin.admin_utente_diario_corsa', user_id=user.id) }}" class="btn btn-custom w-100 d-block">VEDI DIARIO CORSA</a>
+        <form method="POST" action="{{ url_for('admin.admin_utente_export', user_id=user.id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-light w-100">ESPORTA I DATI</button>
+        </form>
     </div>
 </div>
 

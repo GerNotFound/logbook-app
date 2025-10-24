@@ -63,19 +63,45 @@ def aggiungi_esercizio_ajax():
     user_id = session['user_id']
     template_id = request.form.get('template_id')
     exercise_id = request.form.get('exercise_id')
-    sets = request.form.get('sets')
+    sets = (request.form.get('sets') or '').strip()
     csrf_token = request.form.get('csrf_token')
     if not all([template_id, exercise_id, sets]):
         return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+
+    try:
+        template_id_int = int(template_id)
+        exercise_id_int = int(exercise_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Parametri non validi.'}), 400
+
+    template = execute_query(
+        'SELECT id FROM workout_templates WHERE id = :id AND user_id = :user_id',
+        {'id': template_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+    if not template:
+        return jsonify({'success': False, 'error': 'Scheda non trovata o non autorizzata.'}), 404
+
+    exercise = execute_query(
+        'SELECT id, name FROM exercises WHERE id = :id AND (user_id IS NULL OR user_id = :user_id)',
+        {'id': exercise_id_int, 'user_id': user_id},
+        fetchone=True,
+    )
+    if not exercise:
+        return jsonify({'success': False, 'error': 'Esercizio non disponibile.'}), 404
+
     try:
         query = "INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets) RETURNING id"
-        result = execute_query(query, {'tid': template_id, 'eid': exercise_id, 'sets': sets}, fetchone=True)
-        db.session.commit()
-        new_id = result['id']
-        exercise_name_result = execute_query("SELECT name FROM exercises WHERE id = :eid", {'eid': exercise_id}, fetchone=True)
+        result = execute_query(
+            query,
+            {'tid': template_id_int, 'eid': exercise_id_int, 'sets': sets},
+            fetchone=True,
+            commit=True,
+        )
+        new_id = result['id'] if result else None
         return jsonify({
             'success': True,
-            'exercise': { 'id': new_id, 'name': exercise_name_result['name'], 'sets': sets },
+            'exercise': {'id': new_id, 'name': exercise['name'], 'sets': sets},
             'csrf_token': csrf_token
         })
     except Exception:
@@ -424,24 +450,44 @@ def sessione_palestra(date_param, session_ts=None):
 
         exercise_ids = list(set(ex['exercise_id'] for ex in all_template_exercises_raw))
         if exercise_ids:
-            history_raw = execute_query(f'SELECT record_date, session_timestamp, exercise_id, set_number, reps, weight FROM workout_log WHERE user_id = :user_id AND exercise_id = ANY(:eids) AND record_date < :rd ORDER BY record_date DESC, session_timestamp DESC, id ASC',
-                                        {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date}, fetchall=True)
-            comments_raw = execute_query(f"SELECT wsc.comment, wl.record_date, wsc.exercise_id FROM workout_session_comments wsc JOIN workout_log wl ON wsc.session_timestamp = wl.session_timestamp WHERE wsc.user_id = :user_id AND wsc.exercise_id = ANY(:eids) AND wl.record_date < :rd ORDER BY wl.record_date DESC, wsc.id DESC", {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date}, fetchall=True)
+            history_raw = execute_query(
+                'SELECT record_date, session_timestamp, exercise_id, set_number, reps, weight '
+                'FROM workout_log '
+                'WHERE user_id = :user_id AND exercise_id = ANY(:eids) AND record_date < :rd '
+                'ORDER BY record_date DESC, session_timestamp DESC, id ASC',
+                {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date},
+                fetchall=True,
+            )
+            comments_raw = execute_query(
+                "SELECT wsc.comment, wl.record_date, wsc.exercise_id "
+                "FROM workout_session_comments wsc "
+                "JOIN workout_log wl ON wsc.session_timestamp = wl.session_timestamp "
+                "WHERE wsc.user_id = :user_id AND wsc.exercise_id = ANY(:eids) AND wl.record_date < :rd "
+                "ORDER BY wl.record_date DESC, wsc.id DESC",
+                {'user_id': user_id, 'eids': exercise_ids, 'rd': record_date},
+                fetchall=True,
+            )
 
             history_by_exercise = defaultdict(list); last_comment_by_exercise = {}
-            for row in history_raw: history_by_exercise[row['exercise_id']].append(row)
+            for row in history_raw:
+                history_by_exercise[row['exercise_id']].append(row)
             for row in comments_raw:
                 if row['exercise_id'] not in last_comment_by_exercise: last_comment_by_exercise[row['exercise_id']] = row
 
             for ex in all_template_exercises_raw:
-                ex_dict = dict(ex); history_grouped = {}
+                ex_dict = dict(ex)
+                sessions_history = []
                 for row in history_by_exercise.get(ex['exercise_id'], []):
-                    ts = row['session_timestamp']
-                    if ts not in history_grouped:
-                        if len(history_grouped) >= 2: break
-                        history_grouped[ts] = {'date_formatted': row['record_date'].strftime('%d %b'), 'sets': []}
-                    history_grouped[ts]['sets'].append(f"{row['weight']}kg x {row['reps']}")
-                ex_dict['history'] = history_grouped
+                    if not sessions_history or sessions_history[-1]['timestamp'] != row['session_timestamp']:
+                        if len(sessions_history) == 2:
+                            break
+                        sessions_history.append({
+                            'timestamp': row['session_timestamp'],
+                            'date_formatted': row['record_date'].strftime('%d %b'),
+                            'sets': [],
+                        })
+                    sessions_history[-1]['sets'].append(f"{row['weight']}kg x {row['reps']}")
+                ex_dict['history'] = sessions_history
 
                 last_comment = last_comment_by_exercise.get(ex['exercise_id'])
                 ex_dict['last_comment'] = last_comment['comment'] if last_comment else None

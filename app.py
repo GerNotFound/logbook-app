@@ -1,9 +1,10 @@
 import os
-from datetime import timedelta
-from flask import Flask
+from datetime import datetime, timedelta
+from flask import Flask, session
 from extensions import db, csrf, talisman
 from dotenv import load_dotenv
 import commands # NUOVA IMPORTAZIONE
+from utils import ensure_user_security_columns, execute_query
 
 load_dotenv()
 
@@ -59,7 +60,33 @@ def create_app():
     commands.init_app(app)
 
     with app.app_context():
-        
+        ensure_user_security_columns()
+
+        @app.before_request
+        def update_last_active_timestamp():
+            user_id = session.get('user_id')
+            if not user_id:
+                session.pop('last_activity_update', None)
+                return
+
+            now = datetime.utcnow()
+            last_update_iso = session.get('last_activity_update')
+            should_update = True
+            if last_update_iso:
+                try:
+                    last_update = datetime.fromisoformat(last_update_iso)
+                    should_update = (now - last_update) > timedelta(minutes=1)
+                except ValueError:
+                    should_update = True
+
+            if should_update:
+                execute_query(
+                    'UPDATE users SET last_active_at = :ts WHERE id = :uid',
+                    {'ts': now, 'uid': user_id},
+                    commit=True,
+                )
+                session['last_activity_update'] = now.isoformat()
+
         @app.context_processor
         def inject_version():
             try:

@@ -173,7 +173,10 @@
             let lastCommentText = ex.last_comment ? `<strong>${ex.last_comment_date}:</strong> ${ex.last_comment}` : 'Nessun commento precedente.';
             const commentsHtml = `<div id="comments-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem;">${lastCommentText}</div></div>`;
             const notesHtml = ex.notes ? `<div id="notes-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem; white-space: pre-wrap;">${ex.notes}</div></div>` : '';
-            const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem;">` + (Object.keys(ex.history).length > 0 ? Object.values(ex.history).map(session => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`).join('') : `<small class="text-muted">Nessuno storico precedente.</small>`) + `</div></div>`;
+            const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2" style="font-size: 0.9rem;">` + ((ex.history && ex.history.length > 0)
+                ? ex.history.map(session => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`).join('')
+                : `<small class="text-muted">Nessuno storico precedente.</small>`)
+                + `</div></div>`;
             const draftCommentKey = `comment_${ex.exercise_id}`;
             const currentCommentValue = draftFields[draftCommentKey] || (logData[draftCommentKey] || '');
             const commentBoxHtml = `<div id="comment-box-${ex.id}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${ex.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${currentCommentValue}</textarea></div>`;
