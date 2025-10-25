@@ -1,9 +1,12 @@
 # commands.py
 
+import subprocess
+import sys
+
+import bcrypt
 import click
 from flask.cli import with_appcontext
 from sqlalchemy.exc import IntegrityError
-import bcrypt
 
 from bootstrap import ensure_database_indexes
 from extensions import db
@@ -61,9 +64,48 @@ def db_prepare_command():
     click.echo('Database pronto con schema e indici aggiornati.')
 
 
+@click.command(name='security-scan')
+@with_appcontext
+def security_scan_command():
+    """Esegue le verifiche di sicurezza statiche con Bandit."""
+
+    paths = [
+        'app.py',
+        'commands.py',
+        'extensions.py',
+        'routes',
+        'services',
+        'security.py',
+        'utils.py',
+    ]
+    command = ['bandit', '-q', '-r', *paths]
+    click.echo('Esecuzione di Bandit per le verifiche di sicurezza...')
+
+    try:
+        result = subprocess.run(command, check=False)
+    except FileNotFoundError:
+        click.echo(
+            "Bandit non è installato nell'ambiente corrente. "
+            "Installa le dipendenze (pip install -r requirements.txt) e riprova.",
+            err=True,
+        )
+        sys.exit(1)
+
+    if result.returncode == 0:
+        click.echo('Verifiche di sicurezza completate senza vulnerabilità note.')
+    else:
+        click.echo(
+            "Bandit ha rilevato potenziali problemi di sicurezza. "
+            "Consulta l'output sopra per i dettagli.",
+            err=True,
+        )
+        sys.exit(result.returncode)
+
+
 def init_app(app):
     """Registra i comandi CLI con l'applicazione Flask."""
     app.cli.add_command(create_admin_command)
     app.cli.add_command(db_upgrade_command)
     app.cli.add_command(db_prepare_command)
+    app.cli.add_command(security_scan_command)
 
