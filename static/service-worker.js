@@ -1,7 +1,7 @@
 // static/service-worker.js
 
 // Aggiorna questa versione ogni volta che fai una modifica significativa ai file in cache
-const CACHE_NAME = 'logbook-cache-v1.9.8';
+const CACHE_NAME = 'logbook-cache-v1.9.7.2'; 
 
 // Lista dei file fondamentali per l'app shell
 const APP_SHELL_URLS = [
@@ -17,7 +17,6 @@ const APP_SHELL_URLS = [
   
   // JAVASCRIPT
   '/static/js/app.js',
-  '/static/js/service-worker-registration.js',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
 
   // FONT (Bootstrap Icons richiede questo)
@@ -62,59 +61,44 @@ self.addEventListener('activate', event => {
 });
 
 // Evento fetch: intercetta le richieste di rete
-function shouldCacheResponse(request, response) {
-  return response && response.ok && request.method === 'GET';
-}
-
-function cacheFirst(request) {
-  return caches.open(CACHE_NAME).then((cache) =>
-    cache.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(request)
-        .then((networkResponse) => {
-          if (shouldCacheResponse(request, networkResponse)) {
-            cache.put(request, networkResponse.clone());
-          }
-          return networkResponse;
-        })
-        .catch(() => cache.match(request, { ignoreSearch: true }));
-    })
-  );
-}
-
-function networkFirst(request, offlineFallback) {
-  return caches.open(CACHE_NAME).then((cache) =>
-    fetch(request)
-      .then((networkResponse) => {
-        if (shouldCacheResponse(request, networkResponse)) {
-          cache.put(request, networkResponse.clone());
-        }
-        return networkResponse;
-      })
-      .catch(() => cache.match(request).then((cached) => cached || (offlineFallback ? caches.match(offlineFallback) : cache.match(request, { ignoreSearch: true }))))
-  );
-}
-
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', event => {
   const { request } = event;
 
-  if (request.method !== 'GET') {
-    return;
-  }
-
+  // 1. Per la navigazione HTML (pagine del sito), usa la strategia "Network First".
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request, '/offline'));
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Se la rete risponde, metti in cache la nuova pagina e restituiscila
+          return caches.open(CACHE_NAME).then(cache => {
+            cache.put(request, response.clone());
+            return response;
+          });
+        })
+        .catch(() => {
+          // Se la rete fallisce (offline), cerca una corrispondenza nella cache
+          // o mostra la pagina offline di fallback.
+          return caches.match(request).then(response => {
+            return response || caches.match('/offline');
+          });
+        })
+    );
     return;
   }
 
-  const requestUrl = new URL(request.url);
-
-  if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/static/js/sessione_palestra')) {
-    event.respondWith(networkFirst(request));
-    return;
-  }
-
-  event.respondWith(cacheFirst(request));
+  // 2. Per tutte le altre richieste (CSS, JS, immagini, font), usa "Cache First".
+  event.respondWith(
+    caches.open(CACHE_NAME).then(cache => {
+      // --- MODIFICA QUI: Ignora i parametri di query (es. ?v=1.9.7) per il matching ---
+      return cache.match(request, { ignoreSearch: true }).then(response => {
+        // Se la risorsa è in cache, restituiscila subito.
+        // Altrimenti, vai alla rete.
+        return response || fetch(request).then(networkResponse => {
+          // Opzionale: metti in cache le nuove risorse statiche man mano che vengono richieste
+          cache.put(request, networkResponse.clone());
+          return networkResponse;
+        });
+      });
+    })
+  );
 });

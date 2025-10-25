@@ -23,7 +23,7 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ app_version }}">
 </head>
-<body data-sw-url="{{ url_for('main.service_worker') }}">
+<body>
     <div class="container container-mobile">
         {% block content %}{% endblock %}
     </div>
@@ -31,8 +31,17 @@
     <!-- MODIFICA QUI: Versioni stabili e allineate di Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     
-    <script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
-    <script defer src="{{ url_for('static', filename='js/service-worker-registration.js') }}?v={{ app_version }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ app_version }}"></script>
+    
+    <script nonce="{{ csp_nonce() }}">
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register("{{ url_for('main.service_worker') }}")
+            .then(registration => console.log('Service Worker registrato.'))
+            .catch(error => console.log('Registrazione Service Worker fallita:', error));
+        });
+      }
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>
