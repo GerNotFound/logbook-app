@@ -48,10 +48,10 @@
                     <div class="mb-3">
                         <h5>{{ exercise_name }}</h5>
                         <table class="table table-sm table-striped mb-0">
-                            <thead><tr><th>Set</th><th>Reps</th><th>Peso (kg)</th></tr></thead>
+                            <thead><tr><th>Set</th><th>Peso (kg)</th><th>Reps</th></tr></thead>
                             <tbody>
                                 {% for s in sets %}
-                                <tr><td>{{ s.set }}</td><td>{{ s.reps }}</td><td>{{ s.weight }}</td></tr>
+                                <tr><td>{{ s.set }}</td><td>{{ s.weight }}</td><td>{{ s.reps }}</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

@@ -223,6 +223,14 @@
         return [];
     }
 
+    function updateCancelButtonLabel(hasTemplateSelected) {
+        const { cancelButton } = state.elements;
+        if (!cancelButton) {
+            return;
+        }
+        cancelButton.textContent = hasTemplateSelected ? 'ANNULLA' : 'INDIETRO';
+    }
+
     function updateUIForTemplateSelection(templateId, startTime) {
         const { templateSelectionBox, workoutStatusBox, statusTemplateName, runningTimer } = state.elements;
         if (!templateSelectionBox || !workoutStatusBox) {
@@ -243,6 +251,7 @@
                     const ensuredStart = ensureStartTime(state.currentDraft);
                     startRunningTimer(ensuredStart);
                 }
+                updateCancelButtonLabel(true);
                 return;
             }
         }
@@ -256,6 +265,7 @@
         if (runningTimer) {
             runningTimer.textContent = '00:00:00';
         }
+        updateCancelButtonLabel(false);
     }
 
     function collectFieldValues() {
@@ -566,11 +576,6 @@
     }
 
     function handleCancel(event) {
-        const message = state.context.cancelMessage || DEFAULT_MESSAGES.cancel;
-        if (!window.confirm(message)) {
-            event.preventDefault();
-            return;
-        }
         event.preventDefault();
 
         const hasActiveTemplate = Boolean(state.currentDraft.selectedTemplateId);
@@ -585,6 +590,11 @@
             if (state.context.homeUrl) {
                 window.location.href = state.context.homeUrl;
             }
+            return;
+        }
+
+        const message = state.context.cancelMessage || DEFAULT_MESSAGES.cancel;
+        if (!window.confirm(message)) {
             return;
         }
 
