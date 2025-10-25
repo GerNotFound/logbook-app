@@ -98,17 +98,10 @@ def admin_utente_dettaglio(user_id):
             flash(f'Utente {user["username"]} e tutti i suoi dati sono stati eliminati con successo.', 'success')
             return redirect(url_for('admin.admin_utenti'))
 
-    login_logs = execute_query(
-        'SELECT login_at, ip_address FROM user_login_activity WHERE user_id = :id ORDER BY login_at DESC LIMIT 50',
-        {'id': user_id},
-        fetchall=True,
-    )
-
     return render_template(
         'admin_utente_dettaglio.html',
         title=f'Gestione {user["username"]}',
         user=user,
-        login_logs=login_logs or [],
     )
 
 
@@ -202,6 +195,29 @@ def admin_utente_alimenti(user_id):
 
     alimenti = execute_query('SELECT * FROM foods WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True)
     return render_template('admin_utente_alimenti.html', title=f'Alimenti di {user["username"]}', user=user, alimenti=alimenti)
+
+
+@admin_bp.route('/utente/<int:user_id>/accessi')
+@login_required
+@admin_required
+def admin_utente_accessi(user_id):
+    user = execute_query('SELECT * FROM users WHERE id = :id AND is_admin = 0', {'id': user_id}, fetchone=True)
+    if not user:
+        flash('Utente non trovato.', 'danger')
+        return redirect(url_for('admin.admin_utenti'))
+
+    login_logs = execute_query(
+        'SELECT login_at, ip_address FROM user_login_activity WHERE user_id = :id ORDER BY login_at DESC LIMIT 100',
+        {'id': user_id},
+        fetchall=True,
+    )
+
+    return render_template(
+        'admin_utente_accessi.html',
+        title=f'Accessi di {user["username"]}',
+        user=user,
+        login_logs=login_logs or [],
+    )
 
 @admin_bp.route('/utente/<int:user_id>/diario_palestra')
 @login_required
