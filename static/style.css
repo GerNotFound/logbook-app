@@ -198,6 +198,46 @@ hr {
 .macronutrienti-card { background-color: #212529; color: white; padding: 15px; border-radius: 5px; text-align: center; margin-bottom: 10px; font-size: 14px; }
 .text-xl { font-size: 1.5rem; }
 .label-sm { font-size: 0.8rem; }
+.privacy-box { background-color: #111; border-color: #333 !important; }
+.privacy-text { white-space: pre-wrap; line-height: 1.6; }
+.privacy-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(17, 17, 17, 0.95);
+    color: white;
+    padding: 1rem 1.5rem;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.privacy-banner p {
+    margin-bottom: 0;
+    font-size: 0.95rem;
+}
+.privacy-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.privacy-banner a {
+    color: #0dcaf0;
+}
+.privacy-banner a:hover {
+    color: #6fdcff;
+}
+@media (min-width: 768px) {
+    .privacy-banner {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .privacy-banner-actions {
+        justify-content: flex-end;
+    }
+}
 .label-tall { min-height: 40px; }
 .btn-custom-tight {
     padding: calc(var(--btn-custom-padding-y) - 0.2rem) var(--btn-custom-padding-x);
