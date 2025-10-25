@@ -9,6 +9,7 @@ from .auth import login_required, admin_required
 from extensions import db
 from utils import execute_query
 from services.admin_service import build_user_export_archive
+from services import privacy_service
 import os
 
 admin_bp = Blueprint('admin', __name__)
@@ -18,6 +19,20 @@ admin_bp = Blueprint('admin', __name__)
 @admin_required
 def admin_generale():
     return render_template('admin_generale.html', title='Admin Generale')
+
+
+@admin_bp.route('/privacy', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_privacy():
+    if request.method == 'POST':
+        content = request.form.get('content', '')
+        privacy_service.update_privacy_text(content)
+        flash('Informativa sulla privacy aggiornata con successo.', 'success')
+        return redirect(url_for('admin.admin_privacy'))
+
+    privacy_text = privacy_service.get_privacy_text()
+    return render_template('admin_privacy.html', title='Admin Privacy', privacy_text=privacy_text)
 
 @admin_bp.route('/utenti', methods=['GET', 'POST'])
 @login_required

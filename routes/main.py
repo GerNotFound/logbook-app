@@ -6,7 +6,8 @@ import math
 from collections import defaultdict
 from .auth import login_required
 from utils import execute_query, is_valid_time_format
-from services import user_service, data_service # NUOVE IMPORTAZIONI
+from services import user_service, data_service  # NUOVE IMPORTAZIONI
+from services import privacy_service
 
 main_bp = Blueprint('main', __name__)
 
@@ -48,6 +49,13 @@ def impostazioni():
             return user_service.handle_account_deletion(user_id, request.form.get('password_confirm'))
         
     return render_template('impostazioni.html', title='Impostazioni')
+
+
+@main_bp.route('/privacy')
+@login_required
+def privacy():
+    privacy_text = privacy_service.get_privacy_text()
+    return render_template('privacy.html', title='Privacy', privacy_text=privacy_text)
 
 @main_bp.route('/utente', methods=['GET', 'POST'])
 @login_required

@@ -28,6 +28,14 @@
         {% block content %}{% endblock %}
     </div>
 
+    <div id="privacy-banner" class="privacy-banner d-none">
+        <p>Per continuare a utilizzare Logbook ti invitiamo a leggere la nostra informativa su privacy e cookie.</p>
+        <div class="privacy-banner-actions">
+            <a href="{{ url_for('main.privacy') }}" class="text-decoration-none">Leggi informativa</a>
+            <button type="button" class="btn btn-light btn-sm" data-privacy-dismiss>Ho capito</button>
+        </div>
+    </div>
+
     <!-- MODIFICA QUI: Versioni stabili e allineate di Bootstrap -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     

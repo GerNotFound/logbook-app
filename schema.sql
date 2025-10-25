@@ -180,6 +180,16 @@ CREATE TABLE workout_session_comments (
     FOREIGN KEY (exercise_id) REFERENCES exercises (id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS privacy_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    content TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO privacy_settings (id, content)
+VALUES (1, '')
+ON CONFLICT (id) DO NOTHING;
+
 -- NUOVO: Aggiunta degli indici per migliorare le performance
 CREATE INDEX IF NOT EXISTS idx_daily_data_user_date ON daily_data(user_id, record_date);
 CREATE INDEX IF NOT EXISTS idx_diet_log_user_date ON diet_log(user_id, log_date);
