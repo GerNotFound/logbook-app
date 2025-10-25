@@ -42,3 +42,8 @@ def is_valid_time_format(time_str):
     except ValueError:
         return False
 
+def allowed_file(filename):
+    """Controlla se l'estensione di un file è permessa."""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+

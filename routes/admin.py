@@ -9,7 +9,7 @@ from .auth import login_required, admin_required
 from extensions import db
 from utils import execute_query
 from services.admin_service import build_user_export_archive
-from services.user_service import ensure_avatar_profile
+import os
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -34,14 +34,8 @@ def admin_utenti():
             else:
                 hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 try:
-                    result = execute_query(
-                        "INSERT INTO users (username, password) VALUES (:username, :password) RETURNING id",
-                        {'username': username, 'password': hashed_pw},
-                        fetchone=True,
-                        commit=True,
-                    )
-                    if result and result.get('id'):
-                        ensure_avatar_profile(result['id'], username)
+                    execute_query("INSERT INTO users (username, password) VALUES (:username, :password)", 
+                                  {'username': username, 'password': hashed_pw}, commit=True)
                     flash('Utente aggiunto con successo.', 'success')
                 except IntegrityError:
                     db.session.rollback()
@@ -90,8 +84,17 @@ def admin_utente_dettaglio(user_id):
                 flash('Il campo password non può essere vuoto.', 'warning')
             return redirect(url_for('admin.admin_utente_dettaglio', user_id=user_id))
         elif action == 'delete_account':
+            profile_to_delete = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
+            if profile_to_delete and profile_to_delete.get('profile_image_file'):
+                try:
+                    file_path = os.path.join('static', 'profile_pics', profile_to_delete['profile_image_file'])
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Errore durante l'eliminazione del file immagine per l'utente {user_id}: {e}")
+            
             execute_query('DELETE FROM users WHERE id = :id', {'id': user_id}, commit=True)
-
+            
             flash(f'Utente {user["username"]} e tutti i suoi dati sono stati eliminati con successo.', 'success')
             return redirect(url_for('admin.admin_utenti'))
 

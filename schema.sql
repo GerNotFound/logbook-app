@@ -18,7 +18,7 @@ CREATE TABLE user_profile (
     user_id INTEGER PRIMARY KEY,
     birth_date DATE, -- MODIFICA: TEXT -> DATE
     height REAL,
-    avatar_color TEXT NOT NULL CHECK (avatar_color ~ '^#[0-9A-Fa-f]{6}$'),
+    profile_image_file TEXT,
     gender TEXT,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
