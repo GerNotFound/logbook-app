@@ -32,11 +32,7 @@ def create_app() -> Flask:
     csrf.init_app(app)
     init_security(app)
 
-    limiter.init_app(
-        app,
-        storage_uri=app.config['RATELIMIT_STORAGE_URI'],
-        default_limits=[app.config['DEFAULT_RATE_LIMIT']],
-    )
+    limiter.init_app(app)
 
     commands.init_app(app)
 
