@@ -21,7 +21,8 @@
             userId: '',
             recordDate: '',
             saveMessage: DEFAULT_MESSAGES.save,
-            cancelMessage: DEFAULT_MESSAGES.cancel
+            cancelMessage: DEFAULT_MESSAGES.cancel,
+            homeUrl: ''
         },
         draftKey: 'workout_draft',
         storageAvailable: true,
@@ -209,8 +210,21 @@
         }
     }
 
+    function getExercisesList(template) {
+        if (!template) {
+            return [];
+        }
+        if (Array.isArray(template.exercises)) {
+            return template.exercises;
+        }
+        if (template.exercises && typeof template.exercises === 'object') {
+            return Object.values(template.exercises);
+        }
+        return [];
+    }
+
     function updateUIForTemplateSelection(templateId, startTime) {
-        const { templateSelectionBox, workoutStatusBox, statusTemplateName } = state.elements;
+        const { templateSelectionBox, workoutStatusBox, statusTemplateName, runningTimer } = state.elements;
         if (!templateSelectionBox || !workoutStatusBox) {
             return;
         }
@@ -223,14 +237,25 @@
                 if (statusTemplateName) {
                     statusTemplateName.textContent = selectedTemplate.name;
                 }
-                startRunningTimer(startTime);
+                if (typeof startTime === 'number') {
+                    startRunningTimer(startTime);
+                } else {
+                    const ensuredStart = ensureStartTime(state.currentDraft);
+                    startRunningTimer(ensuredStart);
+                }
                 return;
             }
         }
 
         templateSelectionBox.classList.remove('d-none');
         workoutStatusBox.classList.add('d-none');
+        if (statusTemplateName) {
+            statusTemplateName.textContent = '';
+        }
         stopRunningTimer();
+        if (runningTimer) {
+            runningTimer.textContent = '00:00:00';
+        }
     }
 
     function collectFieldValues() {
@@ -291,31 +316,39 @@
 
         templateNameInput.value = selectedTemplate.name;
 
-        selectedTemplate.exercises.forEach((exercise) => {
-            const parentId = `exercise-group-${exercise.id}`;
+        const exercises = getExercisesList(selectedTemplate);
+        const fragment = document.createDocumentFragment();
+
+        exercises.forEach((exercise, index) => {
+            const uniqueSuffix = exercise.id ? String(exercise.id) : `${exercise.exercise_id}_${index}`;
+            const parentId = `exercise-group-${uniqueSuffix}`;
+            const commentsId = `comments-${uniqueSuffix}`;
+            const notesId = `notes-${uniqueSuffix}`;
+            const historyId = `history-${uniqueSuffix}`;
+            const commentBoxId = `comment-box-${uniqueSuffix}`;
             const lastCommentText = exercise.last_comment
                 ? `<strong>${exercise.last_comment_date}:</strong> ${exercise.last_comment}`
                 : 'Nessun commento precedente.';
-            const commentsHtml = `<div id="comments-${exercise.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${lastCommentText}</div></div>`;
+            const commentsHtml = `<div id="${commentsId}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${lastCommentText}</div></div>`;
             const notesHtml = exercise.notes
-                ? `<div id="notes-${exercise.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm text-prewrap">${exercise.notes}</div></div>`
+                ? `<div id="${notesId}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm text-prewrap">${exercise.notes}</div></div>`
                 : '';
             const historyContent = Array.isArray(exercise.history) && exercise.history.length > 0
                 ? exercise.history
                     .map((session) => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`)
                     .join('')
                 : '<small class="text-muted">Nessuno storico precedente.</small>';
-            const historyHtml = `<div id="history-${exercise.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${historyContent}</div></div>`;
+            const historyHtml = `<div id="${historyId}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${historyContent}</div></div>`;
 
             const draftCommentKey = `comment_${exercise.exercise_id}`;
             const existingComment = draftFields[draftCommentKey] ?? state.context.logData[draftCommentKey] ?? '';
-            const commentBoxHtml = `<div id="comment-box-${exercise.id}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${exercise.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${existingComment}</textarea></div>`;
+            const commentBoxHtml = `<div id="${commentBoxId}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${exercise.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${existingComment}</textarea></div>`;
 
-            const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comments-${exercise.id}">Commenti</button>`;
+            const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#${commentsId}">Commenti</button>`;
             const notesButtonHtml = exercise.notes
-                ? `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#notes-${exercise.id}">Note</button>`
+                ? `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#${notesId}">Note</button>`
                 : '';
-            const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#history-${exercise.id}">Storico</button>`;
+            const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#${historyId}">Storico</button>`;
 
             let setsHtml = '';
             const totalSets = parseInt(exercise.sets, 10) || 0;
@@ -336,23 +369,26 @@
             }
 
             const exerciseHtml = `
-                <div class="mb-3 p-3 border rounded" id="${parentId}">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5>${exercise.name}</h5>
-                        <div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div>
-                    </div>
-                    ${commentsHtml}${notesHtml}${historyHtml}
-                    <hr class="my-2">
-                    ${setsHtml}
-                    <div class="mt-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comment-box-${exercise.id}">+ Commento</button>
-                    </div>
-                    ${commentBoxHtml}
-                </div>`;
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5>${exercise.name}</h5>
+                    <div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div>
+                </div>
+                ${commentsHtml}${notesHtml}${historyHtml}
+                <hr class="my-2">
+                ${setsHtml}
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#${commentBoxId}">+ Commento</button>
+                </div>
+                ${commentBoxHtml}`;
 
-            workoutSection.insertAdjacentHTML('beforeend', exerciseHtml);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mb-3 p-3 border rounded';
+            wrapper.id = parentId;
+            wrapper.innerHTML = exerciseHtml;
+            fragment.appendChild(wrapper);
         });
 
+        workoutSection.appendChild(fragment);
         attachInputListeners();
     }
 
@@ -496,6 +532,39 @@
         state.currentDraft = createEmptyDraft();
     }
 
+    function resetToEmptyDraft() {
+        clearDraftStorage();
+        state.currentDraft = createEmptyDraft();
+        state.initialDraftSnapshot = deepClone(state.currentDraft);
+        persistDraft(state.currentDraft);
+        if (state.elements.templateSelector) {
+            state.elements.templateSelector.value = '';
+        }
+        if (state.elements.startTimestampInput) {
+            state.elements.startTimestampInput.value = '';
+        }
+        renderWorkout('');
+        updateUIForTemplateSelection('', null);
+        resetStopwatch();
+    }
+
+    function restoreInitialSnapshot() {
+        const snapshot = deepClone(state.initialDraftSnapshot);
+        state.currentDraft = snapshot ? sanitizeDraft(snapshot) : createEmptyDraft();
+        const templateId = state.currentDraft.selectedTemplateId || '';
+        const startTime = templateId ? ensureStartTime(state.currentDraft) : null;
+        persistDraft(state.currentDraft);
+        if (state.elements.templateSelector) {
+            state.elements.templateSelector.value = templateId;
+        }
+        if (state.elements.startTimestampInput) {
+            state.elements.startTimestampInput.value = startTime || '';
+        }
+        renderWorkout(templateId);
+        updateUIForTemplateSelection(templateId, startTime);
+        resetStopwatch();
+    }
+
     function handleCancel(event) {
         const message = state.context.cancelMessage || DEFAULT_MESSAGES.cancel;
         if (!window.confirm(message)) {
@@ -503,30 +572,28 @@
             return;
         }
         event.preventDefault();
-        if (state.initialDraftSnapshot) {
-            const snapshot = deepClone(state.initialDraftSnapshot);
-            if (snapshot) {
-                state.currentDraft = sanitizeDraft(snapshot);
-            } else {
-                state.currentDraft = createEmptyDraft();
-                clearDraftStorage();
-            }
-        } else {
-            state.currentDraft = createEmptyDraft();
+
+        const hasActiveTemplate = Boolean(state.currentDraft.selectedTemplateId);
+        const initialTemplate = state.initialDraftSnapshot && state.initialDraftSnapshot.selectedTemplateId
+            ? String(state.initialDraftSnapshot.selectedTemplateId)
+            : '';
+
+        if (!hasActiveTemplate) {
             clearDraftStorage();
+            state.currentDraft = createEmptyDraft();
+            resetStopwatch();
+            if (state.context.homeUrl) {
+                window.location.href = state.context.homeUrl;
+            }
+            return;
         }
-        const templateId = state.currentDraft.selectedTemplateId || '';
-        const startTime = ensureStartTime(state.currentDraft);
-        persistDraft(state.currentDraft);
-        if (state.elements.templateSelector) {
-            state.elements.templateSelector.value = templateId;
+
+        if (initialTemplate) {
+            restoreInitialSnapshot();
+            return;
         }
-        if (state.elements.startTimestampInput) {
-            state.elements.startTimestampInput.value = startTime;
-        }
-        renderWorkout(templateId);
-        updateUIForTemplateSelection(templateId, startTime);
-        resetStopwatch();
+
+        resetToEmptyDraft();
     }
 
     function bindEvents() {
@@ -565,6 +632,7 @@
         state.context.recordDate = dataElement.dataset.recordDate || '';
         state.context.saveMessage = dataElement.dataset.saveMessage || DEFAULT_MESSAGES.save;
         state.context.cancelMessage = dataElement.dataset.cancelMessage || DEFAULT_MESSAGES.cancel;
+        state.context.homeUrl = dataElement.dataset.homeUrl || '';
 
         state.draftKey = state.context.userId && state.context.recordDate
             ? `workout_draft_${state.context.userId}_${state.context.recordDate}`

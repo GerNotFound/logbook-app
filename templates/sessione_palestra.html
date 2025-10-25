@@ -32,7 +32,8 @@
      data-user-id="{{ session['user_id'] }}"
      data-record-date="{{ record_date }}"
      data-save-message="Sei sicuro di voler salvare la sessione?"
-     data-cancel-message="Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi.">
+     data-cancel-message="Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi."
+     data-home-url="{{ url_for('gym.palestra') }}">
 </div>
 
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
@@ -61,7 +62,7 @@
 
 <div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
     <h5 id="status-template-name" class="mb-1"></h5>
-    <p class="mb-0 text-muted">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
+    <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
 </div>
 
 
