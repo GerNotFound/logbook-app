@@ -1,0 +1,18 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">LOGBOOK - PRIVACY</h1>
+
+        <div class="privacy-box p-3 border rounded">
+            {% if privacy_text %}
+                <div class="privacy-text">{{ privacy_text | replace('\n', '<br>') | safe }}</div>
+            {% else %}
+                <p class="text-muted mb-0">L'informativa sulla privacy non è ancora disponibile.</p>
+            {% endif %}
+        </div>
+
+        <a href="{{ url_for('main.impostazioni') }}" class="btn btn-custom mt-3">INDIETRO</a>
+    </div>
+</div>
+{% endblock %}

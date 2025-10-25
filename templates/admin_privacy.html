@@ -1,0 +1,30 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">ADMIN - PRIVACY</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <form method="POST" action="{{ url_for('admin.admin_privacy') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="privacy-content" class="form-label">Testo informativa</label>
+                <textarea id="privacy-content" name="content" class="form-control" rows="12" placeholder="Inserisci qui l'informativa su privacy e cookie">{{ privacy_text }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-custom">SALVA INFORMATIVA</button>
+        </form>
+        <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom mt-3">INDIETRO</a>
+    </div>
+</div>
+{% endblock %}
