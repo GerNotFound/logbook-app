@@ -29,8 +29,21 @@ class BaseConfig:
 
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Strict')
     PREFERRED_URL_SCHEME = 'https'
+
+    CROSS_ORIGIN_OPENER_POLICY = os.environ.get(
+        'CROSS_ORIGIN_OPENER_POLICY',
+        'same-origin',
+    )
+    CROSS_ORIGIN_EMBEDDER_POLICY = os.environ.get(
+        'CROSS_ORIGIN_EMBEDDER_POLICY',
+        'require-corp',
+    )
+    CROSS_ORIGIN_RESOURCE_POLICY = os.environ.get(
+        'CROSS_ORIGIN_RESOURCE_POLICY',
+        'same-origin',
+    )
 
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
     UPLOAD_FOLDER = 'static/profile_pics'
