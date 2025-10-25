@@ -45,6 +45,15 @@ class BaseConfig:
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
     RATELIMIT_HEADERS_ENABLED = True
 
+    LAST_ACTIVITY_UPDATE_INTERVAL_SECONDS = _as_int(
+        os.environ.get('LAST_ACTIVITY_UPDATE_INTERVAL_SECONDS'),
+        900,
+    )
+    GENERAL_METRICS_ENTRY_LIMIT = _as_int(
+        os.environ.get('GENERAL_METRICS_ENTRY_LIMIT'),
+        90,
+    )
+
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
