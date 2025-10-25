@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from .auth import login_required
 from utils import execute_query, is_valid_time_format
-from services import user_service, data_service # NUOVE IMPORTAZIONI
+from services import data_service, user_service
 
 main_bp = Blueprint('main', __name__)
 
@@ -26,9 +26,8 @@ def app_shell():
 @login_required
 def home():
     if session.get('is_admin'): return redirect(url_for('admin.admin_generale'))
-    profile = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': session['user_id']}, fetchone=True)
-    profile_image = profile['profile_image_file'] if profile else None
-    return render_template('home.html', title='Home', profile_image=profile_image)
+    avatar = user_service.build_avatar_context(session['user_id'], session.get('username'))
+    return render_template('home.html', title='Home', avatar=avatar)
 
 @main_bp.route('/impostazioni', methods=['GET', 'POST'])
 @login_required
@@ -47,21 +46,20 @@ def impostazioni():
         elif action == 'delete_account':
             return user_service.handle_account_deletion(user_id, request.form.get('password_confirm'))
         
-        elif action == 'upload_pic':
-            user_service.handle_picture_upload(user_id, request.files.get('profile_pic'))
+        elif action == 'update_avatar':
+            user_service.handle_avatar_color_update(user_id, request.form.get('avatar_color'))
             return redirect(url_for('main.impostazioni'))
 
-        elif action == 'delete_pic':
-            user_service.handle_picture_deletion(user_id)
-            return redirect(url_for('main.impostazioni'))
-    
-    profile = execute_query('SELECT * FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
-    return render_template('impostazioni.html', title='Impostazioni', profile=profile or {})
+    avatar = user_service.build_avatar_context(user_id, session.get('username'))
+    profile = execute_query('SELECT * FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True) or {}
+    profile['avatar_color'] = avatar['color']
+    return render_template('impostazioni.html', title='Impostazioni', profile=profile, avatar=avatar)
 
 @main_bp.route('/utente', methods=['GET', 'POST'])
 @login_required
 def utente():
     user_id = session['user_id']
+    current_avatar_color = user_service.ensure_avatar_profile(user_id, session.get('username'))
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'update_data':
@@ -76,8 +74,18 @@ def utente():
 
             gender = request.form.get("gender")
             
-            query = "INSERT INTO user_profile (user_id, birth_date, height, gender) VALUES (:user_id, :birth_date, :height, :gender) ON CONFLICT(user_id) DO UPDATE SET birth_date = EXCLUDED.birth_date, height = EXCLUDED.height, gender = EXCLUDED.gender"
-            params = {"user_id": user_id, "birth_date": birth_date, "height": height, "gender": gender}
+            query = (
+                "INSERT INTO user_profile (user_id, birth_date, height, gender, avatar_color) "
+                "VALUES (:user_id, :birth_date, :height, :gender, :avatar_color) "
+                "ON CONFLICT(user_id) DO UPDATE SET birth_date = EXCLUDED.birth_date, height = EXCLUDED.height, gender = EXCLUDED.gender"
+            )
+            params = {
+                "user_id": user_id,
+                "birth_date": birth_date,
+                "height": height,
+                "gender": gender,
+                "avatar_color": current_avatar_color,
+            }
             execute_query(query, params, commit=True)
             flash("Dati anagrafici aggiornati.", "success")
         return redirect(url_for('main.utente'))
