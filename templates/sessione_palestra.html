@@ -29,9 +29,9 @@
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
     <div id="stopwatch-container" class="stopwatch-container">
         <div id="stopwatch" class="stopwatch-display">00:00</div>
-        <button id="startBtn" class="btn btn-sm btn-circle ms-3">▶</button>
-        <button id="pauseBtn" class="btn btn-sm btn-circle ms-2 fs-4">❚❚</button>
-        <button id="stopBtn" class="btn btn-outline-light btn-sm btn-circle-outline ms-2">■</button>
+        <button id="startBtn" type="button" class="btn btn-sm btn-circle ms-3">▶</button>
+        <button id="pauseBtn" type="button" class="btn btn-sm btn-circle ms-2 fs-4">❚❚</button>
+        <button id="stopBtn" type="button" class="btn btn-outline-light btn-sm btn-circle-outline ms-2">■</button>
     </div>
 </div>
 
@@ -70,214 +70,428 @@
     <button type="submit" form="workout-form" class="btn btn-custom action-btn" onclick="return confirm('Sei sicuro di voler salvare la sessione?')">
         SALVA
     </button>
-    <a href="#" id="cancel-workout-btn" class="btn btn-custom action-btn">ANNULLA</a>
+    <a href="{{ url_for('gym.palestra') }}" id="cancel-workout-btn" class="btn btn-custom action-btn">ANNULLA</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
-    // La logica JavaScript di questa pagina rimane la stessa, ma con l'aggiunta della conferma su "Annulla"
-    const templatesData = {{ templates|tojson|safe }};
-    const logData = {{ log_data|tojson|safe }};
-    const templateSelector = document.getElementById('template-selector');
-    const workoutSection = document.getElementById('workout-section');
-    const templateNameInput = document.getElementById('template-name-input');
-    const startTimestampInput = document.getElementById('start-timestamp-input');
-
-    const templateSelectionBox = document.getElementById('template-selection-box');
-    const workoutStatusBox = document.getElementById('workout-status-box');
-    const statusTemplateName = document.getElementById('status-template-name');
-    const runningTimer = document.getElementById('running-timer');
-    let durationTimerInterval;
-
-    const currentUserId = {{ session['user_id'] }};
-    const recordDate = '{{ record_date }}';
+    const templatesData = {{ templates|tojson|safe }} || [];
+    const logData = {{ log_data|tojson|safe }} || {};
+    const currentUserId = {{ session['user_id']|tojson }};
+    const recordDate = {{ record_date|tojson }};
     const DRAFT_KEY = `workout_draft_${currentUserId}_${recordDate}`;
 
-    function formatDuration(totalSeconds) {
-        const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-        const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-        const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
-        return `${hours}:${minutes}:${seconds}`;
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        const templateSelector = document.getElementById('template-selector');
+        const workoutSection = document.getElementById('workout-section');
+        const templateNameInput = document.getElementById('template-name-input');
+        const startTimestampInput = document.getElementById('start-timestamp-input');
+        const workoutForm = document.getElementById('workout-form');
 
-    function startRunningTimer(startTimeMs) {
-        if (durationTimerInterval) clearInterval(durationTimerInterval);
-        
-        durationTimerInterval = setInterval(() => {
-            const elapsedSeconds = (Date.now() - startTimeMs) / 1000;
-            runningTimer.textContent = formatDuration(elapsedSeconds);
-        }, 1000);
-    }
+        const templateSelectionBox = document.getElementById('template-selection-box');
+        const workoutStatusBox = document.getElementById('workout-status-box');
+        const statusTemplateName = document.getElementById('status-template-name');
+        const runningTimer = document.getElementById('running-timer');
 
-    function updateUIForTemplateSelection(templateId, startTime) {
-        if (templateId) {
-            const selectedTemplate = templatesData.find(t => t.id == templateId);
-            if (selectedTemplate) {
-                statusTemplateName.textContent = selectedTemplate.name;
-                templateSelectionBox.classList.add('d-none');
-                workoutStatusBox.classList.remove('d-none');
-                startRunningTimer(startTime);
+        let durationTimerInterval = null;
+
+        const sessionLogData = logData || {};
+
+        function parseDraft(rawDraft) {
+            if (!rawDraft) {
+                return {};
             }
-        } else {
+            try {
+                return JSON.parse(rawDraft);
+            } catch (error) {
+                console.warn('Impossibile leggere la bozza dell\'allenamento', error);
+                return {};
+            }
+        }
+
+        function loadDraft() {
+            try {
+                return parseDraft(localStorage.getItem(DRAFT_KEY));
+            } catch (error) {
+                console.warn('Accesso a localStorage non disponibile', error);
+                return {};
+            }
+        }
+
+        function persistDraft(draft) {
+            try {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+            } catch (error) {
+                console.warn('Impossibile salvare la bozza dell\'allenamento', error);
+            }
+        }
+
+        function clearDraft() {
+            try {
+                localStorage.removeItem(DRAFT_KEY);
+            } catch (error) {
+                console.warn('Impossibile cancellare la bozza dell\'allenamento', error);
+            }
+        }
+
+        function formatDuration(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function startRunningTimer(startTimeMs) {
+            if (!runningTimer) {
+                return;
+            }
+
+            if (durationTimerInterval) {
+                clearInterval(durationTimerInterval);
+            }
+
+            const update = () => {
+                const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
+                runningTimer.textContent = formatDuration(elapsedSeconds);
+            };
+
+            update();
+            durationTimerInterval = setInterval(update, 1000);
+        }
+
+        function stopRunningTimer() {
+            if (durationTimerInterval) {
+                clearInterval(durationTimerInterval);
+                durationTimerInterval = null;
+            }
+            if (runningTimer) {
+                runningTimer.textContent = '00:00:00';
+            }
+        }
+
+        function updateUIForTemplateSelection(templateId, startTime) {
+            if (!templateSelectionBox || !workoutStatusBox) {
+                return;
+            }
+
+            if (templateId) {
+                const selectedTemplate = templatesData.find((tpl) => String(tpl.id) === String(templateId));
+                if (selectedTemplate) {
+                    if (statusTemplateName) {
+                        statusTemplateName.textContent = selectedTemplate.name;
+                    }
+                    templateSelectionBox.classList.add('d-none');
+                    workoutStatusBox.classList.remove('d-none');
+                    startRunningTimer(startTime);
+                    return;
+                }
+            }
+
             templateSelectionBox.classList.remove('d-none');
             workoutStatusBox.classList.add('d-none');
-            if (durationTimerInterval) clearInterval(durationTimerInterval);
+            stopRunningTimer();
         }
-    }
 
-    function saveDraft() {
-        const inputs = document.querySelectorAll('#workout-section input, #workout-section textarea');
-        let draftData = JSON.parse(localStorage.getItem(DRAFT_KEY)) || {};
-        
-        if (templateSelector) {
-            draftData.selectedTemplateId = templateSelector.value;
-        }
-        draftData.fields = {};
-
-        inputs.forEach(input => {
-            if (input.value) draftData.fields[input.name] = input.value;
-        });
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
-    }
-
-    function loadDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY);
-        return draft ? JSON.parse(draft) : {};
-    }
-
-    function clearDraft() {
-        localStorage.removeItem(DRAFT_KEY);
-    }
-
-    function attachInputListeners() {
-        document.querySelectorAll('#workout-section input, #workout-section textarea').forEach(input => {
-            input.addEventListener('input', saveDraft);
-        });
-    }
-
-    document.getElementById('workout-form').addEventListener('submit', clearDraft);
-
-    function renderWorkout(templateId) {
-        workoutSection.innerHTML = '';
-        const draftFields = loadDraft().fields || {};
-        if (!templateId) {
-            templateNameInput.value = "Allenamento Libero";
-            return;
-        }
-        const selectedTemplate = templatesData.find(t => t.id == templateId);
-        if (!selectedTemplate) return;
-        templateNameInput.value = selectedTemplate.name;
-        selectedTemplate.exercises.forEach(ex => {
-            const parentId = `exercise-group-${ex.id}`;
-            let lastCommentText = ex.last_comment ? `<strong>${ex.last_comment_date}:</strong> ${ex.last_comment}` : 'Nessun commento precedente.';
-            const commentsHtml = `<div id="comments-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${lastCommentText}</div></div>`;
-            const notesHtml = ex.notes ? `<div id="notes-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm text-prewrap">${ex.notes}</div></div>` : '';
-            const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">` + ((ex.history && ex.history.length > 0)
-                ? ex.history.map(session => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`).join('')
-                : `<small class="text-muted">Nessuno storico precedente.</small>`)
-                + `</div></div>`;
-            const draftCommentKey = `comment_${ex.exercise_id}`;
-            const currentCommentValue = draftFields[draftCommentKey] || (logData[draftCommentKey] || '');
-            const commentBoxHtml = `<div id="comment-box-${ex.id}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${ex.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${currentCommentValue}</textarea></div>`;
-            const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comments-${ex.id}">Commenti</button>`;
-            const notesButtonHtml = ex.notes ? `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#notes-${ex.id}">Note</button>` : '';
-            const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#history-${ex.id}">Storico</button>`;
-            let setsHtml = '';
-            for (let i = 1; i <= parseInt(ex.sets); i++) {
-                const logKey = `${ex.exercise_id}_${i}`;
-                const draftWeightKey = `weight_${ex.exercise_id}_${i}`;
-                const draftRepsKey = `reps_${ex.exercise_id}_${i}`;
-                const repsValue = draftFields[draftRepsKey] || (logData[logKey] ? logData[logKey].reps : '');
-                const weightValue = draftFields[draftWeightKey] || (logData[logKey] ? logData[logKey].weight : '');
-                setsHtml += `<div class="row g-2 align-items-center mb-2">
-                                <div class="col-2 text-center"><span class="badge bg-secondary">Set ${i}</span></div>
-                                <div class="col-5"><input type="text" name="weight_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Peso (kg)" value="${weightValue}"></div>
-                                <div class="col-5"><input type="number" min="0" step="1" name="reps_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Reps" value="${repsValue}"></div>
-                             </div>`;
+        function saveDraft() {
+            if (!workoutSection) {
+                return;
             }
-            const exerciseHtml = `<div class="mb-3 p-3 border rounded" id="${parentId}"><div class="d-flex justify-content-between align-items-center"><h5>${ex.name}</h5><div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div></div>${commentsHtml}${notesHtml}${historyHtml}<hr class="my-2">${setsHtml}<div class="mt-2"><button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comment-box-${ex.id}">+ Commento</button></div>${commentBoxHtml}</div>`;
-            workoutSection.innerHTML += exerciseHtml;
+
+            const draft = { ...loadDraft() };
+            if (!draft.startTime) {
+                draft.startTime = Date.now();
+            }
+            if (templateSelector) {
+                draft.selectedTemplateId = templateSelector.value;
+            }
+
+            draft.fields = {};
+            workoutSection.querySelectorAll('input, textarea').forEach((input) => {
+                if (input.value) {
+                    draft.fields[input.name] = input.value;
+                }
+            });
+
+            persistDraft(draft);
+        }
+
+        function attachInputListeners() {
+            if (!workoutSection) {
+                return;
+            }
+            workoutSection.querySelectorAll('input, textarea').forEach((input) => {
+                input.addEventListener('input', saveDraft);
+            });
+        }
+
+        function renderWorkout(templateId) {
+            if (!workoutSection || !templateNameInput) {
+                return;
+            }
+
+            workoutSection.innerHTML = '';
+
+            const draft = loadDraft();
+            const draftFields = draft.fields || {};
+            const selectedTemplate = templatesData.find((tpl) => String(tpl.id) === String(templateId));
+
+            if (!templateId || !selectedTemplate) {
+                templateNameInput.value = 'Allenamento Libero';
+                attachInputListeners();
+                return;
+            }
+
+            templateNameInput.value = selectedTemplate.name;
+
+            selectedTemplate.exercises.forEach((ex) => {
+                const parentId = `exercise-group-${ex.id}`;
+                const lastCommentText = ex.last_comment
+                    ? `<strong>${ex.last_comment_date}:</strong> ${ex.last_comment}`
+                    : 'Nessun commento precedente.';
+                const commentsHtml = `<div id="comments-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${lastCommentText}</div></div>`;
+                const notesHtml = ex.notes
+                    ? `<div id="notes-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm text-prewrap">${ex.notes}</div></div>`
+                    : '';
+                const historyContent = Array.isArray(ex.history) && ex.history.length > 0
+                    ? ex.history
+                        .map((session) => `<div class="mb-1"><small><strong>${session.date_formatted}:</strong> ${session.sets.join(' - ')}</small></div>`)
+                        .join('')
+                    : '<small class="text-muted">Nessuno storico precedente.</small>';
+                const historyHtml = `<div id="history-${ex.id}" class="collapse" data-bs-parent="#${parentId}"><div class="card card-body mt-2 text-sm">${historyContent}</div></div>`;
+
+                const draftCommentKey = `comment_${ex.exercise_id}`;
+                const existingComment = draftFields[draftCommentKey] ?? sessionLogData[draftCommentKey] ?? '';
+                const commentBoxHtml = `<div id="comment-box-${ex.id}" class="collapse mt-2" data-bs-parent="#${parentId}"><textarea name="comment_${ex.exercise_id}" class="form-control form-control-sm" rows="2" placeholder="Aggiungi un commento...">${existingComment}</textarea></div>`;
+
+                const commentsButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comments-${ex.id}">Commenti</button>`;
+                const notesButtonHtml = ex.notes
+                    ? `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#notes-${ex.id}">Note</button>`
+                    : '';
+                const historyButtonHtml = `<button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#history-${ex.id}">Storico</button>`;
+
+                let setsHtml = '';
+                const totalSets = parseInt(ex.sets, 10) || 0;
+                for (let i = 1; i <= totalSets; i += 1) {
+                    const logKey = `${ex.exercise_id}_${i}`;
+                    const draftWeightKey = `weight_${ex.exercise_id}_${i}`;
+                    const draftRepsKey = `reps_${ex.exercise_id}_${i}`;
+                    const logEntry = sessionLogData[logKey] || {};
+                    const repsValue = draftFields[draftRepsKey] ?? logEntry.reps ?? '';
+                    const weightValue = draftFields[draftWeightKey] ?? logEntry.weight ?? '';
+
+                    setsHtml += `
+                        <div class="row g-2 align-items-center mb-2">
+                            <div class="col-2 text-center"><span class="badge bg-secondary">Set ${i}</span></div>
+                            <div class="col-5"><input type="text" name="weight_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Peso (kg)" value="${weightValue}"></div>
+                            <div class="col-5"><input type="number" min="0" step="1" name="reps_${ex.exercise_id}_${i}" class="form-control form-control-sm" placeholder="Reps" value="${repsValue}"></div>
+                        </div>`;
+                }
+
+                const exerciseHtml = `
+                    <div class="mb-3 p-3 border rounded" id="${parentId}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>${ex.name}</h5>
+                            <div class="btn-group">${commentsButtonHtml}${notesButtonHtml}${historyButtonHtml}</div>
+                        </div>
+                        ${commentsHtml}${notesHtml}${historyHtml}
+                        <hr class="my-2">
+                        ${setsHtml}
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary btn-compact" data-bs-toggle="collapse" data-bs-target="#comment-box-${ex.id}">+ Commento</button>
+                        </div>
+                        ${commentBoxHtml}
+                    </div>`;
+
+                workoutSection.insertAdjacentHTML('beforeend', exerciseHtml);
+            });
+
+            attachInputListeners();
+        }
+
+        if (workoutForm) {
+            workoutForm.addEventListener('submit', () => {
+                clearDraft();
+            });
+
+            workoutForm.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.keyCode !== 13) {
+                    return;
+                }
+
+                const currentInput = event.target;
+                if (!currentInput || currentInput.tagName.toLowerCase() !== 'input') {
+                    return;
+                }
+
+                event.preventDefault();
+                const inputs = Array.from(workoutSection.querySelectorAll('input:not([disabled])'));
+                const currentIndex = inputs.indexOf(currentInput);
+                const nextIndex = currentIndex + 1;
+                if (nextIndex < inputs.length) {
+                    inputs[nextIndex].focus();
+                    inputs[nextIndex].select();
+                } else {
+                    currentInput.blur();
+                }
+            });
+        }
+
+        const cancelButton = document.getElementById('cancel-workout-btn');
+        if (cancelButton) {
+            cancelButton.addEventListener('click', (event) => {
+                if (!confirm('Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi.')) {
+                    event.preventDefault();
+                    return;
+                }
+                clearDraft();
+            });
+        }
+
+        const stopwatchDisplay = document.getElementById('stopwatch');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const stopBtn = document.getElementById('stopBtn');
+
+        let stopwatchTimer = null;
+        let stopwatchStartTime = 0;
+        let stopwatchElapsedTime = 0;
+        let stopwatchIsRunning = false;
+
+        function formatStopwatchTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            const minsString = minutes.toString().padStart(2, '0');
+            const secsString = secs.toString().padStart(2, '0');
+            return `${minsString}:${secsString}`;
+        }
+
+        function updateStopwatchDisplay() {
+            if (!stopwatchIsRunning || !stopwatchDisplay) {
+                return;
+            }
+            const now = Date.now();
+            const totalSeconds = Math.floor((now - stopwatchStartTime + stopwatchElapsedTime) / 1000);
+            stopwatchDisplay.textContent = formatStopwatchTime(totalSeconds);
+        }
+
+        function startStopwatch() {
+            if (stopwatchIsRunning) {
+                return;
+            }
+            stopwatchStartTime = Date.now();
+            stopwatchTimer = setInterval(updateStopwatchDisplay, 1000);
+            stopwatchIsRunning = true;
+            if (startBtn) {
+                startBtn.disabled = true;
+            }
+            if (pauseBtn) {
+                pauseBtn.disabled = false;
+            }
+        }
+
+        function pauseStopwatch() {
+            if (!stopwatchIsRunning) {
+                return;
+            }
+            clearInterval(stopwatchTimer);
+            stopwatchTimer = null;
+            stopwatchElapsedTime += Date.now() - stopwatchStartTime;
+            stopwatchIsRunning = false;
+            if (startBtn) {
+                startBtn.disabled = false;
+            }
+            if (pauseBtn) {
+                pauseBtn.disabled = true;
+            }
+            updateStopwatchDisplay();
+        }
+
+        function stopStopwatch() {
+            clearInterval(stopwatchTimer);
+            stopwatchTimer = null;
+            stopwatchIsRunning = false;
+            stopwatchStartTime = 0;
+            stopwatchElapsedTime = 0;
+            if (stopwatchDisplay) {
+                stopwatchDisplay.textContent = '00:00';
+            }
+            if (startBtn) {
+                startBtn.disabled = false;
+            }
+            if (pauseBtn) {
+                pauseBtn.disabled = true;
+            }
+        }
+
+        if (startBtn) {
+            startBtn.addEventListener('click', startStopwatch);
+        }
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', pauseStopwatch);
+            pauseBtn.disabled = true;
+        }
+        if (stopBtn) {
+            stopBtn.addEventListener('click', stopStopwatch);
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                updateStopwatchDisplay();
+            }
         });
-        attachInputListeners();
-    }
-    
-    document.addEventListener('DOMContentLoaded', function() {
+
+        const stopwatchWrapper = document.getElementById('stopwatch-wrapper');
+        const stopwatchContainer = document.getElementById('stopwatch-container');
+        if (stopwatchWrapper && stopwatchContainer) {
+            stopwatchWrapper.style.minHeight = `${stopwatchWrapper.offsetHeight}px`;
+            window.addEventListener('scroll', () => {
+                if (stopwatchWrapper.getBoundingClientRect().top <= 0) {
+                    stopwatchContainer.classList.add('stopwatch-sticky');
+                } else {
+                    stopwatchContainer.classList.remove('stopwatch-sticky');
+                }
+            });
+        }
+
         let draft = loadDraft();
         let startTime = draft.startTime;
-
         if (!startTime) {
             startTime = Date.now();
             draft.startTime = startTime;
-            localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+            persistDraft(draft);
         }
-        startTimestampInput.value = startTime;
 
-        if (draft.selectedTemplateId && templateSelector) {
-            templateSelector.value = draft.selectedTemplateId;
-        }
-        renderWorkout(draft.selectedTemplateId);
-        updateUIForTemplateSelection(draft.selectedTemplateId, startTime);
-    });
-
-    if (templateSelector) {
-        templateSelector.addEventListener('change', (event) => { 
-            const templateId = event.target.value;
-            let startTime = Date.now();
-            clearDraft();
-            
-            let newDraft = { startTime: startTime, selectedTemplateId: templateId };
-            localStorage.setItem(DRAFT_KEY, JSON.stringify(newDraft));
-
+        if (startTimestampInput) {
             startTimestampInput.value = startTime;
-            renderWorkout(templateId);
-            updateUIForTemplateSelection(templateId, startTime);
-            if (templateId) {
-                saveDraft();
-            }
-        });
-    }
-    
-    // MODIFICA QUI: Aggiunto onclick con confirm per l'annullamento
-    document.getElementById('cancel-workout-btn').addEventListener('click', function(event) {
-        event.preventDefault();
-        if (confirm('Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi.')) {
-            clearDraft(); 
-            window.location.href = "{{ url_for('gym.palestra') }}";
         }
-    });
 
-    const stopwatchDisplay = document.getElementById('stopwatch'); const startBtn = document.getElementById('startBtn'); const pauseBtn = document.getElementById('pauseBtn'); const stopBtn = document.getElementById('stopBtn');
-    let stopwatchTimer; let stopwatchStartTime = 0; let stopwatchElapsedTime = 0; let stopwatchIsRunning = false;
-    function formatStopwatchTime(seconds) { const minutes = Math.floor(seconds / 60); const secs = seconds % 60; return `${minutes < 10 ? '0' : ''}${minutes}:${secs < 10 ? '0' : ''}${secs}`; }
-    function updateStopwatchDisplay() { if (stopwatchIsRunning) { const now = Date.now(); const totalSeconds = Math.floor((now - stopwatchStartTime + stopwatchElapsedTime) / 1000); stopwatchDisplay.textContent = formatStopwatchTime(totalSeconds); } }
-    function startStopwatch() { if (!stopwatchIsRunning) { stopwatchStartTime = Date.now(); stopwatchTimer = setInterval(updateStopwatchDisplay, 1000); stopwatchIsRunning = true; startBtn.disabled = true; pauseBtn.disabled = false; } }
-    function pauseStopwatch() { if (stopwatchIsRunning) { clearInterval(stopwatchTimer); const now = Date.now(); stopwatchElapsedTime += now - stopwatchStartTime; stopwatchIsRunning = false; startBtn.disabled = false; pauseBtn.disabled = true; } }
-    function stopStopwatch() { clearInterval(stopwatchTimer); stopwatchIsRunning = false; stopwatchStartTime = 0; stopwatchElapsedTime = 0; stopwatchDisplay.textContent = '00:00'; startBtn.disabled = false; pauseBtn.disabled = true; }
-    startBtn.addEventListener('click', startStopwatch);
-    pauseBtn.addEventListener('click', pauseStopwatch);
-    stopBtn.addEventListener('click', stopStopwatch);
-    document.addEventListener('DOMContentLoaded', () => { pauseBtn.disabled = true; });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && stopwatchIsRunning) { updateStopwatchDisplay(); } });
-    document.addEventListener('DOMContentLoaded', function() {
-        const stopwatchWrapper = document.getElementById('stopwatch-wrapper'); const stopwatchContainer = document.getElementById('stopwatch-container'); const wrapperHeight = stopwatchWrapper.offsetHeight; stopwatchWrapper.style.minHeight = `${wrapperHeight}px`;
-        window.addEventListener('scroll', function() { if (stopwatchWrapper.getBoundingClientRect().top <= 0) { stopwatchContainer.classList.add('stopwatch-sticky'); } else { stopwatchContainer.classList.remove('stopwatch-sticky'); } });
-    });
+        const initialTemplateId = draft.selectedTemplateId || (templateSelector ? templateSelector.value : '');
+        if (templateSelector && draft.selectedTemplateId) {
+            templateSelector.value = String(draft.selectedTemplateId);
+        }
 
-    document.getElementById('workout-form').addEventListener('keydown', function(event) {
-        if (event.key === 'Enter' || event.keyCode === 13) {
-            const currentInput = event.target;
-            if (currentInput.tagName.toLowerCase() !== 'input') { return; }
-            event.preventDefault();
-            const inputs = Array.from(document.querySelectorAll('#workout-section input:not([disabled])'));
-            const currentIndex = inputs.indexOf(currentInput);
-            const nextIndex = currentIndex + 1;
-            if (nextIndex < inputs.length) {
-                inputs[nextIndex].focus();
-                inputs[nextIndex].select();
-            } else {
-                currentInput.blur();
-            }
+        renderWorkout(initialTemplateId);
+        updateUIForTemplateSelection(initialTemplateId, startTime);
+
+        if (templateSelector) {
+            templateSelector.addEventListener('change', (event) => {
+                const templateId = event.target.value;
+                const startTimeMs = Date.now();
+                clearDraft();
+                persistDraft({ startTime: startTimeMs, selectedTemplateId: templateId, fields: {} });
+
+                if (startTimestampInput) {
+                    startTimestampInput.value = startTimeMs;
+                }
+
+                renderWorkout(templateId);
+                updateUIForTemplateSelection(templateId, startTimeMs);
+
+                if (templateId) {
+                    saveDraft();
+                }
+            });
         }
     });
 </script>
