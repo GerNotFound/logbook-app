@@ -223,6 +223,7 @@ hr {
 
 .stopwatch-wrapper { }
 .stopwatch-container { display: flex; justify-content: center; align-items: center; padding: 10px 15px; margin-bottom: 1rem; border: 1px solid #444; border-radius: 5px; }
+.stopwatch-container, .stopwatch-display, #running-timer { color: #fff; }
 .stopwatch-display { font-size: 2.5rem; font-weight: 700; }
 .btn-circle, .btn-circle-outline { border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; line-height: 1; }
 .btn-circle { background-color: white; color: black; }
@@ -246,8 +247,14 @@ hr {
     bottom: 10px;
     right: 15px;
     font-size: 0.75rem;
-    color: #555;
+    color: #fff;
     z-index: 1000;
+}
+
+body .text-muted,
+body .text-secondary,
+body .text-body-secondary {
+    color: #fff !important;
 }
 
 .min-vh-80 { min-height: 80vh; }
