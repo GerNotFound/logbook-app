@@ -23,6 +23,13 @@ CREATE TABLE user_profile (
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
+CREATE TABLE user_login_activity (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    login_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    ip_address TEXT
+);
+
 CREATE TABLE user_notes (
     user_id INTEGER PRIMARY KEY,
     content TEXT,
@@ -180,3 +187,4 @@ CREATE INDEX IF NOT EXISTS idx_cardio_log_user_date ON cardio_log(user_id, recor
 CREATE INDEX IF NOT EXISTS idx_workout_log_user_date ON workout_log(user_id, record_date);
 CREATE INDEX IF NOT EXISTS idx_workout_log_user_exercise ON workout_log(user_id, exercise_id);
 CREATE INDEX IF NOT EXISTS idx_workout_sessions_user_date ON workout_sessions(user_id, record_date);
+CREATE INDEX IF NOT EXISTS idx_user_login_activity_user_time ON user_login_activity(user_id, login_at DESC);

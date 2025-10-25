@@ -1,7 +1,19 @@
 // static/service-worker.js
 
-// Aggiorna questa versione ogni volta che fai una modifica significativa ai file in cache
-const CACHE_NAME = 'logbook-cache-v1.9.8';
+// Determina la versione corrente dal parametro di query usato in fase di registrazione
+const CURRENT_VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+
+// Aggiorna automaticamente il nome della cache quando cambia la versione
+const CACHE_NAME = `logbook-cache-${CURRENT_VERSION}`;
+
+function versionedStaticAsset(path) {
+  if (!path.startsWith('/static/')) {
+    return path;
+  }
+  const url = new URL(path, self.location.origin);
+  url.searchParams.set('v', CURRENT_VERSION);
+  return `${url.pathname}${url.search}`;
+}
 
 // Lista dei file fondamentali per l'app shell
 const APP_SHELL_URLS = [
@@ -11,21 +23,21 @@ const APP_SHELL_URLS = [
   
   // --- MODIFICA QUI: Allineamento e aggiunta di risorse ---
   // CSS
-  '/static/style.css',
+  versionedStaticAsset('/static/style.css'),
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
   
   // JAVASCRIPT
-  '/static/js/app.js',
-  '/static/js/service-worker-registration.js',
+  versionedStaticAsset('/static/js/app.js'),
+  versionedStaticAsset('/static/js/service-worker-registration.js'),
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
 
   // FONT (Bootstrap Icons richiede questo)
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2?dd67030699838ea613ee6dbda9032279',
   
   // IMMAGINI PWA
-  '/static/icon-512x512.png',
-  '/static/apple-touch-icon.png'
+  versionedStaticAsset('/static/icon-512x512.png'),
+  versionedStaticAsset('/static/apple-touch-icon.png')
 ];
 
 // Evento di installazione: scarica e mette in cache l'app shell
@@ -59,6 +71,12 @@ self.addEventListener('activate', event => {
       return self.clients.claim();
     })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event?.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Evento fetch: intercetta le richieste di rete

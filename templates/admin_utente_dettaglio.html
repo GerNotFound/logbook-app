@@ -31,8 +31,39 @@
         <a href="{{ url_for('admin.admin_utente_diario_corsa', user_id=user.id) }}" class="btn btn-custom w-100 d-block">VEDI DIARIO CORSA</a>
         <form id="export-data-form" method="POST" action="{{ url_for('admin.admin_utente_export', user_id=user.id) }}" class="mt-2">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-light w-100">ESPORTA I DATI</button>
+            <button type="submit" class="btn btn-custom w-100 d-block">ESPORTA I DATI</button>
         </form>
+        <button class="btn btn-custom w-100 d-block mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#loginAccessi" aria-expanded="false" aria-controls="loginAccessi">ACCESSI</button>
+    </div>
+</div>
+
+<div class="collapse" id="loginAccessi">
+    <div class="card card-body bg-dark border-0 mt-3">
+        {% if login_logs %}
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Data</th>
+                            <th scope="col">Orario</th>
+                            <th scope="col">IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in login_logs %}
+                            {% set timestamp = log.login_at %}
+                            <tr>
+                                <td>{{ timestamp.strftime('%d/%m/%Y') if timestamp else 'N/D' }}</td>
+                                <td>{{ timestamp.strftime('%H:%M:%S') if timestamp else 'N/D' }}</td>
+                                <td>{{ log.ip_address or 'N/D' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="mb-0 text-center text-muted">Nessun accesso registrato per questo utente.</p>
+        {% endif %}
     </div>
 </div>
 
