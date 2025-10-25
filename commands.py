@@ -8,6 +8,7 @@ import bcrypt
 from extensions import db
 from migrations import run_migrations
 from utils import execute_query
+from services.user_service import ensure_avatar_profile
 
 @click.command(name='create-admin')
 @with_appcontext
@@ -25,12 +26,16 @@ def create_admin_command():
     
     try:
         query = """
-            INSERT INTO users (username, password, is_admin, has_seen_welcome_message) 
+            INSERT INTO users (username, password, is_admin, has_seen_welcome_message)
             VALUES (:username, :password, 1, 1)
+            RETURNING id
         """
         params = {'username': username, 'password': hashed_pw}
-        execute_query(query, params, commit=True)
-        
+        result = execute_query(query, params, fetchone=True, commit=True)
+
+        if result and result.get('id'):
+            ensure_avatar_profile(result['id'], username)
+
         click.echo(f"Utente amministratore '{username}' creato con successo.")
     
     except IntegrityError:

@@ -5,11 +5,15 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>LOGBOOK - HOME</h1>
             <div class="d-flex align-items-center">
-                {% if profile_image %}
-                    <img src="{{ url_for('static', filename='profile_pics/' + profile_image) }}" alt="Profilo" class="rounded-circle avatar-thumb">
-                {% else %}
-                    <div class="rounded-circle bg-dark avatar-placeholder"></div>
-                {% endif %}
+                <div
+                    class="avatar-badge{% if avatar.needs_border %} avatar-badge-border{% endif %}"
+                    style="background-color: {{ avatar.color }}; color: {{ avatar.text_color }};"
+                    role="img"
+                    aria-label="{{ avatar.aria_label }}"
+                    title="{{ avatar.title }}"
+                >
+                    <span aria-hidden="true">{{ avatar.initial }}</span>
+                </div>
                 <div class="dropdown">
                     <button class="btn btn-custom dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         {{ session['username'][:10] }}{% if session['username']|length > 10 %}...{% endif %}

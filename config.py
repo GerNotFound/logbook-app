@@ -33,8 +33,8 @@ class BaseConfig:
     PREFERRED_URL_SCHEME = 'https'
 
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
-    UPLOAD_FOLDER = 'static/profile_pics'
-    MAX_CONTENT_LENGTH = 4 * 1024 * 1024
+    AVATAR_MODE = os.environ.get('AVATAR_MODE', 'color')
+    MAX_CONTENT_LENGTH = 512 * 1024
 
     SECURITY_MAX_FAILED_LOGINS = _as_int(os.environ.get('SECURITY_MAX_FAILED_LOGINS'), 5)
     SECURITY_LOCKOUT_MINUTES = _as_int(os.environ.get('SECURITY_LOCKOUT_MINUTES'), 15)
