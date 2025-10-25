@@ -5,6 +5,7 @@ from flask.cli import with_appcontext
 from sqlalchemy.exc import IntegrityError
 import bcrypt
 
+from bootstrap import ensure_database_indexes
 from extensions import db
 from migrations import run_migrations
 from utils import execute_query
@@ -50,7 +51,19 @@ def db_upgrade_command():
     click.echo('Migrazioni applicate con successo.')
 
 
+@click.command(name='db-prepare')
+@with_appcontext
+def db_prepare_command():
+    """Aggiorna lo schema e crea gli indici essenziali."""
+
+    run_migrations()
+    ensure_database_indexes()
+    click.echo('Database pronto con schema e indici aggiornati.')
+
+
 def init_app(app):
     """Registra i comandi CLI con l'applicazione Flask."""
     app.cli.add_command(create_admin_command)
     app.cli.add_command(db_upgrade_command)
+    app.cli.add_command(db_prepare_command)
+

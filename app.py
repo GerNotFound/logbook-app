@@ -7,11 +7,9 @@ from flask import Flask, session, current_app
 from dotenv import load_dotenv
 
 import commands
-from bootstrap import ensure_database_indexes
 from config import ProductionConfig
 from extensions import csrf, db, limiter
 from logging_config import setup_logging
-from migrations import run_migrations
 from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
 from routes.health import health_bp
 from security import init_security
@@ -46,46 +44,50 @@ def create_app() -> Flask:
 
     app.config['APP_VERSION'] = _load_app_version()
 
-    with app.app_context():
-        run_migrations()
-        ensure_database_indexes()
+    @app.before_request
+    def update_last_active_timestamp() -> None:
+        user_id = session.get('user_id')
+        if not user_id:
+            session.pop('last_activity_update', None)
+            session.pop('next_activity_update', None)
+            return
 
-        @app.before_request
-        def update_last_active_timestamp() -> None:
-            user_id = session.get('user_id')
-            if not user_id:
-                session.pop('last_activity_update', None)
-                return
+        now = datetime.utcnow()
+        next_update_iso = session.get('next_activity_update')
+        if next_update_iso:
+            try:
+                next_update = datetime.fromisoformat(next_update_iso)
+                if now < next_update:
+                    return
+            except ValueError:
+                current_app.logger.debug('Invalid next_activity_update in session, forcing refresh.')
 
-            now = datetime.utcnow()
-            last_update_iso = session.get('last_activity_update')
-            should_update = True
-            if last_update_iso:
-                try:
-                    last_update = datetime.fromisoformat(last_update_iso)
-                    should_update = (now - last_update) > timedelta(minutes=1)
-                except ValueError:
-                    should_update = True
+        update_interval = current_app.config.get('LAST_ACTIVITY_UPDATE_INTERVAL_SECONDS', 900)
 
-            if should_update:
-                execute_query(
-                    'UPDATE users SET last_active_at = :ts WHERE id = :uid',
-                    {'ts': now, 'uid': user_id},
-                    commit=True,
-                )
-                session['last_activity_update'] = now.isoformat()
+        try:
+            execute_query(
+                'UPDATE users SET last_active_at = :ts WHERE id = :uid',
+                {'ts': now, 'uid': user_id},
+                commit=True,
+            )
+        except Exception as exc:  # pragma: no cover - safeguard
+            current_app.logger.warning('Unable to persist last_active_at for user %s: %s', user_id, exc)
+            return
 
-        @app.context_processor
-        def inject_version() -> dict[str, str]:
-            return {'app_version': current_app.config.get('APP_VERSION', 'N/D')}
+        session['last_activity_update'] = now.isoformat()
+        session['next_activity_update'] = (now + timedelta(seconds=update_interval)).isoformat()
 
-        app.register_blueprint(main_bp)
-        app.register_blueprint(auth_bp)
-        app.register_blueprint(nutrition_bp)
-        app.register_blueprint(gym_bp)
-        app.register_blueprint(cardio_bp)
-        app.register_blueprint(admin_bp, url_prefix='/admin')
-        app.register_blueprint(health_bp)
+    @app.context_processor
+    def inject_version() -> dict[str, str]:
+        return {'app_version': current_app.config.get('APP_VERSION', 'N/D')}
+
+    app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(nutrition_bp)
+    app.register_blueprint(gym_bp)
+    app.register_blueprint(cardio_bp)
+    app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(health_bp)
 
     return app
 

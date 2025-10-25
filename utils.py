@@ -18,19 +18,23 @@ def execute_query(
 ) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
     """Funzione helper centralizzata per eseguire query SQL con SQLAlchemy."""
 
-    result = db.session.execute(text(query), params or {})
-    payload: Optional[Any] = None
+    try:
+        result = db.session.execute(text(query), params or {})
+        payload: Optional[Any] = None
 
-    if fetchone:
-        row = result.mappings().first()
-        payload = dict(row) if row else None
-    elif fetchall:
-        payload = [dict(row) for row in result.mappings()]
+        if fetchone:
+            row = result.mappings().first()
+            payload = dict(row) if row else None
+        elif fetchall:
+            payload = [dict(row) for row in result.mappings()]
 
-    if commit:
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
-    return payload
+        return payload
+    except Exception:
+        db.session.rollback()
+        raise
 
 def is_valid_time_format(time_str):
     """Controlla se una stringa è in formato HH:MM."""

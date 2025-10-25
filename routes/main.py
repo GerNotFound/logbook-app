@@ -1,6 +1,6 @@
 # routes/main.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, send_from_directory, current_app
 from datetime import datetime, date, timedelta
 import math
 from collections import defaultdict
@@ -84,22 +84,51 @@ def generale():
     height_cm = (profile['height'] * 100) if profile and profile.get('height') else 0
     gender = profile['gender'] if profile and profile.get('gender') else 'M' 
     
-    entries_raw = execute_query('SELECT * FROM daily_data WHERE user_id = :user_id ORDER BY record_date DESC', {'user_id': user_id}, fetchall=True)
-    all_workouts = execute_query('SELECT DISTINCT record_date, template_name FROM workout_sessions WHERE user_id = :user_id', {'user_id': user_id}, fetchall=True)
-    all_cardio = execute_query('SELECT DISTINCT record_date, activity_type FROM cardio_log WHERE user_id = :user_id', {'user_id': user_id}, fetchall=True)
+    limit = current_app.config.get('GENERAL_METRICS_ENTRY_LIMIT', 90)
+    entries_raw = execute_query(
+        'SELECT * FROM daily_data WHERE user_id = :user_id ORDER BY record_date DESC LIMIT :limit',
+        {'user_id': user_id, 'limit': limit},
+        fetchall=True,
+    ) or []
 
     activities_by_date = defaultdict(set)
-    for workout in all_workouts:
-        if workout.get('template_name'): activities_by_date[workout['record_date']].add(workout['template_name'])
-    for cardio in all_cardio:
-        activities_by_date[cardio['record_date']].add(cardio['activity_type'])
+    if entries_raw:
+        date_min = min(entry['record_date'] for entry in entries_raw)
+        date_max = max(entry['record_date'] for entry in entries_raw)
+        activity_rows = execute_query(
+            """
+            WITH combined AS (
+                SELECT record_date, template_name AS label
+                FROM workout_sessions
+                WHERE user_id = :user_id
+                  AND template_name IS NOT NULL AND template_name <> ''
+                  AND record_date BETWEEN :start_date AND :end_date
+                UNION ALL
+                SELECT record_date, activity_type AS label
+                FROM cardio_log
+                WHERE user_id = :user_id
+                  AND activity_type IS NOT NULL AND activity_type <> ''
+                  AND record_date BETWEEN :start_date AND :end_date
+            )
+            SELECT record_date, label FROM combined
+            """,
+            {
+                'user_id': user_id,
+                'start_date': date_min,
+                'end_date': date_max,
+            },
+            fetchall=True,
+        ) or []
+
+        for row in activity_rows:
+            activities_by_date[row['record_date']].add(row['label'])
 
     entries = []
     for entry in entries_raw:
         entry_dict = dict(entry)
         record_date = entry['record_date']
         activities = activities_by_date.get(record_date, set())
-        entry_dict['workout_info'] = ", ".join(sorted(list(activities)))
+        entry_dict['workout_info'] = ", ".join(sorted(activities))
         
         if entry.get('bfp_manual') is not None:
             entry_dict['bfp'] = entry['bfp_manual']
