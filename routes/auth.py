@@ -5,6 +5,8 @@ import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
 from secrets import token_hex
+
+from extensions import limiter
 from utils import execute_query
 
 auth_bp = Blueprint('auth', __name__)
@@ -35,6 +37,7 @@ def index():
     return redirect(url_for('auth.login'))
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def login():
     if 'user_id' in session:
         return redirect(url_for('main.home'))

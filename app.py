@@ -1,78 +1,47 @@
-import os
+from __future__ import annotations
+
 from datetime import datetime, timedelta
+
 from flask import Flask, session
-from extensions import db, csrf, talisman
 from dotenv import load_dotenv
-import commands # NUOVA IMPORTAZIONE
+
+import commands
+from bootstrap import ensure_database_indexes
+from config import ProductionConfig
+from extensions import csrf, db, limiter
+from logging_config import setup_logging
 from migrations import run_migrations
+from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
+from routes.health import health_bp
+from security import init_security
 from utils import execute_query
 
 load_dotenv()
 
-def create_app():
+
+def create_app() -> Flask:
     app = Flask(__name__)
+    app.config.from_object(ProductionConfig())
+    ProductionConfig.init_app(app)
 
-    # --- CONFIGURAZIONE ---
-    
-    db_url = os.environ.get('DATABASE_URL')
-    if db_url and db_url.startswith('postgres://'):
-        db_url = db_url.replace('postgres://', 'postgresql://', 1)
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-    
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'pool_pre_ping': True,
-        'pool_recycle': 280,
-    }
-    
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # MODIFICA: Fallisce se la SECRET_KEY non è impostata in produzione
-    if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('SECRET_KEY'):
-        raise ValueError("Nessuna SECRET_KEY impostata per l'ambiente di produzione")
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-insecure') 
-    
-    app.debug = os.environ.get('FLASK_ENV') == 'development'
-
-    app.config['UPLOAD_FOLDER'] = 'static/profile_pics'
-    app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024
-    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-    app.config['SECURITY_MAX_FAILED_LOGINS'] = int(os.environ.get('SECURITY_MAX_FAILED_LOGINS', 5))
-    app.config['SECURITY_LOCKOUT_MINUTES'] = int(os.environ.get('SECURITY_LOCKOUT_MINUTES', 15))
-    app.config['SECURITY_ONLINE_THRESHOLD_MINUTES'] = int(os.environ.get('SECURITY_ONLINE_THRESHOLD_MINUTES', 5))
-    
-    app.config.update(
-        SESSION_COOKIE_SECURE=not app.debug,
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE='Lax',
-    )
+    setup_logging(app.config['LOG_LEVEL'])
+    app.logger.handlers = []
+    app.logger.propagate = True
 
     db.init_app(app)
     csrf.init_app(app)
-    
-    csp = {
-        'default-src': "'self'",
-        'script-src': ["'self'", 'https://cdn.jsdelivr.net'],
-        'style-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
-        'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
-        'img-src': ["'self'", 'data:']
-    }
+    init_security(app)
 
-    talisman.init_app(
-        app,
-        content_security_policy=csp,
-        force_https=not app.debug,
-        content_security_policy_nonce_in=['script-src']
-    )
+    limiter.init_app(app)
 
-    # NUOVA SEZIONE: Registra i comandi CLI
     commands.init_app(app)
 
     with app.app_context():
         run_migrations()
+        ensure_database_indexes()
 
         @app.before_request
-        def update_last_active_timestamp():
+        def update_last_active_timestamp() -> None:
             user_id = session.get('user_id')
             if not user_id:
                 session.pop('last_activity_update', None)
@@ -97,24 +66,25 @@ def create_app():
                 session['last_activity_update'] = now.isoformat()
 
         @app.context_processor
-        def inject_version():
+        def inject_version() -> dict[str, str]:
             try:
-                with open('versione.txt', 'r') as f:
-                    version = f.read().strip()
+                with open('versione.txt', 'r', encoding='utf-8') as version_file:
+                    version = version_file.read().strip()
             except FileNotFoundError:
                 version = 'N/D'
-            return dict(app_version=version)
-        
-        from routes import main_bp, auth_bp, nutrition_bp, gym_bp, cardio_bp, admin_bp
+            return {'app_version': version}
+
         app.register_blueprint(main_bp)
         app.register_blueprint(auth_bp)
         app.register_blueprint(nutrition_bp)
         app.register_blueprint(gym_bp)
         app.register_blueprint(cardio_bp)
         app.register_blueprint(admin_bp, url_prefix='/admin')
+        app.register_blueprint(health_bp)
 
     return app
 
+
 if __name__ == '__main__':
-    app = create_app()
-    app.run(host='0.0.0.0', port=5000)
+    application = create_app()
+    application.run(host='0.0.0.0', port=5000)
