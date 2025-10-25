@@ -12,7 +12,9 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/service-worker.js')
 def service_worker():
-    return send_from_directory('static', 'service-worker.js')
+    response = send_from_directory('static', 'service-worker.js', max_age=0)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 @main_bp.route('/offline')
 def offline():

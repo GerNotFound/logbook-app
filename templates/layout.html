@@ -7,8 +7,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Logbook">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}?v={{ app_version }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}?v={{ app_version }}">
     <meta name="theme-color" content="#000000">
 
     <title>{{ title }} - Logbook</title>
@@ -23,7 +23,7 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ app_version }}">
 </head>
-<body data-sw-url="{{ url_for('main.service_worker') }}">
+<body data-sw-url="{{ url_for('main.service_worker') }}?v={{ app_version }}" data-app-version="{{ app_version }}">
     <div class="container container-mobile">
         {% block content %}{% endblock %}
     </div>

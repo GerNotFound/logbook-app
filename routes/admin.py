@@ -98,7 +98,18 @@ def admin_utente_dettaglio(user_id):
             flash(f'Utente {user["username"]} e tutti i suoi dati sono stati eliminati con successo.', 'success')
             return redirect(url_for('admin.admin_utenti'))
 
-    return render_template('admin_utente_dettaglio.html', title=f'Gestione {user["username"]}', user=user)
+    login_logs = execute_query(
+        'SELECT login_at, ip_address FROM user_login_activity WHERE user_id = :id ORDER BY login_at DESC LIMIT 50',
+        {'id': user_id},
+        fetchall=True,
+    )
+
+    return render_template(
+        'admin_utente_dettaglio.html',
+        title=f'Gestione {user["username"]}',
+        user=user,
+        login_logs=login_logs or [],
+    )
 
 
 @admin_bp.route('/utente/<int:user_id>/export', methods=['POST'])

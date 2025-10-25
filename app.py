@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from flask import Flask, session
+from flask import Flask, session, current_app
 from dotenv import load_dotenv
 
 import commands
@@ -15,6 +16,13 @@ from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
 from routes.health import health_bp
 from security import init_security
 from utils import execute_query
+
+
+def _load_app_version() -> str:
+    try:
+        return Path('versione.txt').read_text(encoding='utf-8').strip()
+    except FileNotFoundError:
+        return 'N/D'
 
 load_dotenv()
 
@@ -35,6 +43,8 @@ def create_app() -> Flask:
     limiter.init_app(app)
 
     commands.init_app(app)
+
+    app.config['APP_VERSION'] = _load_app_version()
 
     with app.app_context():
         run_migrations()
@@ -67,12 +77,7 @@ def create_app() -> Flask:
 
         @app.context_processor
         def inject_version() -> dict[str, str]:
-            try:
-                with open('versione.txt', 'r', encoding='utf-8') as version_file:
-                    version = version_file.read().strip()
-            except FileNotFoundError:
-                version = 'N/D'
-            return {'app_version': version}
+            return {'app_version': current_app.config.get('APP_VERSION', 'N/D')}
 
         app.register_blueprint(main_bp)
         app.register_blueprint(auth_bp)

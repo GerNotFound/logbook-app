@@ -73,6 +73,14 @@ def login():
                 commit=True,
             )
 
+            forwarded_for = request.headers.get('X-Forwarded-For', '')
+            client_ip = forwarded_for.split(',')[0].strip() if forwarded_for else request.remote_addr
+            execute_query(
+                'INSERT INTO user_login_activity (user_id, login_at, ip_address) VALUES (:user_id, :login_at, :ip_address)',
+                {'user_id': user['id'], 'login_at': now, 'ip_address': client_ip},
+                commit=True,
+            )
+
             remember_me = request.form.get('remember_me')
             if remember_me:
                 session.permanent = True
