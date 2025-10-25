@@ -28,9 +28,7 @@ def app_shell():
 @login_required
 def home():
     if session.get('is_admin'): return redirect(url_for('admin.admin_generale'))
-    profile = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': session['user_id']}, fetchone=True)
-    profile_image = profile['profile_image_file'] if profile else None
-    return render_template('home.html', title='Home', profile_image=profile_image)
+    return render_template('home.html', title='Home')
 
 @main_bp.route('/impostazioni', methods=['GET', 'POST'])
 @login_required
@@ -49,16 +47,7 @@ def impostazioni():
         elif action == 'delete_account':
             return user_service.handle_account_deletion(user_id, request.form.get('password_confirm'))
         
-        elif action == 'upload_pic':
-            user_service.handle_picture_upload(user_id, request.files.get('profile_pic'))
-            return redirect(url_for('main.impostazioni'))
-
-        elif action == 'delete_pic':
-            user_service.handle_picture_deletion(user_id)
-            return redirect(url_for('main.impostazioni'))
-    
-    profile = execute_query('SELECT * FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
-    return render_template('impostazioni.html', title='Impostazioni', profile=profile or {})
+    return render_template('impostazioni.html', title='Impostazioni')
 
 @main_bp.route('/utente', methods=['GET', 'POST'])
 @login_required

@@ -5,11 +5,6 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>LOGBOOK - HOME</h1>
             <div class="d-flex align-items-center">
-                {% if profile_image %}
-                    <img src="{{ url_for('static', filename='profile_pics/' + profile_image) }}" alt="Profilo" class="rounded-circle avatar-thumb">
-                {% else %}
-                    <div class="rounded-circle bg-dark avatar-placeholder"></div>
-                {% endif %}
                 <div class="dropdown">
                     <button class="btn btn-custom dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         {{ session['username'][:10] }}{% if session['username']|length > 10 %}...{% endif %}
