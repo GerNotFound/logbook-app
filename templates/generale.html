@@ -28,19 +28,19 @@
             <canvas id="overviewChart"></canvas>
         </div>
         <div id="overviewLegend" class="chart-legend"></div>
-        <p class="text-muted small mb-3">
+        <p class="text-subtle small mb-3">
             Ogni linea è normalizzata su una scala percentile (0-100) per facilitare il confronto immediato fra indicatori diversi.
         </p>
         {% if analytics.metric_summary %}
         <div class="d-grid gap-2">
-            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#metricSummary" aria-expanded="false" aria-controls="metricSummary">
+            <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#metricSummary" aria-expanded="false" aria-controls="metricSummary">
                 Mostra riepilogo numerico
             </button>
         </div>
         <div class="collapse mt-3" id="metricSummary">
             <div class="table-responsive">
                 <table class="table table-sm table-striped align-middle mb-0">
-                    <thead class="table-light">
+                    <thead>
                         <tr>
                             <th scope="col">Metrica</th>
                             <th scope="col">Media</th>
@@ -84,7 +84,7 @@
             <canvas id="consistencyChart"></canvas>
         </div>
         <div id="consistencyLegend" class="chart-legend"></div>
-        <p class="text-muted small mt-2 mb-0">
+        <p class="text-subtle small mt-2 mb-0">
             Le percentuali indicano quante volte, nell'arco della settimana, hai registrato ogni categoria rispetto ai 7 giorni disponibili.
         </p>
     </div>
