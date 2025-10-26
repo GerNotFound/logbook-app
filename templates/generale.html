@@ -24,36 +24,43 @@
 <div class="card shadow-sm mb-4">
     <div class="card-body">
         <h2 class="h5 mb-3">Panoramica dell'andamento</h2>
-        {% if analytics.metric_summary %}
-        <div class="table-responsive mb-3">
-            <table class="table table-sm table-striped align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th scope="col">Metrica</th>
-                        <th scope="col">Media</th>
-                        <th scope="col">Min</th>
-                        <th scope="col">Max</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in analytics.metric_summary %}
-                    <tr>
-                        <td>{{ row.metric }}</td>
-                        <td>{{ row.avg }} {{ row.unit }}</td>
-                        <td>{{ row.min }} {{ row.unit }}</td>
-                        <td>{{ row.max }} {{ row.unit }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="ratio ratio-16x9 mb-3">
+            <canvas id="overviewChart"></canvas>
         </div>
-        {% endif %}
-        <div class="mt-3">
-            <canvas id="overviewChart" height="320"></canvas>
-        </div>
-        <p class="text-muted small mt-2 mb-0">
+        <p class="text-muted small mb-3">
             Ogni linea è normalizzata su una scala percentile (0-100) per facilitare il confronto immediato fra indicatori diversi.
         </p>
+        {% if analytics.metric_summary %}
+        <div class="d-grid gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#metricSummary" aria-expanded="false" aria-controls="metricSummary">
+                Mostra riepilogo numerico
+            </button>
+        </div>
+        <div class="collapse mt-3" id="metricSummary">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Metrica</th>
+                            <th scope="col">Media</th>
+                            <th scope="col">Min</th>
+                            <th scope="col">Max</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in analytics.metric_summary %}
+                        <tr>
+                            <td>{{ row.metric }}</td>
+                            <td>{{ row.avg }} {{ row.unit }}</td>
+                            <td>{{ row.min }} {{ row.unit }}</td>
+                            <td>{{ row.max }} {{ row.unit }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -114,7 +121,6 @@
                 borderWidth: dataset.key === 'progress' ? 3 : 2,
                 pointRadius: dataset.key === 'progress' ? 4 : 3,
                 pointHoverRadius: dataset.key === 'progress' ? 6 : 4,
-                hidden: dataset.key !== 'progress',
             }));
 
             new Chart(overviewEl, {
