@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">LOGBOOK - GENERALE</h1>
+        <h1 class="mb-3">LOGBOOK - ANALYTICS</h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -16,60 +16,210 @@
     </div>
 </div>
 
-<div class="table-responsive">
-    <!-- MODIFICA: Ripristinata classe semplice 'table-bordered' -->
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Data</th>
-                <th>Allenamento</th>
-                <th>Peso (kg)</th>
-                <th>Orario Peso</th>
-                <th>Calorie (kcal)</th>
-                <th>Proteine (g)</th>
-                <th>Carboidrati (g)</th>
-                <th>Grassi (g)</th>
-                <th>Sonno</th>
-                <th>Qualità Sonno</th>
-                <th>BFP</th>
-                <th>BMI</th>
-                <th>Azioni</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for entry in entries %}
-            <tr>
-                <td>{{ entry.date_formatted }}</td>
-                <td>{{ entry.workout_info }}</td>
-                <td>{{ entry.weight | round(1) if entry.weight is not none }}</td>
-                <td>{{ entry.weight_time or '' }}</td>
-                <td>{{ entry.calories | round(0) if entry.calories is not none }}</td>
-                <td>{{ entry.total_protein | round(1) if entry.total_protein is not none and entry.total_protein > 0 }}</td>
-                <td>{{ entry.total_carbs | round(1) if entry.total_carbs is not none and entry.total_carbs > 0 }}</td>
-                <td>{{ entry.total_fat | round(1) if entry.total_fat is not none and entry.total_fat > 0 }}</td>
-                <td>{{ entry.sleep or '' }}</td>
-                <td>{{ entry.sleep_quality or '' }}</td>
-                <td>{{ '%s%%' % (entry.bfp | round(1)) if entry.bfp is not none else '-' }}</td>
-                <td>{{ entry.bmi | round(1) if entry.bmi is not none else '-' }}</td>
-                <td>
-                    <a href="{{ url_for('main.modifica_misure', record_date=entry.record_date) }}" class="btn btn-sm btn-outline-light">✏️</a>
-                    <form method="POST" action="{{ url_for('main.elimina_giorno') }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="date" value="{{ entry.record_date }}">
-                        <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Sei sicuro di voler eliminare TUTTI i dati di questo giorno (misure, dieta e allenamenti)?')">X</button>
-                    </form>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="13" class="text-center">Nessun dato inserito. Inizia dalla sezione "Misure" o "Dieta".</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% if not analytics.has_data %}
+<div class="alert alert-info mt-3" role="alert">
+    Nessun dato disponibile per generare le analytics. Inizia registrando le tue misurazioni, gli allenamenti e l'alimentazione.
+</div>
+{% else %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Panoramica dell'andamento</h2>
+        {% if analytics.metric_summary %}
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Metrica</th>
+                        <th scope="col">Media</th>
+                        <th scope="col">Min</th>
+                        <th scope="col">Max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in analytics.metric_summary %}
+                    <tr>
+                        <td>{{ row.metric }}</td>
+                        <td>{{ row.avg }} {{ row.unit }}</td>
+                        <td>{{ row.min }} {{ row.unit }}</td>
+                        <td>{{ row.max }} {{ row.unit }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        <div class="mt-3">
+            <canvas id="overviewChart" height="320"></canvas>
+        </div>
+        <p class="text-muted small mt-2 mb-0">
+            Ogni linea è normalizzata su una scala percentile (0-100) per facilitare il confronto immediato fra indicatori diversi.
+        </p>
+    </div>
 </div>
 
-<div class="sticky-bottom-nav">
-    <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Fattori che influenzano le prestazioni</h2>
+        <ul class="mb-0 ps-3">
+            {% for insight in analytics.insights %}
+            <li class="mb-1">{{ insight }}</li>
+            {% endfor %}
+        </ul>
+    </div>
 </div>
+
+{% if analytics.consistency.labels %}
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">Costanza di compilazione settimanale</h2>
+        <div class="mt-2">
+            <canvas id="consistencyChart" height="280"></canvas>
+        </div>
+        <p class="text-muted small mt-2 mb-0">
+            Le percentuali indicano quante volte, nell'arco della settimana, hai registrato ogni categoria rispetto ai 7 giorni disponibili.
+        </p>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="sticky-bottom-nav d-flex gap-2">
+    <a href="{{ url_for('main.home') }}" class="btn btn-custom flex-fill">INDIETRO</a>
+    <a href="{{ url_for('main.generale_tabella') }}" class="btn btn-secondary flex-fill">GENERALE</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    {% if analytics.has_data %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const analyticsData = {{ analytics | tojson }};
+        if (!analyticsData || !analyticsData.has_data) {
+            return;
+        }
+
+        const overviewEl = document.getElementById('overviewChart');
+        if (overviewEl && analyticsData.chart_labels.length && analyticsData.chart_datasets.length) {
+            const overviewDatasets = analyticsData.chart_datasets.map(dataset => ({
+                label: dataset.label,
+                data: dataset.data,
+                raw: dataset.raw,
+                unit: dataset.unit,
+                borderColor: dataset.color,
+                backgroundColor: dataset.color,
+                spanGaps: true,
+                tension: 0.25,
+                borderWidth: dataset.key === 'progress' ? 3 : 2,
+                pointRadius: dataset.key === 'progress' ? 4 : 3,
+                pointHoverRadius: dataset.key === 'progress' ? 6 : 4,
+                hidden: dataset.key !== 'progress',
+            }));
+
+            new Chart(overviewEl, {
+                type: 'line',
+                data: {
+                    labels: analyticsData.chart_labels,
+                    datasets: overviewDatasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const ds = context.dataset;
+                                    const raw = ds.raw && ds.raw[context.dataIndex];
+                                    if (raw === null || raw === undefined) {
+                                        return `${ds.label}: nessun dato`;
+                                    }
+                                    const unit = ds.unit ? ` ${ds.unit}` : '';
+                                    return `${ds.label}: ${raw}${unit} (score ${context.formattedValue}%)`;
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: value => `${value}%`,
+                            },
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        const consistencyEl = document.getElementById('consistencyChart');
+        const consistencyData = analyticsData.consistency;
+        if (consistencyEl && consistencyData.labels && consistencyData.labels.length) {
+            const consistencyDatasets = consistencyData.datasets.map(dataset => ({
+                type: 'line',
+                label: dataset.label,
+                data: dataset.data,
+                borderColor: dataset.color,
+                backgroundColor: dataset.color,
+                tension: 0.25,
+                borderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                spanGaps: true,
+            }));
+
+            new Chart(consistencyEl, {
+                data: {
+                    labels: consistencyData.labels,
+                    datasets: consistencyDatasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return `${context.dataset.label}: ${context.formattedValue}%`;
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: {
+                                callback: value => `${value}%`,
+                            },
+                        },
+                    },
+                },
+            });
+        }
+    });
+    </script>
+    {% endif %}
 {% endblock %}
