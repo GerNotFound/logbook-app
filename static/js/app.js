@@ -84,11 +84,28 @@ function initPrivacyBanner() {
     }
 }
 
+function bindConfirmationDialogs() {
+    document.querySelectorAll('form[data-confirm]').forEach((form) => {
+        if (form.dataset.confirmBound === '1') {
+            return;
+        }
+        form.dataset.confirmBound = '1';
+        form.addEventListener('submit', (event) => {
+            const message = form.dataset.confirm;
+            if (message && !confirm(message)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     addFormSubmitFeedback('upload-pic-form', 'Caricamento...');
     addFormSubmitFeedback('export-data-form', 'Esportazione...', 3000);
     bindAjaxForms();
     initPrivacyBanner();
+    bindConfirmationDialogs();
 });
 
 /**

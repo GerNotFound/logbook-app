@@ -23,6 +23,17 @@
     </form>
 </div>
 
+<div class="mb-4 p-3 border rounded">
+    <h5>Privilegi</h5>
+    <form method="POST" action="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="toggle_superuser">
+        <input type="hidden" name="is_superuser" value="{{ 0 if user.is_superuser else 1 }}">
+        <p class="text-muted small">I super user possono creare, modificare e rendere globali alimenti ed esercizi direttamente dal logbook.</p>
+        <button type="submit" class="btn btn-custom w-100">{{ 'RIMUOVI PRIVILEGI SUPER USER' if user.is_superuser else 'ABILITA SUPER USER' }}</button>
+    </form>
+</div>
+
 <div class="row">
     <div class="col-12">
         <a href="{{ url_for('admin.admin_utente_schede', user_id=user.id) }}" class="btn btn-custom w-100 d-block">GESTISCI SCHEDE</a>

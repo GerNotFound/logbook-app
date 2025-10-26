@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, session, current_app
+from flask import Flask, session, current_app, flash, redirect, url_for
 from dotenv import load_dotenv
 
 import commands
@@ -43,6 +43,25 @@ def create_app() -> Flask:
     commands.init_app(app)
 
     app.config['APP_VERSION'] = _load_app_version()
+
+    @app.before_request
+    def ensure_user_session_is_valid():
+        user_id = session.get('user_id')
+        if not user_id:
+            return
+
+        user_exists = execute_query(
+            'SELECT 1 FROM users WHERE id = :uid',
+            {'uid': user_id},
+            fetchone=True,
+        )
+
+        if user_exists:
+            return
+
+        session.clear()
+        flash('La tua sessione è stata chiusa. Effettua nuovamente l\'accesso.', 'info')
+        return redirect(url_for('auth.login'))
 
     @app.before_request
     def update_last_active_timestamp() -> None:

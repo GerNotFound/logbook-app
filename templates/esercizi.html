@@ -17,7 +17,15 @@
         <div class="row g-2">
             <div class="col"><input type="text" name="name" class="form-control" placeholder="Nome Esercizio" required></div>
             <div class="col-12"><textarea name="notes" class="form-control" rows="2" placeholder="Note personali (opzionali)..."></textarea></div>
-            <div class="col-12"><button type="submit" class="btn btn-custom btn-custom-tight">Aggiungi</button></div>
+            {% if is_superuser %}
+            <div class="col-12">
+                <div class="form-check text-start">
+                    <input class="form-check-input" type="checkbox" value="1" id="exercise-make-global" name="make_global">
+                    <label class="form-check-label" for="exercise-make-global">Rendi globale</label>
+                </div>
+            </div>
+            {% endif %}
+            <div class="col-12"><button type="submit" class="btn btn-custom btn-custom-tight">Salva</button></div>
         </div>
     </form>
 </div>
@@ -34,10 +42,11 @@
         </thead>
         <tbody>
             {% for ex in exercises %}
+            {% set can_manage = (ex.user_id == session.user_id) or (ex.user_id is none and is_superuser) %}
             <tr id="exercise-{{ ex.id }}">
                 <td class="align-middle">
                     <span class="exercise-name">{{ ex.name }}</span>
-                    {% if ex.user_id is none %}<span class="badge bg-secondary">Globale</span>{% endif %}
+                    {% if ex.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}
                 </td>
                 <td>
                     <form method="POST" action="{{ url_for('gym.esercizi') }}">
@@ -51,12 +60,13 @@
                 <td class="text-center align-middle">
                     <div class="d-grid gap-2">
                         <a href="{{ url_for('gym.esercizio_dettaglio', exercise_id=ex.id) }}" class="btn btn-sm btn-outline-light">Progressione</a>
-                        {% if ex.user_id == session.user_id %}
+                        {% if can_manage %}
                         <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameExerciseModal-{{ ex.id }}">Rinomina</button>
                         <form method="POST" action="{{ url_for('gym.esercizi') }}" onsubmit="return confirm('Sei sicuro?');" class="d-grid">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="delete_exercise">
                             <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                            <input type="hidden" name="is_global" value="{{ 1 if ex.user_id is none else 0 }}">
                             <button type="submit" class="btn btn-sm btn-delete w-100">X</button>
                         </form>
                         {% endif %}
@@ -64,7 +74,7 @@
                 </td>
             </tr>
 
-            {% if ex.user_id == session.user_id %}
+            {% if can_manage %}
             <div class="modal fade" id="renameExerciseModal-{{ ex.id }}" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
@@ -74,6 +84,7 @@
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="action" value="rename_exercise">
                                 <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                                <input type="hidden" name="is_global" value="{{ 1 if ex.user_id is none else 0 }}">
                                 <label for="new_exercise_name-{{ ex.id }}" class="form-label">Nuovo nome</label>
                                 <input type="text" name="new_exercise_name" id="new_exercise_name-{{ ex.id }}" class="form-control" value="{{ ex.name }}" required>
                             </div>

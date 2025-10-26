@@ -46,7 +46,7 @@
 {% for user in users %}
 <tr>
 <td>{{ user.id }}</td>
-<td>{{ user.username }}</td>
+<td>{{ user.username }}{% if user.is_superuser %} <span class="badge bg-light text-dark">SUPER</span>{% endif %}</td>
 <td class="text-center">
 <div class="d-flex flex-column align-items-center gap-1">
     <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-sm btn-outline-light">Gestisci</a>

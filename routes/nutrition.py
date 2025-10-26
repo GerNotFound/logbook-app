@@ -51,7 +51,7 @@ def diario_alimentare():
 @login_required
 def dieta(date_str):
     user_id = session['user_id']
-    if date_str: 
+    if date_str:
         try: current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError: return redirect(url_for('nutrition.dieta'))
     else: current_date = date.today()
@@ -92,9 +92,16 @@ def dieta(date_str):
         
         return redirect(url_for('nutrition.dieta', date_str=current_date_str))
 
-    food_names_rows = execute_query('SELECT name FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    food_names = [row['name'] for row in food_names_rows]
-    diet_log = execute_query('SELECT dl.id, f.name as food_name, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld', 
+    food_rows = execute_query('SELECT id, name, user_id FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True) or []
+    food_options = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': row['user_id'] is None
+        }
+        for row in food_rows
+    ]
+    diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
                              {'uid': user_id, 'ld': current_date_str}, fetchall=True)
     
     totals = {'protein': sum(item['protein'] for item in diet_log), 'carbs': sum(item['carbs'] for item in diet_log), 'fat': sum(item['fat'] for item in diet_log), 'calories': sum(item['calories'] for item in diet_log)}
@@ -110,49 +117,97 @@ def dieta(date_str):
     today_data = execute_query('SELECT day_type FROM daily_data WHERE user_id = :uid AND record_date = :rd', {'uid': user_id, 'rd': current_date_str}, fetchone=True)
     current_day_type = today_data['day_type'] if today_data and today_data.get('day_type') else 'ON'
     
-    return render_template('dieta.html', title='Dieta', food_names=food_names, diet_log=diet_log, totals=totals, date_formatted=current_date.strftime('%d %b %y'), target_macros=target_macros, current_day_type=current_day_type, current_date_str=current_date_str, prev_day=prev_day, next_day=next_day, is_today=is_today)
+    return render_template(
+        'dieta.html',
+        title='Dieta',
+        food_options=food_options,
+        diet_log=diet_log,
+        totals=totals,
+        date_formatted=current_date.strftime('%d %b %y'),
+        target_macros=target_macros,
+        current_day_type=current_day_type,
+        current_date_str=current_date_str,
+        prev_day=prev_day,
+        next_day=next_day,
+        is_today=is_today,
+    )
 
 @nutrition_bp.route('/alimenti', methods=['GET', 'POST'])
 @login_required
 def alimenti():
     user_id = session['user_id']
+    is_superuser = bool(session.get('is_superuser'))
     if request.method == 'POST':
         action = request.form.get('action')
         food_id = request.form.get('food_id')
 
         if action == 'add':
-            name = request.form.get('name'); protein = float(request.form.get('protein', 0)); carbs = float(request.form.get('carbs', 0)); fat = float(request.form.get('fat', 0))
+            name = (request.form.get('name') or '').strip()
+            if not name:
+                flash('Inserisci un nome valido per l\'alimento.', 'danger')
+                return redirect(url_for('nutrition.alimenti'))
+            protein = float(request.form.get('protein', 0)); carbs = float(request.form.get('carbs', 0)); fat = float(request.form.get('fat', 0))
             calories = (protein * 4) + (carbs * 4) + (fat * 9)
             try:
+                make_global = request.form.get('make_global') == '1' and is_superuser
+                owner_id = None if make_global else user_id
+                if make_global:
+                    duplicate = execute_query('SELECT 1 FROM foods WHERE user_id IS NULL AND LOWER(name) = LOWER(:name)', {'name': name}, fetchone=True)
+                    if duplicate:
+                        flash(f"Errore: esiste già un alimento globale chiamato '{name}'.", 'danger')
+                        return redirect(url_for('nutrition.alimenti'))
                 execute_query('INSERT INTO foods (name, protein, carbs, fat, calories, user_id) VALUES (:name, :p, :c, :f, :cal, :uid)',
-                              {'name': name, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'uid': user_id}, commit=True)
-                flash('Alimento personale aggiunto.', 'success')
+                              {'name': name, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'uid': owner_id}, commit=True)
+                flash(('Alimento globale aggiunto.' if make_global else 'Alimento personale aggiunto.'), 'success')
             except IntegrityError:
                 db.session.rollback()
                 flash(f"Errore: L'alimento '{name}' esiste già.", 'danger')
 
         elif action == 'delete':
-            execute_query('DELETE FROM foods WHERE id = :id AND user_id = :uid', {'id': food_id, 'uid': user_id}, commit=True)
-            flash('Alimento personale eliminato.', 'success')
-        
+            is_global = request.form.get('is_global') == '1'
+            if is_global and not is_superuser:
+                flash('Non sei autorizzato a eliminare questo alimento.', 'danger')
+            else:
+                params = {'id': food_id}
+                condition = 'user_id IS NULL' if is_global else 'user_id = :uid'
+                if not is_global:
+                    params['uid'] = user_id
+                execute_query(f'DELETE FROM foods WHERE id = :id AND {condition}', params, commit=True)
+                flash(('Alimento globale eliminato.' if is_global else 'Alimento personale eliminato.'), 'success')
+
         # NUOVA LOGICA: Rinomina Alimento
         elif action == 'rename_food':
-            new_name = request.form.get('new_food_name')
+            new_name = (request.form.get('new_food_name') or '').strip()
+            is_global = request.form.get('is_global') == '1'
             if new_name and food_id:
+                if is_global and not is_superuser:
+                    flash('Non sei autorizzato a rinominare questo alimento.', 'danger')
+                    return redirect(url_for('nutrition.alimenti'))
                 try:
-                    query = "UPDATE foods SET name = :name WHERE id = :id AND user_id = :uid"
-                    execute_query(query, {'name': new_name, 'id': food_id, 'uid': user_id}, commit=True)
+                    params = {'name': new_name, 'id': food_id}
+                    if is_global:
+                        duplicate = execute_query('SELECT 1 FROM foods WHERE user_id IS NULL AND LOWER(name) = LOWER(:name) AND id <> :id', {'name': new_name, 'id': food_id}, fetchone=True)
+                        if duplicate:
+                            flash(f"Errore: esiste già un alimento globale con il nome '{new_name}'.", 'danger')
+                            return redirect(url_for('nutrition.alimenti'))
+                        query = "UPDATE foods SET name = :name WHERE id = :id AND user_id IS NULL"
+                    else:
+                        params['uid'] = user_id
+                        query = "UPDATE foods SET name = :name WHERE id = :id AND user_id = :uid"
+                    execute_query(query, params, commit=True)
                     flash('Alimento rinominato con successo.', 'success')
                 except IntegrityError:
                     db.session.rollback()
                     flash(f"Errore: Esiste già un alimento con il nome '{new_name}'.", 'danger')
+            else:
+                flash('Inserisci un nome valido per rinominare l\'alimento.', 'danger')
 
         if food_id:
             return redirect(url_for('nutrition.alimenti', _anchor=f"food-{food_id}"))
         return redirect(url_for('nutrition.alimenti'))
 
     foods = execute_query('SELECT * FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    return render_template('alimenti.html', title='Database Alimenti', foods=foods)
+    return render_template('alimenti.html', title='Database Alimenti', foods=foods, is_superuser=is_superuser)
 
 @nutrition_bp.route('/macros', methods=['GET', 'POST'])
 @login_required

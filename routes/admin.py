@@ -10,6 +10,7 @@ from extensions import db
 from utils import execute_query
 from services.admin_service import build_user_export_archive
 from services import privacy_service
+from services.communication_service import get_welcome_message, update_welcome_message
 import os
 
 admin_bp = Blueprint('admin', __name__)
@@ -19,6 +20,24 @@ admin_bp = Blueprint('admin', __name__)
 @admin_required
 def admin_generale():
     return render_template('admin_generale.html', title='Admin Generale')
+
+
+@admin_bp.route('/comunicazioni', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_comunicazioni():
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'update_welcome':
+            message = (request.form.get('welcome_message') or '').strip()
+            if not message:
+                message = get_welcome_message()
+            update_welcome_message(message)
+            flash('Messaggio di benvenuto aggiornato con successo.', 'success')
+            return redirect(url_for('admin.admin_comunicazioni'))
+
+    welcome_message = get_welcome_message()
+    return render_template('admin_comunicazioni.html', title='Admin - Comunicazioni', welcome_message=welcome_message)
 
 
 @admin_bp.route('/privacy', methods=['GET', 'POST'])
@@ -58,7 +77,7 @@ def admin_utenti():
         return redirect(url_for('admin.admin_utenti'))
 
     search_term = request.args.get('search', '')
-    query = "SELECT id, username, last_active_at FROM users WHERE is_admin = 0"
+    query = "SELECT id, username, last_active_at, is_superuser FROM users WHERE is_admin = 0"
     params = {}
     if search_term:
         query += " AND (username ILIKE :search OR CAST(id AS TEXT) ILIKE :search)"
@@ -97,6 +116,14 @@ def admin_utente_dettaglio(user_id):
                 flash(f'Password per {user["username"]} aggiornata.', 'success')
             else:
                 flash('Il campo password non può essere vuoto.', 'warning')
+            return redirect(url_for('admin.admin_utente_dettaglio', user_id=user_id))
+        elif action == 'toggle_superuser':
+            desired_state = 1 if request.form.get('is_superuser') == '1' else 0
+            execute_query('UPDATE users SET is_superuser = :state WHERE id = :id', {'state': desired_state, 'id': user_id}, commit=True)
+            if desired_state:
+                flash(f"{user['username']} ora è un super user.", 'success')
+            else:
+                flash(f"Privilegi di super user rimossi per {user['username']}.", 'success')
             return redirect(url_for('admin.admin_utente_dettaglio', user_id=user_id))
         elif action == 'delete_account':
             profile_to_delete = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
