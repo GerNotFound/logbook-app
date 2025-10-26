@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-3">LOGBOOK - ANALYTICS</h1>
+        <h1 class="mb-4">LOGBOOK - GENERALE</h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -16,192 +16,60 @@
     </div>
 </div>
 
-{% if not analytics.has_data %}
-<div class="alert alert-info mt-3" role="alert">
-    Nessun dato disponibile per generare le analytics. Inizia registrando le tue misurazioni, gli allenamenti e l'alimentazione.
-</div>
-{% else %}
-<div class="card shadow-sm mb-4">
-    <div class="card-body chart-card">
-        <h2 class="h5 mb-3">Panoramica dell'andamento</h2>
-        <div class="chart-surface mb-3">
-            <canvas id="overviewChart"></canvas>
-        </div>
-        <div id="overviewLegend" class="chart-legend"></div>
-        <p class="text-subtle small mb-3">
-            Ogni linea è normalizzata su una scala percentile (0-100) per facilitare il confronto immediato fra indicatori diversi.
-        </p>
-        {% if analytics.metric_summary %}
-        <div class="d-grid gap-2">
-            <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#metricSummary" aria-expanded="false" aria-controls="metricSummary">
-                Mostra riepilogo numerico
-            </button>
-        </div>
-        <div class="collapse mt-3" id="metricSummary">
-            <div class="table-responsive">
-                <table class="table table-sm table-striped align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th scope="col">Metrica</th>
-                            <th scope="col">Media</th>
-                            <th scope="col">Min</th>
-                            <th scope="col">Max</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in analytics.metric_summary %}
-                        <tr>
-                            <td>{{ row.metric }}</td>
-                            <td>{{ row.avg }} {{ row.unit }}</td>
-                            <td>{{ row.min }} {{ row.unit }}</td>
-                            <td>{{ row.max }} {{ row.unit }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<div class="card shadow-sm mb-4">
-    <div class="card-body chart-card">
-        <h2 class="h5 mb-3">Fattori che influenzano le prestazioni</h2>
-        <ul class="mb-0 ps-3">
-            {% for insight in analytics.insights %}
-            <li class="mb-1">{{ insight }}</li>
+<div class="table-responsive">
+    <!-- MODIFICA: Ripristinata classe semplice 'table-bordered' -->
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Allenamento</th>
+                <th>Peso (kg)</th>
+                <th>Orario Peso</th>
+                <th>Calorie (kcal)</th>
+                <th>Proteine (g)</th>
+                <th>Carboidrati (g)</th>
+                <th>Grassi (g)</th>
+                <th>Sonno</th>
+                <th>Qualità Sonno</th>
+                <th>BFP</th>
+                <th>BMI</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr>
+                <td>{{ entry.date_formatted }}</td>
+                <td>{{ entry.workout_info }}</td>
+                <td>{{ entry.weight | round(1) if entry.weight is not none }}</td>
+                <td>{{ entry.weight_time or '' }}</td>
+                <td>{{ entry.calories | round(0) if entry.calories is not none }}</td>
+                <td>{{ entry.total_protein | round(1) if entry.total_protein is not none and entry.total_protein > 0 }}</td>
+                <td>{{ entry.total_carbs | round(1) if entry.total_carbs is not none and entry.total_carbs > 0 }}</td>
+                <td>{{ entry.total_fat | round(1) if entry.total_fat is not none and entry.total_fat > 0 }}</td>
+                <td>{{ entry.sleep or '' }}</td>
+                <td>{{ entry.sleep_quality or '' }}</td>
+                <td>{{ '%s%%' % (entry.bfp | round(1)) if entry.bfp is not none else '-' }}</td>
+                <td>{{ entry.bmi | round(1) if entry.bmi is not none else '-' }}</td>
+                <td>
+                    <a href="{{ url_for('main.modifica_misure', record_date=entry.record_date) }}" class="btn btn-sm btn-outline-light">✏️</a>
+                    <form method="POST" action="{{ url_for('main.elimina_giorno') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="date" value="{{ entry.record_date }}">
+                        <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Sei sicuro di voler eliminare TUTTI i dati di questo giorno (misure, dieta e allenamenti)?')">X</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="13" class="text-center">Nessun dato inserito. Inizia dalla sezione "Misure" o "Dieta".</td>
+            </tr>
             {% endfor %}
-        </ul>
-    </div>
+        </tbody>
+    </table>
 </div>
 
-{% if analytics.consistency.labels %}
-<div class="card shadow-sm mb-4">
-    <div class="card-body chart-card">
-        <h2 class="h5 mb-3">Costanza di compilazione settimanale</h2>
-        <div class="chart-surface mt-2">
-            <canvas id="consistencyChart"></canvas>
-        </div>
-        <div id="consistencyLegend" class="chart-legend"></div>
-        <p class="text-subtle small mt-2 mb-0">
-            Le percentuali indicano quante volte, nell'arco della settimana, hai registrato ogni categoria rispetto ai 7 giorni disponibili.
-        </p>
-    </div>
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
-{% endif %}
-{% endif %}
-
-<div class="sticky-bottom-nav d-flex gap-2">
-    <a href="{{ url_for('main.home') }}" class="btn btn-custom flex-fill">INDIETRO</a>
-    <a href="{{ url_for('main.generale_tabella') }}" class="btn btn-custom flex-fill">GENERALE</a>
-</div>
-{% endblock %}
-
-{% block scripts %}
-    {{ super() }}
-    {% if analytics.has_data %}
-    <script defer src="{{ url_for('static', filename='js/analytics-charts.js') }}?v={{ app_version }}"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const analyticsData = {{ analytics | tojson }};
-        if (!analyticsData || !analyticsData.has_data) {
-            return;
-        }
-
-        const initCharts = () => {
-            if (!window.AnalyticsCharts) {
-                return;
-            }
-
-            const formatRawValue = (raw) => {
-                if (raw === null || raw === undefined || raw === '') {
-                    return null;
-                }
-                if (typeof raw === 'number') {
-                    const abs = Math.abs(raw);
-                    let decimals = 2;
-                    if (abs >= 1000) {
-                        decimals = 0;
-                    } else if (abs >= 100) {
-                        decimals = 0;
-                    } else if (abs >= 10) {
-                        decimals = 1;
-                    }
-                    return raw.toLocaleString('it-IT', {
-                        minimumFractionDigits: decimals,
-                        maximumFractionDigits: decimals,
-                    });
-                }
-                return raw;
-            };
-
-            const overviewEl = document.getElementById('overviewChart');
-            if (overviewEl && analyticsData.chart_labels.length && analyticsData.chart_datasets.length) {
-                const overviewChart = AnalyticsCharts.renderLineChart(overviewEl, {
-                    labels: analyticsData.chart_labels,
-                    yRange: { min: 0, max: 100 },
-                    yFormatter: (value) => `${Math.round(value)}%`,
-                    tooltip: {
-                        valueFormatter: (dataset, point) => {
-                            const raw = formatRawValue(point.raw);
-                            const unit = dataset.unit ? ` ${dataset.unit}` : '';
-                            const baseText = raw !== null ? `${raw}${unit}` : 'Nessun dato';
-                            const normalized = point.value != null ? Number(point.value).toFixed(1) : null;
-                            const scoreText = normalized !== null ? `<span class="chart-tooltip-note">punteggio ${normalized}%</span>` : '';
-                            return `${baseText}${scoreText}`;
-                        },
-                    },
-                    datasets: analyticsData.chart_datasets.map((dataset) => ({
-                        label: dataset.label,
-                        color: dataset.color,
-                        unit: dataset.unit,
-                        data: dataset.data.map((value) => (value === null ? null : Number(value))),
-                        raw: dataset.raw,
-                        pointRadius: dataset.key === 'progress' ? 4.5 : 3.5,
-                        lineWidth: dataset.key === 'progress' ? 3 : 2,
-                    })),
-                });
-
-                overviewChart.subscribe((snapshot) => {
-                    AnalyticsCharts.renderLegend(document.getElementById('overviewLegend'), snapshot.datasets);
-                });
-            }
-
-            const consistencyEl = document.getElementById('consistencyChart');
-            const consistencyData = analyticsData.consistency || {};
-            if (consistencyEl && Array.isArray(consistencyData.labels) && consistencyData.labels.length) {
-                const consistencyChart = AnalyticsCharts.renderLineChart(consistencyEl, {
-                    labels: consistencyData.labels,
-                    yRange: { min: 0, max: 100 },
-                    yFormatter: (value) => `${Math.round(value)}%`,
-                    tooltip: {
-                        valueFormatter: (_dataset, point) => (point.value != null ? `${Number(point.value).toFixed(1)}%` : '—'),
-                    },
-                    datasets: (consistencyData.datasets || []).map((dataset) => ({
-                        label: dataset.label,
-                        color: dataset.color,
-                        data: dataset.data.map((value) => (value === null ? null : Number(value))),
-                        pointRadius: 3.5,
-                    })),
-                });
-
-                consistencyChart.subscribe((snapshot) => {
-                    AnalyticsCharts.renderLegend(document.getElementById('consistencyLegend'), snapshot.datasets);
-                });
-            }
-        };
-
-        if (window.AnalyticsCharts) {
-            initCharts();
-        } else {
-            const handleReady = () => {
-                window.removeEventListener('analyticsChartsReady', handleReady);
-                initCharts();
-            };
-            window.addEventListener('analyticsChartsReady', handleReady);
-        }
-    });
-    </script>
-    {% endif %}
 {% endblock %}
