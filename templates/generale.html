@@ -105,85 +105,101 @@
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const analyticsData = {{ analytics | tojson }};
-        if (!analyticsData || !analyticsData.has_data || !window.AnalyticsCharts) {
+        if (!analyticsData || !analyticsData.has_data) {
             return;
         }
 
-        const formatRawValue = (raw) => {
-            if (raw === null || raw === undefined || raw === '') {
-                return null;
+        const initCharts = () => {
+            if (!window.AnalyticsCharts) {
+                return;
             }
-            if (typeof raw === 'number') {
-                const abs = Math.abs(raw);
-                let decimals = 2;
-                if (abs >= 1000) {
-                    decimals = 0;
-                } else if (abs >= 100) {
-                    decimals = 0;
-                } else if (abs >= 10) {
-                    decimals = 1;
+
+            const formatRawValue = (raw) => {
+                if (raw === null || raw === undefined || raw === '') {
+                    return null;
                 }
-                return raw.toLocaleString('it-IT', {
-                    minimumFractionDigits: decimals,
-                    maximumFractionDigits: decimals,
+                if (typeof raw === 'number') {
+                    const abs = Math.abs(raw);
+                    let decimals = 2;
+                    if (abs >= 1000) {
+                        decimals = 0;
+                    } else if (abs >= 100) {
+                        decimals = 0;
+                    } else if (abs >= 10) {
+                        decimals = 1;
+                    }
+                    return raw.toLocaleString('it-IT', {
+                        minimumFractionDigits: decimals,
+                        maximumFractionDigits: decimals,
+                    });
+                }
+                return raw;
+            };
+
+            const overviewEl = document.getElementById('overviewChart');
+            if (overviewEl && analyticsData.chart_labels.length && analyticsData.chart_datasets.length) {
+                const overviewChart = AnalyticsCharts.renderLineChart(overviewEl, {
+                    labels: analyticsData.chart_labels,
+                    yRange: { min: 0, max: 100 },
+                    yFormatter: (value) => `${Math.round(value)}%`,
+                    tooltip: {
+                        valueFormatter: (dataset, point) => {
+                            const raw = formatRawValue(point.raw);
+                            const unit = dataset.unit ? ` ${dataset.unit}` : '';
+                            const baseText = raw !== null ? `${raw}${unit}` : 'Nessun dato';
+                            const normalized = point.value != null ? Number(point.value).toFixed(1) : null;
+                            const scoreText = normalized !== null ? `<span class="chart-tooltip-note">punteggio ${normalized}%</span>` : '';
+                            return `${baseText}${scoreText}`;
+                        },
+                    },
+                    datasets: analyticsData.chart_datasets.map((dataset) => ({
+                        label: dataset.label,
+                        color: dataset.color,
+                        unit: dataset.unit,
+                        data: dataset.data.map((value) => (value === null ? null : Number(value))),
+                        raw: dataset.raw,
+                        pointRadius: dataset.key === 'progress' ? 4.5 : 3.5,
+                        lineWidth: dataset.key === 'progress' ? 3 : 2,
+                    })),
+                });
+
+                overviewChart.subscribe((snapshot) => {
+                    AnalyticsCharts.renderLegend(document.getElementById('overviewLegend'), snapshot.datasets);
                 });
             }
-            return raw;
+
+            const consistencyEl = document.getElementById('consistencyChart');
+            const consistencyData = analyticsData.consistency || {};
+            if (consistencyEl && Array.isArray(consistencyData.labels) && consistencyData.labels.length) {
+                const consistencyChart = AnalyticsCharts.renderLineChart(consistencyEl, {
+                    labels: consistencyData.labels,
+                    yRange: { min: 0, max: 100 },
+                    yFormatter: (value) => `${Math.round(value)}%`,
+                    tooltip: {
+                        valueFormatter: (_dataset, point) => (point.value != null ? `${Number(point.value).toFixed(1)}%` : '—'),
+                    },
+                    datasets: (consistencyData.datasets || []).map((dataset) => ({
+                        label: dataset.label,
+                        color: dataset.color,
+                        data: dataset.data.map((value) => (value === null ? null : Number(value))),
+                        pointRadius: 3.5,
+                    })),
+                });
+
+                consistencyChart.subscribe((snapshot) => {
+                    AnalyticsCharts.renderLegend(document.getElementById('consistencyLegend'), snapshot.datasets);
+                });
+            }
         };
 
-        const overviewEl = document.getElementById('overviewChart');
-        if (overviewEl && analyticsData.chart_labels.length && analyticsData.chart_datasets.length) {
-            const overviewChart = AnalyticsCharts.renderLineChart(overviewEl, {
-                labels: analyticsData.chart_labels,
-                yRange: { min: 0, max: 100 },
-                yFormatter: (value) => `${Math.round(value)}%`,
-                tooltip: {
-                    valueFormatter: (dataset, point) => {
-                        const raw = formatRawValue(point.raw);
-                        const unit = dataset.unit ? ` ${dataset.unit}` : '';
-                        const baseText = raw !== null ? `${raw}${unit}` : 'Nessun dato';
-                        const normalized = point.value != null ? Number(point.value).toFixed(1) : null;
-                        const scoreText = normalized !== null ? `<span class="chart-tooltip-note">punteggio ${normalized}%</span>` : '';
-                        return `${baseText}${scoreText}`;
-                    },
-                },
-                datasets: analyticsData.chart_datasets.map((dataset) => ({
-                    label: dataset.label,
-                    color: dataset.color,
-                    unit: dataset.unit,
-                    data: dataset.data.map((value) => (value === null ? null : Number(value))),
-                    raw: dataset.raw,
-                    pointRadius: dataset.key === 'progress' ? 4.5 : 3.5,
-                    lineWidth: dataset.key === 'progress' ? 3 : 2,
-                })),
-            });
-
-            overviewChart.subscribe((snapshot) => {
-                AnalyticsCharts.renderLegend(document.getElementById('overviewLegend'), snapshot.datasets);
-            });
-        }
-
-        const consistencyEl = document.getElementById('consistencyChart');
-        const consistencyData = analyticsData.consistency || {};
-        if (consistencyEl && Array.isArray(consistencyData.labels) && consistencyData.labels.length) {
-            const consistencyChart = AnalyticsCharts.renderLineChart(consistencyEl, {
-                labels: consistencyData.labels,
-                yRange: { min: 0, max: 100 },
-                yFormatter: (value) => `${Math.round(value)}%`,
-                tooltip: {
-                    valueFormatter: (_dataset, point) => (point.value != null ? `${Number(point.value).toFixed(1)}%` : '—'),
-                },
-                datasets: (consistencyData.datasets || []).map((dataset) => ({
-                    label: dataset.label,
-                    color: dataset.color,
-                    data: dataset.data.map((value) => (value === null ? null : Number(value))),
-                    pointRadius: 3.5,
-                })),
-            });
-
-            consistencyChart.subscribe((snapshot) => {
-                AnalyticsCharts.renderLegend(document.getElementById('consistencyLegend'), snapshot.datasets);
-            });
+        if (window.AnalyticsCharts) {
+            initCharts();
+        } else {
+            const handleReady = () => {
+                window.removeEventListener('analyticsChartsReady', handleReady);
+                initCharts();
+            };
+            window.addEventListener('analyticsChartsReady', handleReady);
         }
     });
     </script>
