@@ -206,6 +206,7 @@ hr {
     position: relative;
     width: 100%;
     min-height: 320px;
+    height: clamp(280px, 55vw, 420px);
 }
 
 .chart-surface canvas {
