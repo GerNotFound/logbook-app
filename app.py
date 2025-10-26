@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 import commands
 from config import ProductionConfig
+from migrations import run_migrations
+from bootstrap import ensure_database_indexes
 from extensions import csrf, db, limiter
 from logging_config import setup_logging
 from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
@@ -43,6 +45,10 @@ def create_app() -> Flask:
     commands.init_app(app)
 
     app.config['APP_VERSION'] = _load_app_version()
+
+    with app.app_context():
+        run_migrations()
+        ensure_database_indexes()
 
     @app.before_request
     def ensure_user_session_is_valid():
