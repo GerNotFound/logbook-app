@@ -533,4 +533,9 @@
   }
 
   window.AnalyticsCharts = AnalyticsChartsModule();
+  try {
+    window.dispatchEvent(new CustomEvent('analyticsChartsReady'));
+  } catch (err) {
+    window.dispatchEvent(new Event('analyticsChartsReady'));
+  }
 })(window);
