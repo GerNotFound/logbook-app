@@ -214,6 +214,37 @@ hr {
     height: 100% !important;
     display: block;
 }
+
+.text-subtle {
+    color: rgba(248, 249, 252, 0.9) !important;
+}
+
+.text-subtle strong {
+    color: #ffffff;
+}
+
+.chart-card .table {
+    color: #f8f9fa;
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.chart-card .table thead {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.chart-card .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.chart-card .table-striped tbody tr:nth-of-type(even) {
+    background-color: rgba(255, 255, 255, 0.015);
+}
+
+.chart-card .table td,
+.chart-card .table th {
+    border-color: rgba(255, 255, 255, 0.05);
+}
 .chart-legend {
     display: flex;
     flex-wrap: wrap;

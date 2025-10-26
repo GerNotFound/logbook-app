@@ -49,6 +49,47 @@
     var canvas = state.canvas;
     var width = canvas.clientWidth;
     var height = canvas.clientHeight;
+
+    if (!width || !height) {
+      var rect = canvas.getBoundingClientRect();
+      if (!width && rect.width) {
+        width = rect.width;
+      }
+      if (!height && rect.height) {
+        height = rect.height;
+      }
+    }
+
+    if (!width || !height) {
+      var parent = canvas.parentElement;
+      if (parent) {
+        var parentRect = parent.getBoundingClientRect();
+        if (!width && parentRect.width) {
+          width = parentRect.width;
+        }
+        if (!height && parentRect.height) {
+          height = parentRect.height;
+        }
+        if (!height) {
+          var parentStyle = window.getComputedStyle(parent);
+          var minHeight = parseFloat(parentStyle.minHeight) || parseFloat(parentStyle.height);
+          if (minHeight && isFinite(minHeight)) {
+            height = minHeight;
+          }
+        }
+      }
+    }
+
+    if (!width || !height) {
+      if (!height) {
+        height = 320;
+        canvas.style.height = height + 'px';
+      }
+      if (!width) {
+        width = 480;
+      }
+    }
+
     if (!width || !height) {
       return null;
     }
@@ -108,6 +149,7 @@
         highlightIndex: null,
         rafHandle: null,
         snapshot: null,
+        retryHandle: null,
       };
 
       function notify() {
@@ -168,7 +210,18 @@
       function draw() {
         var metrics = prepareCanvas(state);
         if (!metrics) {
+          if (!state.retryHandle) {
+            state.retryHandle = window.setTimeout(function () {
+              state.retryHandle = null;
+              scheduleDraw();
+            }, 120);
+          }
           return;
+        }
+
+        if (state.retryHandle) {
+          window.clearTimeout(state.retryHandle);
+          state.retryHandle = null;
         }
 
         var width = metrics.width;
@@ -474,6 +527,11 @@
       }
 
       function destroy() {
+        if (state.retryHandle) {
+          window.clearTimeout(state.retryHandle);
+          state.retryHandle = null;
+        }
+
         if (resizeObserver) {
           resizeObserver.disconnect();
         } else {
