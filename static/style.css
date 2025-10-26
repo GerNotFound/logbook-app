@@ -250,7 +250,7 @@ hr {
 .w-80 { width: 80px; }
 .suggestions-container { position: relative; }
 .suggestions-list { position: absolute; z-index: 1000; width: 100%; max-height: 200px; overflow-y: auto; background: #212529; border: 1px solid #444; border-top: none; display: none; }
-.suggestion-item { padding: 12px 15px; border-bottom: 1px solid #444; cursor: pointer; font-size: 16px; }
+.suggestion-item { padding: 12px 15px; border-bottom: 1px solid #444; cursor: pointer; font-size: 16px; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
 .suggestion-item:hover { background-color: #343a40; }
 .avatar-thumb { width: 50px; height: 50px; object-fit: cover; margin-right: 15px; }
 .avatar-placeholder { width: 50px; height: 50px; margin-right: 15px; }
@@ -298,3 +298,13 @@ body .text-body-secondary {
 }
 
 .min-vh-80 { min-height: 80vh; }
+
+.global-icon {
+    margin-left: 0.45rem;
+    color: #d1d1d1;
+    font-size: 0.85em;
+}
+.suggestion-item .global-icon {
+    margin-left: auto;
+    flex-shrink: 0;
+}

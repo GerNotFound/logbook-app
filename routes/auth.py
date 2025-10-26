@@ -8,6 +8,7 @@ from secrets import token_hex
 
 from extensions import limiter
 from utils import execute_query
+from services.communication_service import get_welcome_message
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -65,6 +66,7 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = user['is_admin']
+            session['is_superuser'] = user.get('is_superuser', 0)
             session['last_activity_update'] = now.isoformat()
 
             execute_query(
@@ -86,7 +88,7 @@ def login():
                 session.permanent = True
             
             if not user['has_seen_welcome_message']:
-                flash('Benvenuto in Logbook! Gli amministratori possono aiutarti a mantenere aggiornati i tuoi dati di allenamento. Puoi sempre gestire le autorizzazioni dalle impostazioni del tuo profilo.', 'info')
+                flash(get_welcome_message(), 'info')
                 execute_query('UPDATE users SET has_seen_welcome_message = 1 WHERE id = :id', {'id': user['id']}, commit=True)
             
             if user['is_admin']:

@@ -40,7 +40,7 @@
             <tbody>
             {% for exercise in template.exercises %}
                 <tr id="tex-{{ exercise.id }}">
-                    <td>{{ exercise.name }}</td><td>{{ exercise.sets }}</td>
+                    <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td><td>{{ exercise.sets }}</td>
                     <td class="text-center">
                         <form method="POST" action="{{ url_for('gym.scheda') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -89,4 +89,53 @@
     <div class="alert alert-secondary text-center">Nessuna scheda di allenamento trovata.</div>
 {% endif %}
 <div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    const allExercises = {{ all_exercises|tojson|safe }};
+    document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
+        const parentForm = searchInput.closest('form');
+        const suggestionsDiv = parentForm.querySelector('.suggestions-list');
+        const exerciseIdInput = parentForm.querySelector('.exercise-id-input');
+
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            exerciseIdInput.value = '';
+            suggestionsDiv.innerHTML = '';
+            if (searchTerm.length < 1) { suggestionsDiv.style.display = 'none'; return; }
+
+            const filteredExercises = allExercises.filter(ex => ex.name.toLowerCase().includes(searchTerm)).slice(0, 8);
+            if (filteredExercises.length > 0) {
+                filteredExercises.forEach(ex => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    const label = document.createElement('span');
+                    label.textContent = ex.name;
+                    item.appendChild(label);
+                    if (ex.user_id === null) {
+                        const icon = document.createElement('i');
+                        icon.className = 'bi bi-globe2 global-icon';
+                        icon.setAttribute('title', 'Esercizio globale');
+                        icon.setAttribute('aria-label', 'Esercizio globale');
+                        item.appendChild(icon);
+                    }
+                    item.addEventListener('click', () => {
+                        searchInput.value = ex.name;
+                        exerciseIdInput.value = ex.id;
+                        suggestionsDiv.style.display = 'none';
+                    });
+                    suggestionsDiv.appendChild(item);
+                });
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.matches('.exercise-search-input')) {
+            document.querySelectorAll('.suggestions-list').forEach(div => div.style.display = 'none');
+        }
+    });
+</script>
 {% endblock %}

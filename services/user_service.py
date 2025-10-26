@@ -63,5 +63,6 @@ def handle_account_deletion(user_id, password_confirm_str):
 
     execute_query("DELETE FROM users WHERE id = :id", {"id": user_id}, commit=True)
     session.clear()
+    session.modified = True
     flash("Account eliminato con successo.", "success")
     return redirect(url_for("auth.login"))
