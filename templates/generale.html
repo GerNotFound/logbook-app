@@ -22,9 +22,9 @@
 </div>
 {% else %}
 <div class="card shadow-sm mb-4">
-    <div class="card-body">
+    <div class="card-body chart-card">
         <h2 class="h5 mb-3">Panoramica dell'andamento</h2>
-        <div class="ratio ratio-16x9 mb-3">
+        <div class="chart-surface mb-3">
             <canvas id="overviewChart"></canvas>
         </div>
         <p class="text-muted small mb-3">
@@ -65,7 +65,7 @@
 </div>
 
 <div class="card shadow-sm mb-4">
-    <div class="card-body">
+    <div class="card-body chart-card">
         <h2 class="h5 mb-3">Fattori che influenzano le prestazioni</h2>
         <ul class="mb-0 ps-3">
             {% for insight in analytics.insights %}
@@ -77,10 +77,10 @@
 
 {% if analytics.consistency.labels %}
 <div class="card shadow-sm mb-4">
-    <div class="card-body">
+    <div class="card-body chart-card">
         <h2 class="h5 mb-3">Costanza di compilazione settimanale</h2>
-        <div class="mt-2">
-            <canvas id="consistencyChart" height="280"></canvas>
+        <div class="chart-surface mt-2">
+            <canvas id="consistencyChart"></canvas>
         </div>
         <p class="text-muted small mt-2 mb-0">
             Le percentuali indicano quante volte, nell'arco della settimana, hai registrato ogni categoria rispetto ai 7 giorni disponibili.
@@ -105,6 +105,12 @@
         const analyticsData = {{ analytics | tojson }};
         if (!analyticsData || !analyticsData.has_data) {
             return;
+        }
+
+        if (window.Chart) {
+            Chart.defaults.color = '#f8f9fa';
+            Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.15)';
+            Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
         }
 
         const overviewEl = document.getElementById('overviewChart');
