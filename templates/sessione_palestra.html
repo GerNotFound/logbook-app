@@ -39,7 +39,10 @@
      data-record-date="{{ record_date }}"
      data-save-message="Sei sicuro di voler salvare la sessione?"
      data-cancel-message="Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi."
-     data-home-url="{{ url_for('gym.palestra') }}">
+     data-home-url="{{ url_for('gym.palestra') }}"
+     data-selected-template="{{ selected_template_id or '' }}"
+     data-is-editing="{{ '1' if is_editing else '0' }}"
+     data-session-template-name="{{ selected_template_name or '' }}">
 </div>
 
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
@@ -60,10 +63,11 @@
 <div id="template-selection-box" class="mb-4 p-3 border rounded">
     <h5>Seleziona Scheda</h5>
     {% if templates %}
+        {% set selected_id = selected_template_id if selected_template_id is not none else request.args.get('template_id')|int %}
         <select id="template-selector" class="form-select form-control">
-            <option value="">Nessuna scheda (allenamento libero)</option>
+            <option value="" {% if not selected_id %}selected{% endif %}>Nessuna scheda (allenamento libero)</option>
             {% for template in templates %}
-                <option value="{{ template.id }}" {% if request.args.get('template_id')|int == template.id %}selected{% endif %}>{{ template.name }}</option>
+                <option value="{{ template.id }}" {% if selected_id and selected_id == template.id %}selected{% endif %}>{{ template.name }}</option>
             {% endfor %}
         </select>
     {% else %}

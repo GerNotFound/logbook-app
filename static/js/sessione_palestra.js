@@ -22,7 +22,10 @@
             recordDate: '',
             saveMessage: DEFAULT_MESSAGES.save,
             cancelMessage: DEFAULT_MESSAGES.cancel,
-            homeUrl: ''
+            homeUrl: '',
+            selectedTemplateId: '',
+            sessionTemplateName: '',
+            isEditing: false
         },
         draftKey: 'workout_draft',
         storageAvailable: true,
@@ -393,12 +396,17 @@
         const selectedTemplate = state.context.templates.find((tpl) => String(tpl.id) === String(templateId));
 
         if (!templateId || !selectedTemplate) {
-            templateNameInput.value = 'Allenamento Libero';
+            if (!state.context.sessionTemplateName) {
+                state.context.sessionTemplateName = 'Allenamento Libero';
+            }
+            const fallbackName = state.context.sessionTemplateName || 'Allenamento Libero';
+            templateNameInput.value = fallbackName;
             appendFeedbackSection(workoutSection, draftFields);
             attachInputListeners();
             return;
         }
 
+        state.context.sessionTemplateName = selectedTemplate.name;
         templateNameInput.value = selectedTemplate.name;
 
         const exercises = getExercisesList(selectedTemplate);
@@ -591,6 +599,12 @@
 
     function handleTemplateChange(event) {
         const templateId = event.target.value || '';
+        if (templateId) {
+            const matchedTemplate = state.context.templates.find((tpl) => String(tpl.id) === String(templateId));
+            state.context.sessionTemplateName = matchedTemplate ? matchedTemplate.name : 'Allenamento Libero';
+        } else {
+            state.context.sessionTemplateName = 'Allenamento Libero';
+        }
         const newDraft = {
             startTime: Date.now(),
             selectedTemplateId: templateId,
@@ -719,6 +733,12 @@
         state.context.saveMessage = dataElement.dataset.saveMessage || DEFAULT_MESSAGES.save;
         state.context.cancelMessage = dataElement.dataset.cancelMessage || DEFAULT_MESSAGES.cancel;
         state.context.homeUrl = dataElement.dataset.homeUrl || '';
+        state.context.selectedTemplateId = dataElement.dataset.selectedTemplate || '';
+        state.context.sessionTemplateName = dataElement.dataset.sessionTemplateName || '';
+        if (!state.context.sessionTemplateName) {
+            state.context.sessionTemplateName = 'Allenamento Libero';
+        }
+        state.context.isEditing = dataElement.dataset.isEditing === '1';
 
         state.draftKey = state.context.userId && state.context.recordDate
             ? `workout_draft_${state.context.userId}_${state.context.recordDate}`
@@ -728,6 +748,12 @@
         state.storageAvailable = isLocalStorageAvailable();
 
         state.currentDraft = sanitizeDraft(loadDraftFromStorage());
+        if (state.context.isEditing) {
+            state.currentDraft.fields = {};
+            state.currentDraft.selectedTemplateId = state.context.selectedTemplateId
+                ? String(state.context.selectedTemplateId)
+                : '';
+        }
         const fallbackTemplateId = state.elements.templateSelector ? state.elements.templateSelector.value || '' : '';
         if (!state.currentDraft.selectedTemplateId && fallbackTemplateId) {
             state.currentDraft.selectedTemplateId = fallbackTemplateId;
