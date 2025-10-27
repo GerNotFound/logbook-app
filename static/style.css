@@ -170,6 +170,103 @@ h1 {
     font-size: 0.95rem;
 }
 
+.tracking-date-nav {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 1rem 1.25rem;
+}
+
+.tracking-date-nav__label {
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.tracking-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+    box-shadow: 0 20px 34px rgba(0, 0, 0, 0.45);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+@media (hover: hover) {
+    .tracking-card:hover {
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 26px 46px rgba(0, 0, 0, 0.55);
+        transform: translateY(-4px);
+    }
+}
+
+.tracking-card__icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 1.6rem;
+    color: #ffffff;
+}
+
+.tracking-card__total-value {
+    font-size: clamp(1.2rem, 2.6vw, 1.55rem);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.tracking-input-group .form-control {
+    border-radius: 16px 0 0 16px;
+}
+
+.tracking-input-group .btn {
+    border-radius: 0 16px 16px 0;
+}
+
+.tracking-quick-buttons .btn {
+    flex: 1 1 120px;
+    min-width: 120px;
+}
+
+@media (max-width: 575.98px) {
+    .tracking-quick-buttons .btn {
+        flex-basis: calc(50% - 0.5rem);
+    }
+}
+
+.tracking-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0));
+}
+
+.tracking-entry {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tracking-entry:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.tracking-entry__amount {
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+}
+
+.tracking-entry__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.tracking-entry__note {
+    word-break: break-word;
+}
+
+.tracking-goal-hint {
+    font-style: italic;
+    opacity: 0.75;
+}
+
 .brand-heading {
     display: flex;
     align-items: baseline;
