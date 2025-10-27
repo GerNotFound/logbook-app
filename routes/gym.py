@@ -460,13 +460,27 @@ def sessione_palestra(date_param, session_ts=None):
         template_name = request.form.get('template_name', 'Allenamento Libero')
 
         start_timestamp_ms = request.form.get('start_timestamp')
-        duration_minutes = 0
-        if start_timestamp_ms:
+        manual_duration_value = (request.form.get('duration_minutes_manual') or '').strip()
+        duration_minutes = None
+
+        if manual_duration_value:
             try:
-                start_time = datetime.fromtimestamp(int(start_timestamp_ms) / 1000)
-                duration = datetime.now() - start_time
-                duration_minutes = max(0, int(duration.total_seconds() / 60))
-            except (ValueError, TypeError): pass
+                manual_duration = int(manual_duration_value)
+            except (ValueError, TypeError):
+                manual_duration = None
+            else:
+                if manual_duration >= 0:
+                    duration_minutes = manual_duration
+
+        if duration_minutes is None:
+            duration_minutes = 0
+            if start_timestamp_ms:
+                try:
+                    start_time = datetime.fromtimestamp(int(start_timestamp_ms) / 1000)
+                    duration = datetime.now() - start_time
+                    duration_minutes = max(0, int(duration.total_seconds() / 60))
+                except (ValueError, TypeError):
+                    pass
 
         session_note = (request.form.get('session_note') or '').strip()
         session_rating_value = (request.form.get('session_rating') or '').strip()
@@ -544,12 +558,13 @@ def sessione_palestra(date_param, session_ts=None):
         return redirect(url_for('gym.diario_palestra'))
 
     stored_session = execute_query(
-        'SELECT template_name FROM workout_sessions WHERE user_id = :uid AND session_timestamp = :ts',
+        'SELECT template_name, duration_minutes FROM workout_sessions WHERE user_id = :uid AND session_timestamp = :ts',
         {'uid': user_id, 'ts': session_ts},
         fetchone=True,
     ) if session_ts else None
 
     selected_template_name = stored_session['template_name'] if stored_session else None
+    stored_duration_minutes = stored_session['duration_minutes'] if stored_session else None
 
     templates = get_templates_with_history(user_id, current_date)
     selected_template_id = None
@@ -567,6 +582,8 @@ def sessione_palestra(date_param, session_ts=None):
 
     log_data = get_session_log_data(user_id, session_ts) if session_ts else {}
 
+    cancel_url = url_for('gym.diario_palestra') if session_ts else url_for('gym.palestra')
+
     return render_template(
         'sessione_palestra.html',
         title='Sessione Palestra',
@@ -581,6 +598,8 @@ def sessione_palestra(date_param, session_ts=None):
         session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'),
         selected_template_id=selected_template_id,
         selected_template_name=selected_template_name,
+        session_duration_minutes=stored_duration_minutes,
+        cancel_url=cancel_url,
     )
 
 @gym_bp.route('/diario_palestra', methods=['GET', 'POST'])
