@@ -841,10 +841,17 @@
         updateUIForTemplateSelection(templateId, startTime);
     }
 
+    function getCancelDestination() {
+        const button = state.elements.cancelButton;
+        const href = button ? button.getAttribute('href') : '';
+        return state.context.cancelUrl || href || state.context.homeUrl || '';
+    }
+
     function handleCancel(event) {
         event.preventDefault();
 
         const message = state.context.cancelMessage || DEFAULT_MESSAGES.cancel;
+        const destination = getCancelDestination();
 
         if (state.context.isEditing) {
             if (!window.confirm(message)) {
@@ -853,7 +860,6 @@
             clearDraftStorage();
             state.currentDraft = createEmptyDraft();
             resetStopwatch();
-            const destination = state.context.cancelUrl || state.context.homeUrl;
             if (destination) {
                 window.location.href = destination;
             } else {
@@ -871,8 +877,8 @@
             clearDraftStorage();
             state.currentDraft = createEmptyDraft();
             resetStopwatch();
-            if (state.context.homeUrl) {
-                window.location.href = state.context.homeUrl;
+            if (destination) {
+                window.location.href = destination;
             }
             return;
         }
