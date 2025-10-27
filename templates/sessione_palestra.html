@@ -42,7 +42,9 @@
      data-home-url="{{ url_for('gym.palestra') }}"
      data-selected-template="{{ selected_template_id or '' }}"
      data-is-editing="{{ '1' if is_editing else '0' }}"
-     data-session-template-name="{{ selected_template_name or '' }}">
+     data-session-template-name="{{ selected_template_name or '' }}"
+     data-session-duration-minutes="{{ session_duration_minutes if session_duration_minutes is not none else '' }}"
+     data-cancel-url="{{ cancel_url }}">
 </div>
 
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
@@ -78,7 +80,13 @@
 
 <div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
     <h5 id="status-template-name" class="mb-1"></h5>
-    <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
+    <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+        <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
+        <div class="duration-manual mt-2 mt-md-0">
+            <label for="duration-manual-input" class="form-label text-white-50 text-uppercase small mb-1">Modifica manuale (hh:mm)</label>
+            <input type="text" id="duration-manual-input" class="form-control form-control-sm bg-dark text-white" placeholder="00:00" form="workout-form" inputmode="text" pattern="^\d{1,2}:[0-5]\d$|^\d+$">
+        </div>
+    </div>
 </div>
 
 
@@ -86,6 +94,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" id="template-name-input" name="template_name" value="">
     <input type="hidden" id="start-timestamp-input" name="start_timestamp">
+    <input type="hidden" id="duration-minutes-field" name="duration_minutes_manual" value="0">
     <div id="workout-section">
         <!-- Contenuto generato da JS -->
     </div>
