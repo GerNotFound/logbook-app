@@ -98,7 +98,7 @@ h1 {
 }
 
 .login-title {
-    margin-bottom: clamp(2.25rem, 7vw, 3.5rem);
+    margin-bottom: clamp(3rem, 9vw, 5rem);
 }
 
 .workout-accordion__trigger {
