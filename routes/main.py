@@ -188,23 +188,42 @@ def misure(date_str):
         if not is_valid_time_format(weight_time) or not is_valid_time_format(measure_time):
             flash('Formato orario non valido. Usa HH:MM.', 'danger')
             return redirect(url_for('main.misure', date_str=current_date_str))
-        
+
         bfp_mode = request.form.get('bfp-mode-selector')
+        neck_raw = request.form.get('neck')
+        waist_raw = request.form.get('waist')
+        hip_raw = request.form.get('hip')
+        bfp_manual_raw = request.form.get('bfp_manual')
         try:
             form_data = {
                 'weight': float(request.form.get('weight')) if request.form.get('weight') else None,
                 'sleep_quality': int(request.form.get('sleep_quality')) if request.form.get('sleep_quality') else None,
-                'neck': float(request.form.get('neck')) if bfp_mode == 'formula' and request.form.get('neck') else None,
-                'waist': float(request.form.get('waist')) if bfp_mode == 'formula' and request.form.get('waist') else None,
-                'hip': float(request.form.get('hip')) if bfp_mode == 'formula' and request.form.get('hip') else None,
-                'bfp_manual': float(request.form.get('bfp_manual')) if bfp_mode == 'manual' and request.form.get('bfp_manual') else None,
+                'neck': float(neck_raw) if bfp_mode == 'formula' and neck_raw else None,
+                'waist': float(waist_raw) if bfp_mode == 'formula' and waist_raw else None,
+                'hip': float(hip_raw) if bfp_mode == 'formula' and hip_raw else None,
+                'bfp_manual': float(bfp_manual_raw) if bfp_mode == 'manual' and bfp_manual_raw else None,
                 'weight_time': weight_time or None,
                 'sleep': request.form.get('sleep') or None,
                 'measure_time': measure_time if bfp_mode == 'formula' else None
             }
         except (ValueError, TypeError):
-             flash('Inserisci solo valori numerici validi.', 'danger')
-             return redirect(url_for('main.misure', date_str=current_date_str))
+            flash('Inserisci solo valori numerici validi.', 'danger')
+            return redirect(url_for('main.misure', date_str=current_date_str))
+
+        if bfp_mode == 'formula':
+            missing_fields = []
+            if not neck_raw:
+                missing_fields.append('collo')
+            if not waist_raw:
+                missing_fields.append('vita')
+            if gender == 'F' and not hip_raw:
+                missing_fields.append('fianchi')
+            if missing_fields:
+                flash('Per calcolare il BFP con la formula inserisci le misure di: ' + ', '.join(missing_fields) + '.', 'danger')
+                return redirect(url_for('main.misure', date_str=current_date_str))
+        elif bfp_mode == 'manual' and not bfp_manual_raw:
+            flash('Inserisci manualmente la percentuale di BFP.', 'danger')
+            return redirect(url_for('main.misure', date_str=current_date_str))
 
         query = "INSERT INTO daily_data (user_id, record_date, weight, weight_time, sleep, sleep_quality, neck, waist, hip, measure_time, bfp_manual) VALUES (:user_id, :record_date, :weight, :weight_time, :sleep, :sleep_quality, :neck, :waist, :hip, :measure_time, :bfp_manual) ON CONFLICT(user_id, record_date) DO UPDATE SET weight=excluded.weight, weight_time=excluded.weight_time, sleep=excluded.sleep, sleep_quality=excluded.sleep_quality, neck=excluded.neck, waist=excluded.waist, hip=excluded.hip, measure_time=excluded.measure_time, bfp_manual=excluded.bfp_manual"
         params = {'user_id': user_id, 'record_date': current_date_str, **form_data}
@@ -213,7 +232,8 @@ def misure(date_str):
         return redirect(url_for('main.generale'))
     
     misure_giorno = execute_query('SELECT * FROM daily_data WHERE user_id = :user_id AND record_date = :date', {'user_id': user_id, 'date': current_date_str}, fetchone=True)
-    return render_template('misure.html', title='Misure', date_formatted=current_date.strftime('%d %b %y'), misure=misure_giorno or {}, prev_day=prev_day, next_day=next_day, is_today=is_today, current_date_str=current_date_str, gender=gender)
+    bfp_mode_selected = 'manual' if misure_giorno and misure_giorno.get('bfp_manual') is not None else 'formula'
+    return render_template('misure.html', title='Misure', date_formatted=current_date.strftime('%d %b %y'), misure=misure_giorno or {}, prev_day=prev_day, next_day=next_day, is_today=is_today, current_date_str=current_date_str, gender=gender, bfp_mode=bfp_mode_selected)
 
 @main_bp.route('/note', methods=['GET', 'POST'])
 @login_required
@@ -255,24 +275,44 @@ def modifica_misure(record_date):
         weight_time = request.form.get('weight_time'); measure_time = request.form.get('measure_time')
         if not is_valid_time_format(weight_time) or not is_valid_time_format(measure_time):
             flash('Formato orario non valido. Usa HH:MM.', 'danger')
-            return render_template('modifica_misure.html', title=f'Modifica {date_formatted}', misure=misure, date_formatted=date_formatted, gender=gender)
-        
+            selected_mode = request.form.get('bfp-mode-selector', 'manual' if misure.get('bfp_manual') is not None else 'formula')
+            return render_template('modifica_misure.html', title=f'Modifica {date_formatted}', misure=misure, date_formatted=date_formatted, gender=gender, bfp_mode=selected_mode)
+
         bfp_mode = request.form.get('bfp-mode-selector')
+        neck_raw = request.form.get('neck')
+        waist_raw = request.form.get('waist')
+        hip_raw = request.form.get('hip')
+        bfp_manual_raw = request.form.get('bfp_manual')
         try:
             form_data = {
                 'weight': float(request.form.get('weight')) if request.form.get('weight') else None,
                 'sleep_quality': int(request.form.get('sleep_quality')) if request.form.get('sleep_quality') else None,
-                'neck': float(request.form.get('neck')) if bfp_mode == 'formula' and request.form.get('neck') else None,
-                'waist': float(request.form.get('waist')) if bfp_mode == 'formula' and request.form.get('waist') else None,
-                'hip': float(request.form.get('hip')) if bfp_mode == 'formula' and request.form.get('hip') else None,
-                'bfp_manual': float(request.form.get('bfp_manual')) if bfp_mode == 'manual' and request.form.get('bfp_manual') else None,
+                'neck': float(neck_raw) if bfp_mode == 'formula' and neck_raw else None,
+                'waist': float(waist_raw) if bfp_mode == 'formula' and waist_raw else None,
+                'hip': float(hip_raw) if bfp_mode == 'formula' and hip_raw else None,
+                'bfp_manual': float(bfp_manual_raw) if bfp_mode == 'manual' and bfp_manual_raw else None,
                 'weight_time': weight_time or None,
                 'sleep': request.form.get('sleep') or None,
                 'measure_time': measure_time if bfp_mode == 'formula' else None
             }
         except (ValueError, TypeError):
-             flash('Inserisci solo valori numerici validi.', 'danger')
-             return redirect(url_for('main.modifica_misure', record_date=record_date))
+            flash('Inserisci solo valori numerici validi.', 'danger')
+            return redirect(url_for('main.modifica_misure', record_date=record_date))
+
+        if bfp_mode == 'formula':
+            missing_fields = []
+            if not neck_raw:
+                missing_fields.append('collo')
+            if not waist_raw:
+                missing_fields.append('vita')
+            if gender == 'F' and not hip_raw:
+                missing_fields.append('fianchi')
+            if missing_fields:
+                flash('Per calcolare il BFP con la formula inserisci le misure di: ' + ', '.join(missing_fields) + '.', 'danger')
+                return redirect(url_for('main.modifica_misure', record_date=record_date))
+        elif bfp_mode == 'manual' and not bfp_manual_raw:
+            flash('Inserisci manualmente la percentuale di BFP.', 'danger')
+            return redirect(url_for('main.modifica_misure', record_date=record_date))
 
         query = "UPDATE daily_data SET weight=:weight, weight_time=:weight_time, sleep=:sleep, sleep_quality=:sleep_quality, neck=:neck, waist=:waist, hip=:hip, measure_time=:measure_time, bfp_manual=:bfp_manual WHERE user_id=:user_id AND record_date=:record_date"
         params = {'user_id': user_id, 'record_date': record_date, **form_data}
@@ -280,7 +320,7 @@ def modifica_misure(record_date):
         flash('Misure aggiornate con successo.', 'success')
         return redirect(url_for('main.generale'))
     
-    return render_template('modifica_misure.html', title=f'Modifica {date_formatted}', misure=misure, date_formatted=date_formatted, gender=gender)
+    return render_template('modifica_misure.html', title=f'Modifica {date_formatted}', misure=misure, date_formatted=date_formatted, gender=gender, bfp_mode='manual' if misure.get('bfp_manual') is not None else 'formula')
 
 @main_bp.route('/elimina_giorno', methods=['POST'])
 @login_required

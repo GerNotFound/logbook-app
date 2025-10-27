@@ -45,17 +45,17 @@
     <div class="mb-3">
         <label class="form-label">Calcolo BFP</label>
         <select id="bfp-mode-selector" name="bfp-mode-selector" class="form-select form-control">
-            <option value="manual" {% if misure.bfp_manual is not none %}selected{% endif %}>Inserisci Manualmente</option>
-            <option value="formula" {% if misure.bfp_manual is none %}selected{% endif %}>Calcola con Formula</option>
+            <option value="manual" {% if bfp_mode == 'manual' %}selected{% endif %}>Inserisci Manualmente</option>
+            <option value="formula" {% if bfp_mode != 'manual' %}selected{% endif %}>Calcola con Formula</option>
         </select>
     </div>
 
-    <div id="bfp-manual-group">
+    <div id="bfp-manual-group" class="{% if bfp_mode != 'manual' %}d-none{% endif %}">
         <label for="bfp_manual" class="form-label">BFP (%)</label>
         <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
     </div>
 
-    <div id="bfp-formula-group">
+    <div id="bfp-formula-group" class="{% if bfp_mode == 'manual' %}d-none{% endif %}">
         <div class="row">
             <div class="col-4">
                 <label for="neck" class="form-label label-tall">Collo (cm)</label>
@@ -73,7 +73,7 @@
             {% endif %}
         </div>
         <div class="mb-3">
-            <label for="measure_time" class="form-label">Orario Misure</label>
+            <label for="measure_time" class="form-label label-tall">Orario Misure</label>
             <input type="text" name="measure_time" id="measure_time" class="form-control" value="{{ misure.measure_time or '' }}">
         </div>
     </div>
@@ -96,14 +96,14 @@
 
         function toggleBfpFields() {
             const isManual = bfpModeSelector.value === 'manual';
-            manualGroup.style.display = isManual ? 'block' : 'none';
-            formulaGroup.style.display = isManual ? 'none' : 'block';
+            manualGroup.classList.toggle('d-none', !isManual);
+            formulaGroup.classList.toggle('d-none', isManual);
             manualInputs.forEach(input => input.disabled = !isManual);
             formulaInputs.forEach(input => input.disabled = isManual);
         }
-        
+
         bfpModeSelector.addEventListener('change', toggleBfpFields);
-        
+
         toggleBfpFields();
     });
 </script>
