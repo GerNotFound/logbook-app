@@ -543,10 +543,45 @@ def sessione_palestra(date_param, session_ts=None):
         flash('Allenamento salvato con successo!', 'success')
         return redirect(url_for('gym.diario_palestra'))
 
+    stored_session = execute_query(
+        'SELECT template_name FROM workout_sessions WHERE user_id = :uid AND session_timestamp = :ts',
+        {'uid': user_id, 'ts': session_ts},
+        fetchone=True,
+    ) if session_ts else None
+
+    selected_template_name = stored_session['template_name'] if stored_session else None
+
     templates = get_templates_with_history(user_id, current_date)
+    selected_template_id = None
+    if session_ts and selected_template_name:
+        for template in templates or []:
+            if template['name'] == selected_template_name:
+                selected_template_id = template['id']
+                break
+
+    requested_template_id = request.args.get('template_id', type=int)
+    if not session_ts and requested_template_id is not None:
+        selected_template_id = requested_template_id
+    elif selected_template_id is None and requested_template_id is not None:
+        selected_template_id = requested_template_id
+
     log_data = get_session_log_data(user_id, session_ts) if session_ts else {}
 
-    return render_template('sessione_palestra.html', title='Sessione Palestra', templates=templates, log_data=log_data, record_date=record_date, date_formatted=date_formatted, prev_day=prev_day, next_day=next_day, is_today=is_today, is_editing=(session_ts is not None), session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'))
+    return render_template(
+        'sessione_palestra.html',
+        title='Sessione Palestra',
+        templates=templates,
+        log_data=log_data,
+        record_date=record_date,
+        date_formatted=date_formatted,
+        prev_day=prev_day,
+        next_day=next_day,
+        is_today=is_today,
+        is_editing=(session_ts is not None),
+        session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'),
+        selected_template_id=selected_template_id,
+        selected_template_name=selected_template_name,
+    )
 
 @gym_bp.route('/diario_palestra', methods=['GET', 'POST'])
 @login_required
@@ -562,7 +597,22 @@ def diario_palestra():
     sessions_raw = execute_query('SELECT session_timestamp, duration_minutes, template_name, session_note, session_rating FROM workout_sessions WHERE user_id = :uid', {'uid': user_id}, fetchall=True)
     sessions_info = {s['session_timestamp']: dict(s) for s in sessions_raw}
 
-    workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'duration': None, 'template_name': 'N/D', 'exercises': defaultdict(list)})})
+    workouts_by_day = defaultdict(
+        lambda: {
+            'date_formatted': '',
+            'template_names': [],
+            'sessions': defaultdict(
+                lambda: {
+                    'time_formatted': '',
+                    'duration': None,
+                    'template_name': 'Allenamento Libero',
+                    'session_note': None,
+                    'session_rating': None,
+                    'exercises': defaultdict(list),
+                }
+            ),
+        }
+    )
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
         workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
@@ -570,9 +620,23 @@ def diario_palestra():
         s_data = workouts_by_day[day]['sessions'][ts]
         s_data['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
         s_data['duration'] = session_details.get('duration_minutes')
-        s_data['template_name'] = session_details.get('template_name', 'N/D')
+        template_name = session_details.get('template_name') or 'Allenamento Libero'
+        s_data['template_name'] = template_name
         s_data['session_note'] = session_details.get('session_note')
         s_data['session_rating'] = session_details.get('session_rating')
+        if template_name not in workouts_by_day[day]['template_names']:
+            workouts_by_day[day]['template_names'].append(template_name)
         s_data['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
-    final_workouts = {day: {'date_formatted': data['date_formatted'], 'sessions': {ts: dict(s_data) for ts, s_data in data['sessions'].items()}} for day, data in workouts_by_day.items()}
+    final_workouts = {}
+    for day, data in workouts_by_day.items():
+        sessions_payload = {}
+        for ts, s_data in data['sessions'].items():
+            session_dict = dict(s_data)
+            session_dict['exercises'] = {name: sets for name, sets in s_data['exercises'].items()}
+            sessions_payload[ts] = session_dict
+        final_workouts[day] = {
+            'date_formatted': data['date_formatted'],
+            'template_names': data['template_names'],
+            'sessions': sessions_payload,
+        }
     return render_template('diario_palestra.html', title='Diario Palestra', workouts_by_day=final_workouts)
