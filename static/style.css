@@ -199,6 +199,10 @@ h1 {
     color: white;
 }
 
+.duration-manual__input {
+    width: 6.5rem;
+}
+
 .form-control { 
     background-color: black;
     border: 2px solid #555;
