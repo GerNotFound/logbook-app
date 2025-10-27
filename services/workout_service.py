@@ -198,4 +198,16 @@ def get_session_log_data(user_id: int, session_timestamp: str) -> Dict[str, Dict
     for row in comment_rows or []:
         log_data[f"comment_{row['exercise_id']}"] = row['comment']
 
+    session_details = execute_query(
+        'SELECT session_note, session_rating FROM workout_sessions '
+        'WHERE user_id = :user_id AND session_timestamp = :timestamp',
+        {'user_id': user_id, 'timestamp': session_timestamp},
+        fetchone=True,
+    )
+    if session_details:
+        if session_details.get('session_note'):
+            log_data['session_note'] = session_details['session_note']
+        if session_details.get('session_rating') is not None:
+            log_data['session_rating'] = session_details['session_rating']
+
     return log_data

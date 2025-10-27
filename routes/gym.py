@@ -468,8 +468,37 @@ def sessione_palestra(date_param, session_ts=None):
                 duration_minutes = max(0, int(duration.total_seconds() / 60))
             except (ValueError, TypeError): pass
 
-        session_query = "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes) VALUES (:uid, :ts, :rd, :tn, :dur) ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes"
-        execute_query(session_query, {'uid': user_id, 'ts': session_timestamp, 'rd': record_date, 'tn': template_name, 'dur': duration_minutes}, commit=True)
+        session_note = (request.form.get('session_note') or '').strip()
+        session_rating_value = (request.form.get('session_rating') or '').strip()
+        session_rating = None
+        if session_rating_value:
+            try:
+                parsed_rating = int(session_rating_value)
+            except (ValueError, TypeError):
+                parsed_rating = None
+            else:
+                if 1 <= parsed_rating <= 10:
+                    session_rating = parsed_rating
+
+        session_query = (
+            "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes, session_note, session_rating) "
+            "VALUES (:uid, :ts, :rd, :tn, :dur, :note, :rating) "
+            "ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes, "
+            "session_note = EXCLUDED.session_note, session_rating = EXCLUDED.session_rating"
+        )
+        execute_query(
+            session_query,
+            {
+                'uid': user_id,
+                'ts': session_timestamp,
+                'rd': record_date,
+                'tn': template_name,
+                'dur': duration_minutes,
+                'note': session_note or None,
+                'rating': session_rating,
+            },
+            commit=True,
+        )
 
         if session_ts:
             execute_query('DELETE FROM workout_log WHERE user_id = :user_id AND session_timestamp = :ts', {'user_id': user_id, 'ts': session_ts}, commit=True)
@@ -530,7 +559,7 @@ def diario_palestra():
         return redirect(url_for('gym.diario_palestra'))
 
     logs_raw = execute_query('SELECT wl.record_date, wl.session_timestamp, e.name as exercise_name, wl.set_number, wl.reps, wl.weight FROM workout_log wl JOIN exercises e ON wl.exercise_id = e.id WHERE wl.user_id = :uid ORDER BY wl.record_date DESC, wl.session_timestamp DESC, wl.id ASC', {'uid': user_id}, fetchall=True)
-    sessions_raw = execute_query('SELECT session_timestamp, duration_minutes, template_name FROM workout_sessions WHERE user_id = :uid', {'uid': user_id}, fetchall=True)
+    sessions_raw = execute_query('SELECT session_timestamp, duration_minutes, template_name, session_note, session_rating FROM workout_sessions WHERE user_id = :uid', {'uid': user_id}, fetchall=True)
     sessions_info = {s['session_timestamp']: dict(s) for s in sessions_raw}
 
     workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'duration': None, 'template_name': 'N/D', 'exercises': defaultdict(list)})})
@@ -542,6 +571,8 @@ def diario_palestra():
         s_data['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
         s_data['duration'] = session_details.get('duration_minutes')
         s_data['template_name'] = session_details.get('template_name', 'N/D')
+        s_data['session_note'] = session_details.get('session_note')
+        s_data['session_rating'] = session_details.get('session_rating')
         s_data['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
     final_workouts = {day: {'date_formatted': data['date_formatted'], 'sessions': {ts: dict(s_data) for ts, s_data in data['sessions'].items()}} for day, data in workouts_by_day.items()}
     return render_template('diario_palestra.html', title='Diario Palestra', workouts_by_day=final_workouts)

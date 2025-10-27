@@ -2,16 +2,22 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">LOGBOOK - DIETA</h1>
+        <h1 class="mb-4"><span class="logbook-brand">LOGBOOK</span> - DIETA</h1>
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <a href="{{ url_for('nutrition.dieta', date_str=prev_day) }}" class="btn btn-outline-light">◀ Prec.</a>
+            <a href="{{ url_for('nutrition.dieta', date_str=prev_day) }}" class="btn btn-outline-light">
+                <i class="bi bi-chevron-left me-1" aria-hidden="true"></i>
+                Prec.
+            </a>
             <span class="text-center">
                 <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
                 {% if not is_today %}
                     <a href="{{ url_for('nutrition.dieta') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
                 {% endif %}
             </span>
-            <a href="{{ url_for('nutrition.dieta', date_str=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">Succ. ▶</a>
+            <a href="{{ url_for('nutrition.dieta', date_str=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">
+                Succ.
+                <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            </a>
         </div>
     </div>
 </div>

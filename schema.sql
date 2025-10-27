@@ -153,6 +153,8 @@ CREATE TABLE workout_sessions (
     record_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
     template_name TEXT,
     duration_minutes INTEGER,
+    session_note TEXT,
+    session_rating INTEGER CHECK (session_rating BETWEEN 1 AND 10),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 

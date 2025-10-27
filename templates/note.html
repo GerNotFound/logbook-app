@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">LOGBOOK - NOTE</h1>
+        <h1 class="mb-4"><span class="logbook-brand">LOGBOOK</span> - NOTE</h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
         {% endwith %}
