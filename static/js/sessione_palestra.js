@@ -62,10 +62,6 @@
             startEpoch: 0,
             elapsedMs: 0,
             intervalId: null
-        },
-        duration: {
-            manualDirty: false,
-            overrideActive: false
         }
     };
 
@@ -287,6 +283,13 @@
         cancelButton.textContent = hasTemplateSelected ? 'ANNULLA' : 'INDIETRO';
     }
 
+    function formatStatusTemplateName(name) {
+        if (!name) {
+            return '';
+        }
+        return `Scheda: "${name}"`;
+    }
+
     function updateUIForTemplateSelection(templateId, startTime) {
         const { templateSelectionBox, workoutStatusBox, statusTemplateName, runningTimer } = state.elements;
         if (!templateSelectionBox || !workoutStatusBox) {
@@ -299,7 +302,7 @@
                 templateSelectionBox.classList.add('d-none');
                 workoutStatusBox.classList.remove('d-none');
                 if (statusTemplateName) {
-                    statusTemplateName.textContent = selectedTemplate.name;
+                    statusTemplateName.textContent = formatStatusTemplateName(selectedTemplate.name);
                 }
                 if (state.context.isEditing && typeof state.context.durationMinutes === 'number' && state.context.durationMinutes >= 0) {
                     stopRunningTimer(false);
@@ -319,7 +322,7 @@
             templateSelectionBox.classList.add('d-none');
             workoutStatusBox.classList.remove('d-none');
             if (statusTemplateName) {
-                statusTemplateName.textContent = state.context.sessionTemplateName || 'Allenamento Libero';
+                statusTemplateName.textContent = formatStatusTemplateName(state.context.sessionTemplateName || 'Allenamento Libero');
             }
             const durationSeconds = typeof state.context.durationMinutes === 'number' && state.context.durationMinutes >= 0
                 ? state.context.durationMinutes * 60
@@ -367,14 +370,12 @@
             durationManualInput.value = formatMinutesToTime(safeMinutes);
         }
         state.context.durationMinutes = safeMinutes;
-        state.stopwatch.elapsedMs = safeMinutes * 60000;
-        state.stopwatch.startEpoch = 0;
-        state.stopwatch.isRunning = false;
-        stopStopwatchInterval();
-        state.duration.manualDirty = Boolean(markManual);
-        state.duration.overrideActive = Boolean(markManual);
-        updateStopwatchDisplay();
-        setStopwatchButtonsState();
+        const shouldUpdateRunningDisplay = markManual
+            || !state.timers.running
+            || state.context.isEditing;
+        if (shouldUpdateRunningDisplay) {
+            updateRunningTimerFromSeconds(safeMinutes * 60);
+        }
     }
 
     function initializeDurationControls() {
@@ -698,23 +699,6 @@
         const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const seconds = (totalSeconds % 60).toString().padStart(2, '0');
         stopwatchDisplay.textContent = `${minutes}:${seconds}`;
-        syncDurationFields(totalSeconds);
-    }
-
-    function syncDurationFields(totalSeconds) {
-        const totalMinutes = Math.max(0, Math.floor(totalSeconds / 60));
-        state.context.durationMinutes = totalMinutes;
-        if (state.elements.durationMinutesField) {
-            if (state.duration.overrideActive) {
-                state.elements.durationMinutesField.value = String(totalMinutes);
-            } else {
-                state.elements.durationMinutesField.value = '';
-            }
-        }
-        if (!state.duration.manualDirty && state.elements.durationManualInput) {
-            state.elements.durationManualInput.value = formatMinutesToTime(totalMinutes);
-        }
-        updateRunningTimerFromSeconds(totalSeconds);
     }
 
     function stopStopwatchInterval() {
@@ -728,7 +712,6 @@
         if (state.stopwatch.isRunning) {
             return;
         }
-        state.duration.manualDirty = false;
         state.stopwatch.isRunning = true;
         state.stopwatch.startEpoch = Date.now();
         stopStopwatchInterval();
@@ -750,7 +733,6 @@
     }
 
     function resetStopwatch() {
-        state.duration.manualDirty = false;
         state.stopwatch.isRunning = false;
         state.stopwatch.startEpoch = 0;
         state.stopwatch.elapsedMs = 0;
@@ -813,6 +795,7 @@
             event.stopImmediatePropagation();
             return;
         }
+        stopRunningTimer(false);
         clearDraftStorage();
         state.currentDraft = createEmptyDraft();
     }
@@ -919,9 +902,6 @@
             cancelButton.addEventListener('click', handleCancel);
         }
         if (durationManualInput) {
-            durationManualInput.addEventListener('input', () => {
-                state.duration.manualDirty = true;
-            });
             durationManualInput.addEventListener('change', handleDurationManualCommit);
             durationManualInput.addEventListener('blur', handleDurationManualCommit);
         }
