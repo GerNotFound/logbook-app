@@ -30,20 +30,42 @@ h1 {
     align-items: center;
 }
 
-.logbook-brand--boxed {
-    border: 2px solid currentColor;
-    border-radius: 999px;
-    padding: 0.1rem 0.75rem;
+.logbook-brand--login {
     font-weight: 900;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.2em;
+    font-size: clamp(2.2rem, 8vw, 3.5rem);
 }
 
-.logbook-brand--boxed::before {
-    content: '[ ';
+.brand-heading {
+    display: flex;
+    align-items: baseline;
+    gap: clamp(0.45rem, 1.5vw, 0.9rem);
+    flex-wrap: wrap;
 }
 
-.logbook-brand--boxed::after {
-    content: ' ]';
+.brand-heading__brand {
+    font-family: 'Montserrat', 'Poppins', 'Inter', sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.brand-heading__section {
+    font-family: 'Montserrat', 'Poppins', 'Inter', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: clamp(0.9rem, 2.6vw, 1.35rem);
+    opacity: 0.85;
+}
+
+.admin-brand {
+    font-family: 'Montserrat', 'Poppins', 'Inter', sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
 }
 
 .session-feedback textarea {
