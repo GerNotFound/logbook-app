@@ -287,11 +287,21 @@ def esercizi():
                 current_app.logger.exception('Errore durante la rinomina esercizio %s', exercise_id_int)
                 flash('Si è verificato un errore durante il salvataggio.', 'danger')
         elif action == 'delete_exercise':
+            exercise_id = request.form.get('exercise_id')
+            if not exercise_id:
+                flash('Identificativo esercizio non valido.', 'danger')
+                return redirect(url_for('gym.esercizi'))
+            try:
+                exercise_id_int = int(exercise_id)
+            except (TypeError, ValueError):
+                flash('Identificativo esercizio non valido.', 'danger')
+                return redirect(url_for('gym.esercizi'))
+
             is_global = request.form.get('is_global') == '1'
             if is_global and not is_superuser:
                 flash('Non sei autorizzato a eliminare questo esercizio.', 'danger')
                 return redirect(url_for('gym.esercizi'))
-            params = {'id': exercise_id}
+            params = {'id': exercise_id_int}
             condition = 'user_id IS NULL' if is_global else 'user_id = :uid'
             if not is_global:
                 params['uid'] = user_id
