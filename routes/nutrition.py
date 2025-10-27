@@ -8,6 +8,102 @@ from extensions import db
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
+TRACKER_DEFINITIONS = [
+    {
+        'key': 'water',
+        'label': 'Acqua',
+        'unit': 'ml',
+        'unit_singular': 'ml',
+        'unit_plural': 'ml',
+        'icon': 'bi-droplet',
+        'description': 'Monitora rapidamente quanta acqua bevi durante la giornata.',
+        'quick_add': [250, 500, 750],
+        'input_step': 50,
+        'placeholder': 'Quantità in ml',
+        'goal_hint': 'Suggerimento: punta a 2-3 litri al giorno.'
+    },
+    {
+        'key': 'coffee',
+        'label': 'Caffè',
+        'unit': 'tazze',
+        'unit_singular': 'tazza',
+        'unit_plural': 'tazze',
+        'icon': 'bi-cup-hot',
+        'description': 'Tieni sotto controllo il numero di caffè che assumi.',
+        'quick_add': [1, 2],
+        'input_step': 1,
+        'placeholder': 'Numero di tazze',
+        'goal_hint': 'Suggerimento: limita il consumo serale.'
+    },
+    {
+        'key': 'supplements',
+        'label': 'Integratori',
+        'unit': 'dosi',
+        'unit_singular': 'dose',
+        'unit_plural': 'dosi',
+        'icon': 'bi-capsule',
+        'description': 'Segna se hai assunto i tuoi integratori quotidiani.',
+        'quick_add': [1],
+        'input_step': 1,
+        'placeholder': 'Numero di dosi',
+        'goal_hint': 'Aggiungi una nota per ricordare quali integratori hai preso.'
+    },
+]
+
+TRACKER_LOOKUP = {tracker['key']: tracker for tracker in TRACKER_DEFINITIONS}
+
+
+def _format_number(value):
+    if value is None:
+        return '0'
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip('0').rstrip('.')
+
+
+def _format_total(tracker, amount):
+    amount = amount or 0
+    if tracker['key'] == 'water':
+        if amount <= 0:
+            return '0 ml'
+        liters = amount / 1000
+        liters_label = f" ({liters:.2f} L)" if amount >= 1000 else ''
+        return f"{int(round(amount))} ml{liters_label}"
+    if tracker['key'] == 'coffee':
+        cups = _format_number(amount)
+        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
+        return f"{cups} {label}"
+    if tracker['key'] == 'supplements':
+        doses = _format_number(amount)
+        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
+        return f"{doses} {label}"
+    return f"{_format_number(amount)} {tracker['unit']}"
+
+
+def _format_entry_amount(tracker, amount):
+    amount = amount or 0
+    if tracker['key'] == 'water':
+        return f"{int(round(amount))} ml"
+    if tracker['key'] == 'coffee':
+        cups = _format_number(amount)
+        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
+        return f"{cups} {label}"
+    if tracker['key'] == 'supplements':
+        doses = _format_number(amount)
+        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
+        return f"{doses} {label}"
+    return f"{_format_number(amount)} {tracker['unit']}"
+
+
+def _format_quick_label(value, singular, plural):
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        numeric_value = 0
+    label = singular if abs(numeric_value) == 1 else plural
+    display_value = _format_number(numeric_value)
+    return f"+{display_value} {label}"
+
 def update_daily_totals(user_id, date_str):
     totals_query = """
         SELECT SUM(protein) as p, SUM(carbs) as c, SUM(fat) as f, SUM(calories) as cal 
@@ -31,6 +127,128 @@ def update_daily_totals(user_id, date_str):
 @login_required
 def alimentazione():
     return render_template('alimentazione.html', title='Alimentazione')
+
+
+@nutrition_bp.route('/tracking', defaults={'date_str': None}, methods=['GET', 'POST'])
+@nutrition_bp.route('/tracking/<date_str>', methods=['GET', 'POST'])
+@login_required
+def tracking(date_str):
+    user_id = session['user_id']
+    if date_str:
+        try:
+            current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return redirect(url_for('nutrition.tracking'))
+    else:
+        current_date = date.today()
+
+    current_date_str = current_date.strftime('%Y-%m-%d')
+    prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+    next_day = (current_date + timedelta(days=1)).strftime('%Y-%m-%d')
+    is_today = current_date == date.today()
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'add_entry')
+        if action == 'delete_entry':
+            entry_id = request.form.get('entry_id')
+            if entry_id:
+                execute_query(
+                    'DELETE FROM intake_log WHERE id = :id AND user_id = :uid',
+                    {'id': entry_id, 'uid': user_id},
+                    commit=True,
+                )
+        else:
+            tracker_key = request.form.get('tracker_type')
+            tracker = TRACKER_LOOKUP.get(tracker_key)
+            if not tracker:
+                flash('Tracker non valido.', 'danger')
+                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
+
+            quick_amount = request.form.get('quick_amount')
+            amount_value = request.form.get('amount')
+            try:
+                amount = float(quick_amount or amount_value or 0)
+            except (ValueError, TypeError):
+                amount = 0
+
+            if amount <= 0:
+                flash('Inserisci una quantità valida.', 'danger')
+                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
+
+            note = (request.form.get('note') or '').strip()
+            execute_query(
+                'INSERT INTO intake_log (user_id, record_date, tracker_type, amount, unit, note) VALUES (:uid, :rd, :tt, :amt, :unit, :note)',
+                {
+                    'uid': user_id,
+                    'rd': current_date_str,
+                    'tt': tracker_key,
+                    'amt': amount,
+                    'unit': tracker['unit'],
+                    'note': note or None,
+                },
+                commit=True,
+            )
+
+        return redirect(url_for('nutrition.tracking', date_str=current_date_str))
+
+    rows = execute_query(
+        'SELECT id, tracker_type, amount, unit, note, created_at FROM intake_log WHERE user_id = :uid AND record_date = :rd ORDER BY created_at DESC',
+        {'uid': user_id, 'rd': current_date_str},
+        fetchall=True,
+    ) or []
+
+    totals = {tracker['key']: 0 for tracker in TRACKER_DEFINITIONS}
+    grouped_entries = {tracker['key']: [] for tracker in TRACKER_DEFINITIONS}
+
+    for row in rows:
+        tracker = TRACKER_LOOKUP.get(row['tracker_type'])
+        if not tracker:
+            continue
+        totals[row['tracker_type']] += row['amount']
+        created_at = row['created_at']
+        time_label = created_at.strftime('%H:%M') if created_at else ''
+        grouped_entries[row['tracker_type']].append(
+            {
+                'id': row['id'],
+                'amount_label': _format_entry_amount(tracker, row['amount']),
+                'note': row['note'],
+                'time_label': time_label,
+            }
+        )
+
+    tracker_cards = []
+    for tracker in TRACKER_DEFINITIONS:
+        unit_singular = tracker.get('unit_singular', tracker['unit'])
+        unit_plural = tracker.get('unit_plural', tracker['unit'])
+        quick_buttons = [
+            {
+                'value': quick,
+                'label': _format_quick_label(quick, unit_singular, unit_plural),
+            }
+            for quick in tracker.get('quick_add', [])
+        ]
+
+        tracker_cards.append(
+            {
+                **tracker,
+                'unit_singular': unit_singular,
+                'unit_plural': unit_plural,
+                'quick_buttons': quick_buttons,
+                'entries': grouped_entries.get(tracker['key'], []),
+                'total_label': _format_total(tracker, totals.get(tracker['key'])),
+            }
+        )
+
+    return render_template(
+        'tracking.html',
+        title='Tracking',
+        tracker_cards=tracker_cards,
+        date_formatted=current_date.strftime('%d %b %y'),
+        current_date_str=current_date_str,
+        prev_day=prev_day,
+        next_day=next_day,
+        is_today=is_today,
+    )
 
 @nutrition_bp.route('/diario_alimentare')
 @login_required
