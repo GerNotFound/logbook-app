@@ -2,16 +2,22 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">LOGBOOK - SESSIONE PALESTRA</h1>
+        <h1 class="mb-4"><span class="logbook-brand">LOGBOOK</span> - SESSIONE PALESTRA</h1>
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <a href="{{ url_for('gym.sessione_palestra', date_param=prev_day) }}" class="btn btn-outline-light">◀ Prec.</a>
+            <a href="{{ url_for('gym.sessione_palestra', date_param=prev_day) }}" class="btn btn-outline-light">
+                <i class="bi bi-chevron-left me-1" aria-hidden="true"></i>
+                Prec.
+            </a>
             <span class="text-center">
                 <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
                 {% if not is_today %}
                     <a href="{{ url_for('gym.sessione_palestra') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
                 {% endif %}
             </span>
-            <a href="{{ url_for('gym.sessione_palestra', date_param=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">Succ. ▶</a>
+            <a href="{{ url_for('gym.sessione_palestra', date_param=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">
+                Succ.
+                <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            </a>
         </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -39,9 +45,15 @@
 <div id="stopwatch-wrapper" class="stopwatch-wrapper">
     <div id="stopwatch-container" class="stopwatch-container">
         <div id="stopwatch" class="stopwatch-display">00:00</div>
-        <button id="startBtn" type="button" class="btn btn-sm btn-circle ms-3">▶</button>
-        <button id="pauseBtn" type="button" class="btn btn-sm btn-circle ms-2 fs-4">❚❚</button>
-        <button id="stopBtn" type="button" class="btn btn-outline-light btn-sm btn-circle-outline ms-2">■</button>
+        <button id="startBtn" type="button" class="btn btn-sm btn-circle ms-3" aria-label="Avvia cronometro">
+            <i class="bi bi-play-fill" aria-hidden="true"></i>
+        </button>
+        <button id="pauseBtn" type="button" class="btn btn-sm btn-circle ms-2" aria-label="Pausa cronometro">
+            <i class="bi bi-pause-fill" aria-hidden="true"></i>
+        </button>
+        <button id="stopBtn" type="button" class="btn btn-outline-light btn-sm btn-circle-outline ms-2" aria-label="Azzera cronometro">
+            <i class="bi bi-stop-fill" aria-hidden="true"></i>
+        </button>
     </div>
 </div>
 

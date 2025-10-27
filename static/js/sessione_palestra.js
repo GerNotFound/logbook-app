@@ -283,6 +283,80 @@
         return values;
     }
 
+    function resolveFieldValue(draftFields, name) {
+        if (draftFields && Object.prototype.hasOwnProperty.call(draftFields, name)) {
+            return draftFields[name];
+        }
+        if (state.context.logData && Object.prototype.hasOwnProperty.call(state.context.logData, name)) {
+            return state.context.logData[name];
+        }
+        return '';
+    }
+
+    function createFeedbackSection(draftFields) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-4 p-3 border rounded session-feedback';
+
+        const heading = document.createElement('h5');
+        heading.className = 'mb-3';
+        heading.textContent = 'Feedback Allenamento';
+        wrapper.appendChild(heading);
+
+        const noteGroup = document.createElement('div');
+        noteGroup.className = 'mb-3';
+        const noteLabel = document.createElement('label');
+        noteLabel.className = 'form-label';
+        noteLabel.setAttribute('for', 'session-note');
+        noteLabel.textContent = "Note sull'allenamento";
+        const noteField = document.createElement('textarea');
+        noteField.className = 'form-control';
+        noteField.id = 'session-note';
+        noteField.name = 'session_note';
+        noteField.rows = 3;
+        noteField.placeholder = 'Aggiungi eventuali note...';
+        const noteValue = resolveFieldValue(draftFields, 'session_note');
+        if (noteValue) {
+            noteField.value = noteValue;
+        }
+        noteGroup.appendChild(noteLabel);
+        noteGroup.appendChild(noteField);
+        wrapper.appendChild(noteGroup);
+
+        const ratingGroup = document.createElement('div');
+        ratingGroup.className = 'mb-1';
+        const ratingLabel = document.createElement('label');
+        ratingLabel.className = 'form-label';
+        ratingLabel.setAttribute('for', 'session-rating');
+        ratingLabel.textContent = 'Voto allenamento [1-10]';
+        const ratingField = document.createElement('input');
+        ratingField.type = 'number';
+        ratingField.className = 'form-control';
+        ratingField.id = 'session-rating';
+        ratingField.name = 'session_rating';
+        ratingField.min = '1';
+        ratingField.max = '10';
+        ratingField.step = '1';
+        ratingField.inputMode = 'numeric';
+        ratingField.pattern = '[0-9]*';
+        ratingField.placeholder = 'Inserisci un valore da 1 a 10';
+        const ratingValue = resolveFieldValue(draftFields, 'session_rating');
+        if (ratingValue !== '' && ratingValue !== null && ratingValue !== undefined) {
+            ratingField.value = ratingValue;
+        }
+        ratingGroup.appendChild(ratingLabel);
+        ratingGroup.appendChild(ratingField);
+        wrapper.appendChild(ratingGroup);
+
+        return wrapper;
+    }
+
+    function appendFeedbackSection(container, draftFields) {
+        if (!container) {
+            return;
+        }
+        container.appendChild(createFeedbackSection(draftFields));
+    }
+
     function saveDraftFromInputs() {
         state.currentDraft.fields = collectFieldValues();
         if (state.elements.templateSelector) {
@@ -320,6 +394,7 @@
 
         if (!templateId || !selectedTemplate) {
             templateNameInput.value = 'Allenamento Libero';
+            appendFeedbackSection(workoutSection, draftFields);
             attachInputListeners();
             return;
         }
@@ -399,6 +474,7 @@
         });
 
         workoutSection.appendChild(fragment);
+        appendFeedbackSection(workoutSection, draftFields);
         attachInputListeners();
     }
 

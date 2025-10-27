@@ -18,7 +18,36 @@ body {
 h1 {
     font-family: 'Nunito', sans-serif;
     font-weight: 700;
-    margin-top: 0.5rem; 
+    margin-top: 0.5rem;
+}
+
+.logbook-brand {
+    font-family: 'Montserrat', 'Poppins', 'Inter', sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+}
+
+.logbook-brand--boxed {
+    border: 2px solid currentColor;
+    border-radius: 999px;
+    padding: 0.1rem 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+}
+
+.logbook-brand--boxed::before {
+    content: '[ ';
+}
+
+.logbook-brand--boxed::after {
+    content: ' ]';
+}
+
+.session-feedback textarea {
+    min-height: 120px;
 }
 
 .btn-custom {
@@ -268,6 +297,7 @@ hr {
 .btn-circle, .btn-circle-outline { border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; line-height: 1; }
 .btn-circle { background-color: white; color: black; }
 .btn-circle-outline { background-color: transparent; }
+.btn-circle .bi, .btn-circle-outline .bi { font-size: 1.1rem; line-height: 1; }
 .text-sm { font-size: 0.9rem; }
 .text-prewrap { white-space: pre-wrap; }
 .btn-compact { font-size: 0.7rem; padding: 2px 6px; }
