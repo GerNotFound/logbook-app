@@ -49,7 +49,7 @@
         <label class="form-label">Cerca Alimento</label>
         <input type="text" name="food_name" id="alimento-search" class="form-control"
                placeholder="Inizia a digitare..." autocomplete="off" required>
-        <div id="suggestions" class="suggestions-list"></div>
+        <div id="suggestions" class="suggestions-list suggestions-list-up"></div>
     </div>
     <div class="mb-3">
         <label class="form-label">Peso (grammi)</label>
@@ -104,35 +104,72 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     const foodList = {{ food_options|tojson|safe }};
+    const normalizedFoods = foodList.map(food => ({
+        name: food.name,
+        isGlobal: food.is_global,
+        search: food.name.toLowerCase(),
+    }));
     const searchInput = document.getElementById('alimento-search');
     const suggestionsDiv = document.getElementById('suggestions');
-    searchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
+
+    searchInput.addEventListener('input', () => {
+        const searchTerm = searchInput.value.trim().toLowerCase();
         suggestionsDiv.innerHTML = '';
-        if (searchTerm.length < 1) { suggestionsDiv.style.display = 'none'; return; }
-        const filteredFoods = foodList.filter(food => food.name.toLowerCase().includes(searchTerm)).slice(0, 8);
-        if (filteredFoods.length > 0) {
-            filteredFoods.forEach(food => {
-                const item = document.createElement('div');
-                item.className = 'suggestion-item';
-                const label = document.createElement('span');
-                label.textContent = food.name;
-                item.appendChild(label);
-                if (food.is_global) {
-                    const icon = document.createElement('i');
-                    icon.className = 'bi bi-globe2 global-icon';
-                    icon.setAttribute('title', 'Alimento globale');
-                    icon.setAttribute('aria-label', 'Alimento globale');
-                    item.appendChild(icon);
+
+        if (!searchTerm) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        const matches = [];
+        for (const food of normalizedFoods) {
+            if (food.search.includes(searchTerm)) {
+                matches.push(food);
+                if (matches.length === 5) {
+                    break;
                 }
-                item.addEventListener('click', () => { searchInput.value = food.name; suggestionsDiv.style.display = 'none'; });
-                suggestionsDiv.appendChild(item);
+            }
+        }
+
+        if (!matches.length) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        matches.forEach(food => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+
+            const label = document.createElement('span');
+            label.textContent = food.name;
+            item.appendChild(label);
+
+            if (food.isGlobal) {
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-globe2 global-icon';
+                icon.setAttribute('title', 'Alimento globale');
+                icon.setAttribute('aria-label', 'Alimento globale');
+                item.appendChild(icon);
+            }
+
+            item.addEventListener('mousedown', (event) => {
+                event.preventDefault();
+                searchInput.value = food.name;
+                suggestionsDiv.style.display = 'none';
             });
-            suggestionsDiv.style.display = 'block';
-        } else { suggestionsDiv.style.display = 'none'; }
+
+            fragment.appendChild(item);
+        });
+
+        suggestionsDiv.appendChild(fragment);
+        suggestionsDiv.style.display = 'block';
     });
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target)) { suggestionsDiv.style.display = 'none'; }
+
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.suggestions-container')) {
+            suggestionsDiv.style.display = 'none';
+        }
     });
 
     const DRAFT_KEY_DIET = `diet_draft_{{ session['user_id'] }}_{{ current_date_str }}`;

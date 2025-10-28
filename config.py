@@ -60,7 +60,7 @@ class BaseConfig:
 
     LAST_ACTIVITY_UPDATE_INTERVAL_SECONDS = _as_int(
         os.environ.get('LAST_ACTIVITY_UPDATE_INTERVAL_SECONDS'),
-        900,
+        120,
     )
     GENERAL_METRICS_ENTRY_LIMIT = _as_int(
         os.environ.get('GENERAL_METRICS_ENTRY_LIMIT'),
