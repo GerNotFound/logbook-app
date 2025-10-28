@@ -91,15 +91,20 @@
         const bfpModeSelector = document.getElementById('bfp-mode-selector');
         const manualGroup = document.getElementById('bfp-manual-group');
         const formulaGroup = document.getElementById('bfp-formula-group');
-        const manualInputs = manualGroup.querySelectorAll('input');
-        const formulaInputs = formulaGroup.querySelectorAll('input');
+
+        if (!bfpModeSelector || !manualGroup || !formulaGroup) {
+            return;
+        }
+
+        const manualInputs = Array.from(manualGroup.querySelectorAll('input'));
+        const formulaInputs = Array.from(formulaGroup.querySelectorAll('input'));
 
         function toggleBfpFields() {
             const isManual = bfpModeSelector.value === 'manual';
             manualGroup.classList.toggle('d-none', !isManual);
             formulaGroup.classList.toggle('d-none', isManual);
-            manualInputs.forEach(input => input.disabled = !isManual);
-            formulaInputs.forEach(input => input.disabled = isManual);
+            manualInputs.forEach(input => { input.disabled = !isManual; });
+            formulaInputs.forEach(input => { input.disabled = isManual; });
         }
 
         bfpModeSelector.addEventListener('change', toggleBfpFields);
