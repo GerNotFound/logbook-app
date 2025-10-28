@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from datetime import date, datetime, timedelta
 from .auth import login_required
 from utils import execute_query
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from extensions import db
 
@@ -51,6 +52,46 @@ TRACKER_DEFINITIONS = [
 ]
 
 TRACKER_LOOKUP = {tracker['key']: tracker for tracker in TRACKER_DEFINITIONS}
+
+
+_INTAKE_LOG_READY = False
+
+
+def ensure_intake_log_table() -> None:
+    """Guarantee the intake_log table exists before interacting with it."""
+
+    global _INTAKE_LOG_READY
+
+    if _INTAKE_LOG_READY:
+        return
+
+    inspector = inspect(db.engine)
+
+    if inspector.has_table('intake_log'):
+        _INTAKE_LOG_READY = True
+        return
+
+    statements = (
+        """
+        CREATE TABLE IF NOT EXISTS intake_log (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            record_date DATE NOT NULL,
+            tracker_type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            unit TEXT NOT NULL,
+            note TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_intake_log_user_date ON intake_log (user_id, record_date)",
+    )
+
+    with db.engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+    _INTAKE_LOG_READY = True
 
 
 def _format_number(value):
@@ -134,6 +175,7 @@ def alimentazione():
 @login_required
 def tracking(date_str):
     user_id = session['user_id']
+    ensure_intake_log_table()
     if date_str:
         try:
             current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
