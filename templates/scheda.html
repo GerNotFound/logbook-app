@@ -92,135 +92,179 @@
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
-    const allExercises = {{ all_exercises|tojson|safe }};
+    document.addEventListener('DOMContentLoaded', () => {
+        const exerciseSuggestUrl = "{{ url_for('gym.suggest_exercises') }}";
 
-    const normalizeText = (text) => {
-        if (!text) {
-            return '';
-        }
-        try {
-            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        } catch (error) {
-            return text.toLowerCase();
-        }
-    };
+        const normalizeText = (text) => {
+            if (!text) {
+                return '';
+            }
+            try {
+                return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            } catch (error) {
+                return text.toLowerCase();
+            }
+        };
 
-    const normalizedExercises = allExercises.map(exercise => ({
-        id: exercise.id,
-        name: exercise.name,
-        isGlobal: exercise.user_id === null,
-        search: normalizeText(exercise.name),
-    }));
+        const createSuggestionFetcher = (endpoint) => {
+            let controller = null;
+            let debounceId = null;
+            const delay = 160;
 
-    function renderExerciseSuggestions(searchInput, suggestionsDiv, exerciseIdInput) {
-        if (!suggestionsDiv) {
-            return;
-        }
-
-        const searchTerm = normalizeText(searchInput.value.trim());
-        const storedTerm = exerciseIdInput.dataset.selectedTerm || '';
-        if (storedTerm !== searchTerm) {
-            exerciseIdInput.value = '';
-            delete exerciseIdInput.dataset.selectedTerm;
-        }
-        suggestionsDiv.innerHTML = '';
-
-        if (!searchTerm) {
-            suggestionsDiv.style.display = 'none';
-            return;
-        }
-
-        const matches = [];
-        for (const exercise of normalizedExercises) {
-            if (exercise.search.includes(searchTerm)) {
-                matches.push(exercise);
-                if (matches.length === 5) {
-                    break;
+            return (term, callback) => {
+                if (controller) {
+                    controller.abort();
+                    controller = null;
                 }
+
+                if (debounceId) {
+                    clearTimeout(debounceId);
+                }
+
+                if (!term) {
+                    callback([]);
+                    return;
+                }
+
+                debounceId = setTimeout(() => {
+                    controller = new AbortController();
+                    fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
+                        signal: controller.signal,
+                        headers: {'Accept': 'application/json'},
+                    })
+                        .then(response => response.ok ? response.json() : {results: []})
+                        .then(data => {
+                            const results = Array.isArray(data.results) ? data.results : [];
+                            callback(results);
+                        })
+                        .catch(error => {
+                            if (error.name !== 'AbortError') {
+                                console.error('Errore suggerimenti esercizi:', error);
+                            }
+                            callback([]);
+                        });
+                }, delay);
+            };
+        };
+
+        const fetchExerciseSuggestions = createSuggestionFetcher(exerciseSuggestUrl);
+
+        const hideSuggestions = (container) => {
+            container.style.display = 'none';
+            container.innerHTML = '';
+        };
+
+        document.querySelectorAll('form[id^="add-exercise-form"]').forEach(form => {
+            const searchInput = form.querySelector('.exercise-search-input');
+            const suggestionsDiv = form.querySelector('.suggestions-list');
+            const exerciseIdInput = form.querySelector('.exercise-id-input');
+
+            if (!searchInput || !suggestionsDiv || !exerciseIdInput) {
+                return;
             }
-        }
 
-        if (!matches.length) {
-            suggestionsDiv.style.display = 'none';
-            return;
-        }
+            const requestSuggestions = () => {
+                const term = searchInput.value.trim();
+                const normalizedTerm = normalizeText(term);
+                const storedTerm = exerciseIdInput.dataset.selectedTerm || '';
 
-        const fragment = document.createDocumentFragment();
-        suggestionsDiv.setAttribute('role', 'listbox');
-        matches.forEach(exercise => {
-            const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            item.setAttribute('role', 'option');
-            item.tabIndex = 0;
+                if (storedTerm !== normalizedTerm) {
+                    exerciseIdInput.value = '';
+                    delete exerciseIdInput.dataset.selectedTerm;
+                }
 
-            const label = document.createElement('span');
-            label.textContent = exercise.name;
-            item.appendChild(label);
+                if (!term) {
+                    hideSuggestions(suggestionsDiv);
+                    return;
+                }
 
-            if (exercise.isGlobal) {
-                const icon = document.createElement('i');
-                icon.className = 'bi bi-globe2 global-icon';
-                icon.setAttribute('title', 'Esercizio globale');
-                icon.setAttribute('aria-label', 'Esercizio globale');
-                item.appendChild(icon);
-            }
+                fetchExerciseSuggestions(term, (items) => {
+                    if (!items.length) {
+                        hideSuggestions(suggestionsDiv);
+                        return;
+                    }
 
-            const applySelection = () => {
-                searchInput.value = exercise.name;
-                exerciseIdInput.value = exercise.id;
-                exerciseIdInput.dataset.selectedTerm = exercise.search;
-                suggestionsDiv.style.display = 'none';
-                suggestionsDiv.innerHTML = '';
+                    const fragment = document.createDocumentFragment();
+                    items.slice(0, 5).forEach(item => {
+                        const suggestion = document.createElement('div');
+                        suggestion.className = 'suggestion-item';
+                        suggestion.setAttribute('role', 'option');
+                        suggestion.tabIndex = 0;
+
+                        const label = document.createElement('span');
+                        label.textContent = item.name;
+                        suggestion.appendChild(label);
+
+                        if (item.is_global) {
+                            const icon = document.createElement('i');
+                            icon.className = 'bi bi-globe2 global-icon';
+                            icon.setAttribute('title', 'Esercizio globale');
+                            icon.setAttribute('aria-label', 'Esercizio globale');
+                            suggestion.appendChild(icon);
+                        }
+
+                        const applySelection = () => {
+                            searchInput.value = item.name;
+                            searchInput.classList.remove('is-invalid');
+                            searchInput.removeAttribute('aria-invalid');
+                            exerciseIdInput.value = item.id;
+                            exerciseIdInput.dataset.selectedTerm = normalizeText(item.name);
+                            hideSuggestions(suggestionsDiv);
+                        };
+
+                        suggestion.addEventListener('pointerdown', (event) => {
+                            event.preventDefault();
+                            applySelection();
+                        });
+
+                        suggestion.addEventListener('keydown', (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                applySelection();
+                            }
+                        });
+
+                        fragment.appendChild(suggestion);
+                    });
+
+                    suggestionsDiv.innerHTML = '';
+                    suggestionsDiv.appendChild(fragment);
+                    suggestionsDiv.style.display = 'block';
+                });
             };
 
-            item.addEventListener('pointerdown', (event) => {
-                event.preventDefault();
-                applySelection();
+            searchInput.addEventListener('input', () => {
+                searchInput.classList.remove('is-invalid');
+                searchInput.removeAttribute('aria-invalid');
+                requestSuggestions();
             });
 
-            item.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    applySelection();
+            searchInput.addEventListener('focus', requestSuggestions);
+
+            searchInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    hideSuggestions(suggestionsDiv);
+                    exerciseIdInput.value = '';
+                    delete exerciseIdInput.dataset.selectedTerm;
                 }
             });
 
-            fragment.appendChild(item);
+            form.addEventListener('submit', (event) => {
+                if (!exerciseIdInput.value) {
+                    event.preventDefault();
+                    hideSuggestions(suggestionsDiv);
+                    searchInput.classList.add('is-invalid');
+                    searchInput.setAttribute('aria-invalid', 'true');
+                    searchInput.focus();
+                }
+            });
         });
 
-        suggestionsDiv.appendChild(fragment);
-        suggestionsDiv.style.display = 'block';
-    }
-
-    document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
-        const parentForm = searchInput.closest('form');
-        const suggestionsDiv = parentForm ? parentForm.querySelector('.suggestions-list') : null;
-        const exerciseIdInput = parentForm ? parentForm.querySelector('.exercise-id-input') : null;
-
-        if (!suggestionsDiv || !exerciseIdInput) {
-            return;
-        }
-
-        const render = () => renderExerciseSuggestions(searchInput, suggestionsDiv, exerciseIdInput);
-
-        searchInput.addEventListener('input', render);
-        searchInput.addEventListener('focus', render);
-        searchInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                suggestionsDiv.style.display = 'none';
-                suggestionsDiv.innerHTML = '';
-                exerciseIdInput.value = '';
-                delete exerciseIdInput.dataset.selectedTerm;
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.suggestions-container')) {
+                document.querySelectorAll('.suggestions-list').forEach(div => hideSuggestions(div));
             }
         });
-    });
-
-    document.addEventListener('click', (event) => {
-        if (!event.target.closest('.suggestions-container')) {
-            document.querySelectorAll('.suggestions-list').forEach(div => {
-                div.style.display = 'none';
-            });
-        }
     });
 </script>
 {% endblock %}

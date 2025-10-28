@@ -10,6 +10,27 @@ from extensions import db
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+_AVATAR_COLOR_PALETTE = (
+    '#6C5CE7',
+    '#00B894',
+    '#0984E3',
+    '#E17055',
+    '#2D3436',
+    '#E84393',
+    '#74B9FF',
+    '#00CEC9',
+)
+
+
+def generate_avatar_color(user_id: Optional[int]) -> str:
+    """Return a deterministic avatar background color for a given user id."""
+
+    if not user_id:
+        return _AVATAR_COLOR_PALETTE[0]
+
+    index = abs(user_id) % len(_AVATAR_COLOR_PALETTE)
+    return _AVATAR_COLOR_PALETTE[index]
+
 
 def execute_query(
     query: str,

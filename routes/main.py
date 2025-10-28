@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 import math
 from collections import defaultdict
 from .auth import login_required
-from utils import execute_query, is_valid_time_format
+from utils import execute_query, is_valid_time_format, generate_avatar_color
 from services import user_service, data_service  # NUOVE IMPORTAZIONI
 from services import privacy_service
 
@@ -75,8 +75,33 @@ def utente():
 
             gender = request.form.get("gender")
             
-            query = "INSERT INTO user_profile (user_id, birth_date, height, gender) VALUES (:user_id, :birth_date, :height, :gender) ON CONFLICT(user_id) DO UPDATE SET birth_date = EXCLUDED.birth_date, height = EXCLUDED.height, gender = EXCLUDED.gender"
-            params = {"user_id": user_id, "birth_date": birth_date, "height": height, "gender": gender}
+            existing_profile = execute_query(
+                'SELECT avatar_color FROM user_profile WHERE user_id = :user_id',
+                {'user_id': user_id},
+                fetchone=True,
+            )
+            avatar_color = (
+                existing_profile.get('avatar_color')
+                if existing_profile and existing_profile.get('avatar_color')
+                else generate_avatar_color(user_id)
+            )
+
+            query = (
+                "INSERT INTO user_profile (user_id, birth_date, height, gender, avatar_color) "
+                "VALUES (:user_id, :birth_date, :height, :gender, :avatar_color) "
+                "ON CONFLICT(user_id) DO UPDATE SET "
+                "birth_date = EXCLUDED.birth_date, "
+                "height = EXCLUDED.height, "
+                "gender = EXCLUDED.gender, "
+                "avatar_color = COALESCE(user_profile.avatar_color, EXCLUDED.avatar_color)"
+            )
+            params = {
+                'user_id': user_id,
+                'birth_date': birth_date,
+                'height': height,
+                'gender': gender,
+                'avatar_color': avatar_color,
+            }
             execute_query(query, params, commit=True)
             flash("Dati anagrafici aggiornati.", "success")
         return redirect(url_for('main.utente'))
