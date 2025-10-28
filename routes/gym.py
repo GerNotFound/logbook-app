@@ -13,6 +13,41 @@ gym_bp = Blueprint('gym', __name__)
 
 # --- ENDPOINT API PER AJAX ---
 
+@gym_bp.get('/api/suggest/exercises')
+@login_required
+def suggest_exercises():
+    user_id = session['user_id']
+    search_term = (request.args.get('q') or '').strip()
+
+    if not search_term:
+        return jsonify({'results': []})
+
+    pattern = f"%{search_term.lower()}%"
+    rows = execute_query(
+        """
+        SELECT id, name, user_id IS NULL AS is_global
+        FROM exercises
+        WHERE (user_id IS NULL OR user_id = :uid)
+          AND LOWER(name) LIKE :pattern
+        ORDER BY (user_id IS NULL) DESC, name ASC
+        LIMIT 5
+        """,
+        {'uid': user_id, 'pattern': pattern},
+        fetchall=True,
+    ) or []
+
+    suggestions = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': bool(row['is_global']),
+        }
+        for row in rows
+    ]
+
+    return jsonify({'results': suggestions})
+
+
 @gym_bp.route('/scheda/rinomina', methods=['POST'])
 @login_required
 def rinomina_scheda_ajax():
@@ -418,8 +453,7 @@ def scheda():
         exercises = execute_query('SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': t['id']}, fetchall=True)
         template_dict['exercises'] = exercises
         templates.append(template_dict)
-    all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, all_exercises=all_exercises, is_superuser=is_superuser)
+    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, is_superuser=is_superuser)
 
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required

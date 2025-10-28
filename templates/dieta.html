@@ -45,6 +45,7 @@
 <form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" id="dieta-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="add_food">
+    <input type="hidden" name="food_id" id="alimento-id">
     <div class="mb-3 suggestions-container">
         <label class="form-label">Cerca Alimento</label>
         <input type="text" name="food_name" id="alimento-search" class="form-control"
@@ -103,133 +104,202 @@
 
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
-    const foodList = {{ food_options|tojson|safe }};
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('alimento-search');
+        const foodIdInput = document.getElementById('alimento-id');
+        const suggestionsDiv = document.getElementById('suggestions');
+        const dietForm = document.getElementById('dieta-form');
+        const foodSuggestUrl = "{{ url_for('nutrition.suggest_foods') }}";
 
-    const normalizeText = (text) => {
-        if (!text) {
-            return '';
-        }
-        try {
-            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        } catch (error) {
-            return text.toLowerCase();
-        }
-    };
+        const normalizeText = (text) => {
+            if (!text) {
+                return '';
+            }
+            try {
+                return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            } catch (error) {
+                return text.toLowerCase();
+            }
+        };
 
-    const normalizedFoods = foodList.map(food => ({
-        name: food.name,
-        isGlobal: food.is_global,
-        search: normalizeText(food.name),
-    }));
-    const searchInput = document.getElementById('alimento-search');
-    const suggestionsDiv = document.getElementById('suggestions');
+        const createSuggestionFetcher = (endpoint) => {
+            let controller = null;
+            let debounceId = null;
+            const delay = 160;
 
-    searchInput.addEventListener('input', () => {
-        const searchTerm = normalizeText(searchInput.value.trim());
-        suggestionsDiv.innerHTML = '';
-
-        if (!searchTerm) {
-            suggestionsDiv.style.display = 'none';
-            return;
-        }
-
-        const matches = [];
-        for (const food of normalizedFoods) {
-            if (food.search.includes(searchTerm)) {
-                matches.push(food);
-                if (matches.length === 5) {
-                    break;
+            return (term, callback) => {
+                if (controller) {
+                    controller.abort();
+                    controller = null;
                 }
-            }
-        }
 
-        if (!matches.length) {
-            suggestionsDiv.style.display = 'none';
-            return;
-        }
+                if (debounceId) {
+                    clearTimeout(debounceId);
+                }
 
-        const fragment = document.createDocumentFragment();
-        suggestionsDiv.setAttribute('role', 'listbox');
-        matches.forEach(food => {
-            const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            item.setAttribute('role', 'option');
-            item.tabIndex = 0;
+                if (!term) {
+                    callback([]);
+                    return;
+                }
 
-            const label = document.createElement('span');
-            label.textContent = food.name;
-            item.appendChild(label);
-
-            if (food.isGlobal) {
-                const icon = document.createElement('i');
-                icon.className = 'bi bi-globe2 global-icon';
-                icon.setAttribute('title', 'Alimento globale');
-                icon.setAttribute('aria-label', 'Alimento globale');
-                item.appendChild(icon);
-            }
-
-            const applySelection = () => {
-                searchInput.value = food.name;
-                suggestionsDiv.style.display = 'none';
-                suggestionsDiv.innerHTML = '';
+                debounceId = setTimeout(() => {
+                    controller = new AbortController();
+                    fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
+                        signal: controller.signal,
+                        headers: {'Accept': 'application/json'},
+                    })
+                        .then(response => response.ok ? response.json() : {results: []})
+                        .then(data => {
+                            const results = Array.isArray(data.results) ? data.results : [];
+                            callback(results);
+                        })
+                        .catch(error => {
+                            if (error.name !== 'AbortError') {
+                                console.error('Errore suggerimenti alimenti:', error);
+                            }
+                            callback([]);
+                        });
+                }, delay);
             };
+        };
 
-            item.addEventListener('pointerdown', (event) => {
-                event.preventDefault();
-                applySelection();
-            });
+        const fetchFoodSuggestions = createSuggestionFetcher(foodSuggestUrl);
 
-            item.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    applySelection();
-                }
-            });
-
-            fragment.appendChild(item);
-        });
-
-        suggestionsDiv.appendChild(fragment);
-        suggestionsDiv.style.display = 'block';
-    });
-
-    searchInput.addEventListener('focus', () => {
-        if (searchInput.value) {
-            const event = new Event('input');
-            searchInput.dispatchEvent(event);
-        }
-    });
-
-    searchInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
+        const hideSuggestions = () => {
             suggestionsDiv.style.display = 'none';
             suggestionsDiv.innerHTML = '';
-        }
-    });
+        };
 
-    document.addEventListener('click', (event) => {
-        if (!event.target.closest('.suggestions-container')) {
-            suggestionsDiv.style.display = 'none';
-        }
-    });
+        const requestSuggestions = () => {
+            const term = searchInput.value.trim();
+            const normalizedTerm = normalizeText(term);
+            const storedTerm = foodIdInput.dataset.selectedTerm || '';
 
-    const DRAFT_KEY_DIET = `diet_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
-    const dietForm = document.getElementById('dieta-form');
-    const dietInputs = dietForm.querySelectorAll('input[type="text"], input[type="number"]');
-    function saveDietDraft() {
-        const draftData = {};
-        dietInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
-        localStorage.setItem(DRAFT_KEY_DIET, JSON.stringify(draftData));
-    }
-    function loadDietDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_DIET);
-        if (draft) {
-            const draftData = JSON.parse(draft);
-            dietInputs.forEach(input => { if (draftData[input.name]) input.value = draftData[input.name]; });
+            if (storedTerm !== normalizedTerm) {
+                foodIdInput.value = '';
+                delete foodIdInput.dataset.selectedTerm;
+            }
+
+            if (!term) {
+                hideSuggestions();
+                return;
+            }
+
+            fetchFoodSuggestions(term, (items) => {
+                if (!items.length) {
+                    hideSuggestions();
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                items.slice(0, 5).forEach(item => {
+                    const option = document.createElement('div');
+                    option.className = 'suggestion-item';
+                    option.setAttribute('role', 'option');
+                    option.tabIndex = 0;
+
+                    const label = document.createElement('span');
+                    label.textContent = item.name;
+                    option.appendChild(label);
+
+                    if (item.is_global) {
+                        const icon = document.createElement('i');
+                        icon.className = 'bi bi-globe2 global-icon';
+                        icon.setAttribute('title', 'Alimento globale');
+                        icon.setAttribute('aria-label', 'Alimento globale');
+                        option.appendChild(icon);
+                    }
+
+                    const applySelection = () => {
+                        searchInput.value = item.name;
+                        searchInput.classList.remove('is-invalid');
+                        searchInput.removeAttribute('aria-invalid');
+                        foodIdInput.value = item.id;
+                        foodIdInput.dataset.selectedTerm = normalizeText(item.name);
+                        hideSuggestions();
+                    };
+
+                    option.addEventListener('pointerdown', (event) => {
+                        event.preventDefault();
+                        applySelection();
+                    });
+
+                    option.addEventListener('keydown', (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            applySelection();
+                        }
+                    });
+
+                    fragment.appendChild(option);
+                });
+
+                suggestionsDiv.innerHTML = '';
+                suggestionsDiv.appendChild(fragment);
+                suggestionsDiv.style.display = 'block';
+            });
+        };
+
+        searchInput.addEventListener('input', () => {
+            searchInput.classList.remove('is-invalid');
+            searchInput.removeAttribute('aria-invalid');
+            requestSuggestions();
+        });
+
+        searchInput.addEventListener('focus', requestSuggestions);
+
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideSuggestions();
+                foodIdInput.value = '';
+                delete foodIdInput.dataset.selectedTerm;
+            }
+        });
+
+        dietForm.addEventListener('submit', (event) => {
+            if (!foodIdInput.value) {
+                event.preventDefault();
+                hideSuggestions();
+                searchInput.classList.add('is-invalid');
+                searchInput.setAttribute('aria-invalid', 'true');
+                searchInput.focus();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.suggestions-container')) {
+                hideSuggestions();
+            }
+        });
+
+        const DRAFT_KEY_DIET = `diet_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
+        const dietInputs = dietForm.querySelectorAll('input[type="text"], input[type="number"]');
+
+        function saveDietDraft() {
+            const draftData = {};
+            dietInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
+            localStorage.setItem(DRAFT_KEY_DIET, JSON.stringify(draftData));
         }
-    }
-    dietInputs.forEach(input => input.addEventListener('input', saveDietDraft));
-    dietForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_DIET));
-    document.addEventListener('DOMContentLoaded', loadDietDraft);
+
+        function loadDietDraft() {
+            const draft = localStorage.getItem(DRAFT_KEY_DIET);
+            if (draft) {
+                const draftData = JSON.parse(draft);
+                dietInputs.forEach(input => {
+                    if (draftData[input.name] && input.name !== 'food_id') {
+                        input.value = draftData[input.name];
+                    }
+                });
+                if (draftData.food_name) {
+                    searchInput.value = draftData.food_name;
+                    requestSuggestions();
+                }
+            }
+        }
+
+        dietInputs.forEach(input => input.addEventListener('input', saveDietDraft));
+        dietForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_DIET));
+        loadDietDraft();
+    });
 </script>
 {% endblock %}

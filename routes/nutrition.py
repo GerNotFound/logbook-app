@@ -1,5 +1,5 @@
 # routes/nutrition.py
-from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash, jsonify
 from datetime import date, datetime, timedelta
 from .auth import login_required
 from utils import execute_query
@@ -8,6 +8,42 @@ from sqlalchemy.exc import IntegrityError
 from extensions import db
 
 nutrition_bp = Blueprint('nutrition', __name__)
+
+
+@nutrition_bp.get('/api/suggest/foods')
+@login_required
+def suggest_foods():
+    user_id = session['user_id']
+    search_term = (request.args.get('q') or '').strip()
+
+    if not search_term:
+        return jsonify({'results': []})
+
+    pattern = f"%{search_term.lower()}%"
+    rows = execute_query(
+        """
+        SELECT id, name, user_id IS NULL AS is_global
+        FROM foods
+        WHERE (user_id IS NULL OR user_id = :uid)
+          AND LOWER(name) LIKE :pattern
+        ORDER BY (user_id IS NULL) DESC, name ASC
+        LIMIT 5
+        """,
+        {'uid': user_id, 'pattern': pattern},
+        fetchall=True,
+    ) or []
+
+    suggestions = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': bool(row['is_global']),
+        }
+        for row in rows
+    ]
+
+    return jsonify({'results': suggestions})
+
 
 TRACKER_DEFINITIONS = [
     {
@@ -322,8 +358,29 @@ def dieta(date_str):
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_food':
-            food_name = request.form.get('food_name')
-            food_data = execute_query('SELECT * FROM foods WHERE name = :name AND (user_id IS NULL OR user_id = :uid)', {'name': food_name, 'uid': user_id}, fetchone=True)
+            food_id_raw = request.form.get('food_id')
+            food_data = None
+
+            if food_id_raw:
+                try:
+                    food_id = int(food_id_raw)
+                except (TypeError, ValueError):
+                    food_id = None
+                else:
+                    food_data = execute_query(
+                        'SELECT * FROM foods WHERE id = :id AND (user_id IS NULL OR user_id = :uid)',
+                        {'id': food_id, 'uid': user_id},
+                        fetchone=True,
+                    )
+
+            if not food_data:
+                food_name = request.form.get('food_name')
+                if food_name:
+                    food_data = execute_query(
+                        'SELECT * FROM foods WHERE LOWER(name) = LOWER(:name) AND (user_id IS NULL OR user_id = :uid)',
+                        {'name': food_name, 'uid': user_id},
+                        fetchone=True,
+                    )
             try: weight = float(request.form.get('weight', 0))
             except (ValueError, TypeError): weight = 0
 
@@ -352,15 +409,6 @@ def dieta(date_str):
         
         return redirect(url_for('nutrition.dieta', date_str=current_date_str))
 
-    food_rows = execute_query('SELECT id, name, user_id FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True) or []
-    food_options = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': row['user_id'] is None
-        }
-        for row in food_rows
-    ]
     diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
                              {'uid': user_id, 'ld': current_date_str}, fetchall=True)
     
@@ -380,7 +428,6 @@ def dieta(date_str):
     return render_template(
         'dieta.html',
         title='Dieta',
-        food_options=food_options,
         diet_log=diet_log,
         totals=totals,
         date_formatted=current_date.strftime('%d %b %y'),
