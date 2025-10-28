@@ -6,6 +6,7 @@ from utils import execute_query
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from extensions import db
+from services.suggestion_service import get_catalog_suggestions
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -16,32 +17,7 @@ def suggest_foods():
     user_id = session['user_id']
     search_term = (request.args.get('q') or '').strip()
 
-    if not search_term:
-        return jsonify({'results': []})
-
-    pattern = f"%{search_term.lower()}%"
-    rows = execute_query(
-        """
-        SELECT id, name, user_id IS NULL AS is_global
-        FROM foods
-        WHERE (user_id IS NULL OR user_id = :uid)
-          AND LOWER(name) LIKE :pattern
-        ORDER BY (user_id IS NULL) DESC, name ASC
-        LIMIT 5
-        """,
-        {'uid': user_id, 'pattern': pattern},
-        fetchall=True,
-    ) or []
-
-    suggestions = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': bool(row['is_global']),
-        }
-        for row in rows
-    ]
-
+    suggestions = get_catalog_suggestions('foods', user_id, search_term)
     return jsonify({'results': suggestions})
 
 
