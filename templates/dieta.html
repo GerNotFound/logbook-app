@@ -104,16 +104,28 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     const foodList = {{ food_options|tojson|safe }};
+
+    const normalizeText = (text) => {
+        if (!text) {
+            return '';
+        }
+        try {
+            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        } catch (error) {
+            return text.toLowerCase();
+        }
+    };
+
     const normalizedFoods = foodList.map(food => ({
         name: food.name,
         isGlobal: food.is_global,
-        search: food.name.toLowerCase(),
+        search: normalizeText(food.name),
     }));
     const searchInput = document.getElementById('alimento-search');
     const suggestionsDiv = document.getElementById('suggestions');
 
     searchInput.addEventListener('input', () => {
-        const searchTerm = searchInput.value.trim().toLowerCase();
+        const searchTerm = normalizeText(searchInput.value.trim());
         suggestionsDiv.innerHTML = '';
 
         if (!searchTerm) {
@@ -137,9 +149,12 @@
         }
 
         const fragment = document.createDocumentFragment();
+        suggestionsDiv.setAttribute('role', 'listbox');
         matches.forEach(food => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
+            item.setAttribute('role', 'option');
+            item.tabIndex = 0;
 
             const label = document.createElement('span');
             label.textContent = food.name;
@@ -153,10 +168,22 @@
                 item.appendChild(icon);
             }
 
-            item.addEventListener('mousedown', (event) => {
-                event.preventDefault();
+            const applySelection = () => {
                 searchInput.value = food.name;
                 suggestionsDiv.style.display = 'none';
+                suggestionsDiv.innerHTML = '';
+            };
+
+            item.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                applySelection();
+            });
+
+            item.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    applySelection();
+                }
             });
 
             fragment.appendChild(item);
@@ -164,6 +191,20 @@
 
         suggestionsDiv.appendChild(fragment);
         suggestionsDiv.style.display = 'block';
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value) {
+            const event = new Event('input');
+            searchInput.dispatchEvent(event);
+        }
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            suggestionsDiv.style.display = 'none';
+            suggestionsDiv.innerHTML = '';
+        }
     });
 
     document.addEventListener('click', (event) => {

@@ -93,16 +93,36 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     const allExercises = {{ all_exercises|tojson|safe }};
+
+    const normalizeText = (text) => {
+        if (!text) {
+            return '';
+        }
+        try {
+            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        } catch (error) {
+            return text.toLowerCase();
+        }
+    };
+
     const normalizedExercises = allExercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
         isGlobal: exercise.user_id === null,
-        search: exercise.name.toLowerCase(),
+        search: normalizeText(exercise.name),
     }));
 
     function renderExerciseSuggestions(searchInput, suggestionsDiv, exerciseIdInput) {
-        const searchTerm = searchInput.value.trim().toLowerCase();
-        exerciseIdInput.value = '';
+        if (!suggestionsDiv) {
+            return;
+        }
+
+        const searchTerm = normalizeText(searchInput.value.trim());
+        const storedTerm = exerciseIdInput.dataset.selectedTerm || '';
+        if (storedTerm !== searchTerm) {
+            exerciseIdInput.value = '';
+            delete exerciseIdInput.dataset.selectedTerm;
+        }
         suggestionsDiv.innerHTML = '';
 
         if (!searchTerm) {
@@ -126,9 +146,12 @@
         }
 
         const fragment = document.createDocumentFragment();
+        suggestionsDiv.setAttribute('role', 'listbox');
         matches.forEach(exercise => {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
+            item.setAttribute('role', 'option');
+            item.tabIndex = 0;
 
             const label = document.createElement('span');
             label.textContent = exercise.name;
@@ -142,11 +165,24 @@
                 item.appendChild(icon);
             }
 
-            item.addEventListener('mousedown', (event) => {
-                event.preventDefault();
+            const applySelection = () => {
                 searchInput.value = exercise.name;
                 exerciseIdInput.value = exercise.id;
+                exerciseIdInput.dataset.selectedTerm = exercise.search;
                 suggestionsDiv.style.display = 'none';
+                suggestionsDiv.innerHTML = '';
+            };
+
+            item.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                applySelection();
+            });
+
+            item.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    applySelection();
+                }
             });
 
             fragment.appendChild(item);
@@ -158,11 +194,24 @@
 
     document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
         const parentForm = searchInput.closest('form');
-        const suggestionsDiv = parentForm.querySelector('.suggestions-list');
-        const exerciseIdInput = parentForm.querySelector('.exercise-id-input');
+        const suggestionsDiv = parentForm ? parentForm.querySelector('.suggestions-list') : null;
+        const exerciseIdInput = parentForm ? parentForm.querySelector('.exercise-id-input') : null;
 
-        searchInput.addEventListener('input', () => {
-            renderExerciseSuggestions(searchInput, suggestionsDiv, exerciseIdInput);
+        if (!suggestionsDiv || !exerciseIdInput) {
+            return;
+        }
+
+        const render = () => renderExerciseSuggestions(searchInput, suggestionsDiv, exerciseIdInput);
+
+        searchInput.addEventListener('input', render);
+        searchInput.addEventListener('focus', render);
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                suggestionsDiv.style.display = 'none';
+                suggestionsDiv.innerHTML = '';
+                exerciseIdInput.value = '';
+                delete exerciseIdInput.dataset.selectedTerm;
+            }
         });
     });
 
