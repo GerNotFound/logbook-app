@@ -103,275 +103,27 @@
 {% endblock %}
 
 {% block scripts %}
+<script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
 <script nonce="{{ csp_nonce() }}">
-    document.addEventListener('DOMContentLoaded', () => {
+    const initializeDietaSuggestions = (suggestionsModule) => {
+        if (!suggestionsModule) {
+            console.error('Modulo suggerimenti non disponibile.');
+            return;
+        }
+
         const searchInput = document.getElementById('alimento-search');
         const foodIdInput = document.getElementById('alimento-id');
         const suggestionsDiv = document.getElementById('suggestions');
         const dietForm = document.getElementById('dieta-form');
         const foodSuggestUrl = "{{ url_for('nutrition.suggest_foods') }}";
 
-        const normalizeText = (text) => {
-            if (!text) {
-                return '';
-            }
-            try {
-                return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            } catch (error) {
-                return text.toLowerCase();
-            }
-        };
-
-        const createSuggestionFetcher = (endpoint) => {
-            let controller = null;
-            let debounceId = null;
-            const delay = 160;
-
-            return (term, callback) => {
-                if (controller) {
-                    controller.abort();
-                    controller = null;
-                }
-
-                if (debounceId) {
-                    clearTimeout(debounceId);
-                }
-
-                if (!term) {
-                    callback([]);
-                    return;
-                }
-
-                debounceId = setTimeout(() => {
-                    controller = new AbortController();
-                    fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
-                        signal: controller.signal,
-                        headers: {'Accept': 'application/json'},
-                    })
-                        .then(response => response.ok ? response.json() : {results: []})
-                        .then(data => {
-                            const results = Array.isArray(data.results) ? data.results : [];
-                            callback(results);
-                        })
-                        .catch(error => {
-                            if (error.name !== 'AbortError') {
-                                console.error('Errore suggerimenti alimenti:', error);
-                            }
-                            callback([]);
-                        });
-                }, delay);
-            };
-        };
-
-        const fetchFoodSuggestions = createSuggestionFetcher(foodSuggestUrl);
-
-        const hideSuggestions = () => {
-            suggestionsDiv.style.display = 'none';
-            suggestionsDiv.innerHTML = '';
-            suggestionsDiv.removeAttribute('aria-expanded');
-        };
-
-        const attachSelectionHandler = (element, handler) => {
-            const listener = (event) => {
-                event.preventDefault();
-                handler();
-            };
-
-            if (window.PointerEvent) {
-                element.addEventListener('pointerdown', listener);
-            } else {
-                element.addEventListener('mousedown', listener);
-                element.addEventListener('touchstart', listener);
-            }
-        };
-
-        let currentItems = [];
-        let activeIndex = -1;
-
-        const closeSuggestions = () => {
-            hideSuggestions();
-            currentItems = [];
-            activeIndex = -1;
-        };
-
-        const clearActiveClasses = () => {
-            suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
-                item.classList.remove('active');
-                item.removeAttribute('aria-selected');
-            });
-        };
-
-        const setActiveIndex = (index) => {
-            const items = suggestionsDiv.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                activeIndex = -1;
-                return;
-            }
-
-            if (index < 0) {
-                index = items.length - 1;
-            } else if (index >= items.length) {
-                index = 0;
-            }
-
-            activeIndex = index;
-            clearActiveClasses();
-            const activeItem = items[index];
-            if (activeItem) {
-                activeItem.classList.add('active');
-                activeItem.setAttribute('aria-selected', 'true');
-                activeItem.scrollIntoView({block: 'nearest'});
-            }
-        };
-
-        const applySelection = (item) => {
-            searchInput.value = item.name;
-            searchInput.classList.remove('is-invalid');
-            searchInput.removeAttribute('aria-invalid');
-            foodIdInput.value = item.id;
-            foodIdInput.dataset.selectedTerm = normalizeText(item.name);
-            closeSuggestions();
-        };
-
-        const renderSuggestions = (items) => {
-            currentItems = items.slice(0, 5);
-            activeIndex = -1;
-
-            if (!currentItems.length) {
-                closeSuggestions();
-                return;
-            }
-
-            const fragment = document.createDocumentFragment();
-
-            currentItems.forEach((item, index) => {
-                const option = document.createElement('div');
-                option.className = 'suggestion-item';
-                option.setAttribute('role', 'option');
-                option.tabIndex = -1;
-
-                const label = document.createElement('span');
-                label.textContent = item.name;
-                option.appendChild(label);
-
-                if (item.is_global) {
-                    const icon = document.createElement('i');
-                    icon.className = 'bi bi-globe2 global-icon';
-                    icon.setAttribute('title', 'Alimento globale');
-                    icon.setAttribute('aria-label', 'Alimento globale');
-                    option.appendChild(icon);
-                }
-
-                attachSelectionHandler(option, () => applySelection(item));
-
-                option.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        applySelection(item);
-                    }
-                });
-
-                option.addEventListener('mouseenter', () => {
-                    clearActiveClasses();
-                    option.classList.add('active');
-                    option.setAttribute('aria-selected', 'true');
-                    activeIndex = index;
-                });
-
-                fragment.appendChild(option);
-            });
-
-            suggestionsDiv.innerHTML = '';
-            suggestionsDiv.appendChild(fragment);
-            suggestionsDiv.style.display = 'block';
-            suggestionsDiv.setAttribute('aria-expanded', 'true');
-        };
-
-        const moveActive = (direction) => {
-            if (!currentItems.length) {
-                return;
-            }
-            const items = suggestionsDiv.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                return;
-            }
-
-            const nextIndex = activeIndex === -1 ? (direction > 0 ? 0 : items.length - 1) : activeIndex + direction;
-            setActiveIndex(nextIndex);
-        };
-
-        const applyActiveSelection = () => {
-            if (activeIndex < 0 || !currentItems[activeIndex]) {
-                return false;
-            }
-            applySelection(currentItems[activeIndex]);
-            return true;
-        };
-
-        const requestSuggestions = () => {
-            const term = searchInput.value.trim();
-            const normalizedTerm = normalizeText(term);
-            const storedTerm = foodIdInput.dataset.selectedTerm || '';
-
-            if (storedTerm !== normalizedTerm) {
-                foodIdInput.value = '';
-                delete foodIdInput.dataset.selectedTerm;
-            }
-
-            if (!term) {
-                closeSuggestions();
-                return;
-            }
-
-            fetchFoodSuggestions(term, renderSuggestions);
-        };
-
-        searchInput.addEventListener('input', () => {
-            searchInput.classList.remove('is-invalid');
-            searchInput.removeAttribute('aria-invalid');
-            requestSuggestions();
-        });
-
-        searchInput.addEventListener('focus', requestSuggestions);
-
-        searchInput.addEventListener('keydown', (event) => {
-            if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                moveActive(1);
-                return;
-            }
-            if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                moveActive(-1);
-                return;
-            }
-            if (event.key === 'Enter') {
-                if (applyActiveSelection()) {
-                    event.preventDefault();
-                }
-                return;
-            }
-            if (event.key === 'Escape') {
-                closeSuggestions();
-                foodIdInput.value = '';
-                delete foodIdInput.dataset.selectedTerm;
-            }
-        });
-
-        dietForm.addEventListener('submit', (event) => {
-            if (!foodIdInput.value) {
-                event.preventDefault();
-                closeSuggestions();
-                searchInput.classList.add('is-invalid');
-                searchInput.setAttribute('aria-invalid', 'true');
-                searchInput.focus();
-            }
-        });
-
-        document.addEventListener('click', (event) => {
-            if (!event.target.closest('.suggestions-container')) {
-                closeSuggestions();
-            }
+        const suggestionInstance = suggestionsModule.initField({
+            input: searchInput,
+            hiddenInput: foodIdInput,
+            container: suggestionsDiv,
+            form: dietForm,
+            endpoint: foodSuggestUrl,
+            globalIconLabel: 'Alimento globale',
         });
 
         const DRAFT_KEY_DIET = `diet_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
@@ -394,7 +146,9 @@
                 });
                 if (draftData.food_name) {
                     searchInput.value = draftData.food_name;
-                    requestSuggestions();
+                    if (suggestionInstance) {
+                        suggestionInstance.requestSuggestions();
+                    }
                 }
             }
         }
@@ -402,6 +156,21 @@
         dietInputs.forEach(input => input.addEventListener('input', saveDietDraft));
         dietForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_DIET));
         loadDietDraft();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const moduleRef = window.LogbookCatalogSuggestions;
+        if (moduleRef) {
+            initializeDietaSuggestions(moduleRef);
+            return;
+        }
+
+        const readyHandler = (event) => {
+            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
+            initializeDietaSuggestions(moduleFromEvent);
+        };
+
+        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
     });
 </script>
 {% endblock %}
