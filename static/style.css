@@ -521,12 +521,17 @@ hr {
     background: #212529;
     border: 1px solid #444;
     display: none;
+    visibility: hidden;
     border-radius: 0 0 12px 12px;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
     overscroll-behavior: contain;
     top: calc(100% + 4px);
     left: 0;
     right: 0;
+}
+.suggestions-list.is-visible {
+    display: block;
+    visibility: visible;
 }
 .suggestion-item { padding: 12px 15px; border-bottom: 1px solid #3a3a3a; cursor: pointer; font-size: 16px; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; transition: background-color 0.18s ease; }
 .suggestion-item:last-child { border-bottom: none; }
