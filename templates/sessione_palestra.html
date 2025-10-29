@@ -78,16 +78,16 @@
     {% endif %}
 </div>
 
-<div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
-    <h5 id="status-template-name" class="mb-1"></h5>
-    <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
-        <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
-        <div class="duration-manual mt-2 mt-md-0">
-            <label for="duration-manual-input" class="form-label text-white-50 text-uppercase small mb-1">Modifica manuale (hh:mm)</label>
-            <input type="text" id="duration-manual-input" class="form-control form-control-sm bg-dark text-white" placeholder="00:00" form="workout-form" inputmode="text" pattern="^\d{1,2}:[0-5]\d$|^\d+$">
+    <div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
+        <h5 id="status-template-name" class="mb-1"></h5>
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
+            <div class="duration-manual d-flex align-items-center gap-2">
+                <label for="duration-manual-input" class="form-label text-white text-uppercase small mb-0">Modifica manuale (hh:mm)</label>
+                <input type="text" id="duration-manual-input" class="form-control form-control-sm bg-dark text-white duration-manual__input" placeholder="00:00" form="workout-form" inputmode="text" pattern="^\d{1,2}:[0-5]\d$|^\d+$">
+            </div>
         </div>
     </div>
-</div>
 
 
 <form id="workout-form" method="POST" action="{{ url_for('gym.sessione_palestra', date_param=record_date, session_ts=session_timestamp if is_editing else None) }}">

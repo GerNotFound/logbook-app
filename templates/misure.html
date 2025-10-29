@@ -68,12 +68,12 @@
         </select>
     </div>
 
-    <div id="bfp-manual-group" class="{% if bfp_mode != 'manual' %}d-none{% endif %}">
+    <div id="bfp-manual-group" class="{% if bfp_mode != 'manual' %}d-none{% endif %}"{% if bfp_mode != 'manual' %} hidden aria-hidden="true"{% else %} aria-hidden="false"{% endif %}>
         <label for="bfp_manual" class="form-label">BFP (%)</label>
         <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
     </div>
 
-    <div id="bfp-formula-group" class="{% if bfp_mode == 'manual' %}d-none{% endif %}">
+    <div id="bfp-formula-group" class="{% if bfp_mode == 'manual' %}d-none{% endif %}"{% if bfp_mode == 'manual' %} hidden aria-hidden="true"{% else %} aria-hidden="false"{% endif %}>
         <div class="row">
             <div class="col-4">
                 <label for="neck" class="form-label label-tall">Collo (cm)</label>
@@ -109,18 +109,43 @@
         const bfpModeSelector = document.getElementById('bfp-mode-selector');
         const manualGroup = document.getElementById('bfp-manual-group');
         const formulaGroup = document.getElementById('bfp-formula-group');
-        const manualInputs = manualGroup.querySelectorAll('input');
-        const formulaInputs = formulaGroup.querySelectorAll('input');
+        let applyBfpMode = () => {};
 
-        function toggleBfpFields() {
-            const isManual = bfpModeSelector.value === 'manual';
-            manualGroup.classList.toggle('d-none', !isManual);
-            formulaGroup.classList.toggle('d-none', isManual);
-            manualInputs.forEach(input => input.disabled = !isManual);
-            formulaInputs.forEach(input => input.disabled = isManual);
+        if (bfpModeSelector && manualGroup && formulaGroup) {
+            const manualInputs = Array.from(manualGroup.querySelectorAll('input'));
+            const formulaInputs = Array.from(formulaGroup.querySelectorAll('input'));
+
+            applyBfpMode = function() {
+                const isManual = (bfpModeSelector.value || '').toLowerCase() === 'manual';
+                manualGroup.classList.toggle('d-none', !isManual);
+                formulaGroup.classList.toggle('d-none', isManual);
+                if (isManual) {
+                    manualGroup.removeAttribute('hidden');
+                    manualGroup.setAttribute('aria-hidden', 'false');
+                    formulaGroup.setAttribute('hidden', 'hidden');
+                    formulaGroup.setAttribute('aria-hidden', 'true');
+                } else {
+                    manualGroup.setAttribute('hidden', 'hidden');
+                    manualGroup.setAttribute('aria-hidden', 'true');
+                    formulaGroup.removeAttribute('hidden');
+                    formulaGroup.setAttribute('aria-hidden', 'false');
+                }
+                manualInputs.forEach(input => {
+                    input.disabled = !isManual;
+                    input.setAttribute('aria-hidden', (!isManual).toString());
+                });
+                formulaInputs.forEach(input => {
+                    input.disabled = isManual;
+                    input.setAttribute('aria-hidden', isManual.toString());
+                });
+            };
+
+            ['change', 'input'].forEach(eventName => {
+                bfpModeSelector.addEventListener(eventName, applyBfpMode);
+            });
+
+            applyBfpMode();
         }
-        
-        bfpModeSelector.addEventListener('change', toggleBfpFields);
         
         const DRAFT_KEY_MEASURES = `measures_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
         const measuresForm = document.getElementById('misure-form');
@@ -142,12 +167,12 @@
                     }
                 });
             }
-            toggleBfpFields();
+            applyBfpMode();
         }
-        
+
         measuresInputs.forEach(input => input.addEventListener('input', saveMeasuresDraft));
         measuresForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_MEASURES));
-        
+
         loadMeasuresDraft();
     });
 </script>

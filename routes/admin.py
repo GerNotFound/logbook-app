@@ -95,6 +95,9 @@ def admin_utenti():
             except ValueError:
                 last_active = None
         user['is_online'] = bool(last_active and last_active >= online_cutoff)
+        user['last_active_display'] = (
+            last_active.strftime('%d %b %Y %H:%M') if last_active else 'N/D'
+        )
     return render_template('admin_utenti.html', title='Admin Utenti', users=users, search_term=search_term)
 
 @admin_bp.route('/utente/<int:user_id>', methods=['GET', 'POST'])
@@ -269,13 +272,56 @@ def admin_utente_diario_palestra(user_id):
     if not user: return redirect(url_for('admin.admin_utenti'))
     
     logs_raw = execute_query('SELECT wl.record_date, wl.session_timestamp, e.name as exercise_name, wl.set_number, wl.reps, wl.weight FROM workout_log wl JOIN exercises e ON wl.exercise_id = e.id WHERE wl.user_id = :user_id ORDER BY wl.record_date DESC, wl.session_timestamp DESC, wl.id ASC', {'user_id': user_id}, fetchall=True)
-    workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'sessions': defaultdict(lambda: {'time_formatted': '', 'exercises': defaultdict(list)})})
+    sessions_raw = execute_query('SELECT session_timestamp, duration_minutes, template_name, session_note, session_rating FROM workout_sessions WHERE user_id = :user_id', {'user_id': user_id}, fetchall=True)
+    sessions_info = {session['session_timestamp']: dict(session) for session in sessions_raw}
+
+    workouts_by_day = defaultdict(
+        lambda: {
+            'date_formatted': '',
+            'template_names': [],
+            'sessions': defaultdict(
+                lambda: {
+                    'time_formatted': '',
+                    'duration': None,
+                    'template_name': 'Allenamento Libero',
+                    'session_note': None,
+                    'session_rating': None,
+                    'exercises': defaultdict(list),
+                }
+            ),
+        }
+    )
+
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
         workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
-        workouts_by_day[day]['sessions'][ts]['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
-        workouts_by_day[day]['sessions'][ts]['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
-    final_workouts = {day: {'date_formatted': data['date_formatted'], 'sessions': {ts: dict(s_data) for ts, s_data in data['sessions'].items()}} for day, data in workouts_by_day.items()}
+        session_details = sessions_info.get(ts, {})
+        session_data = workouts_by_day[day]['sessions'][ts]
+        session_data['time_formatted'] = datetime.strptime(ts, '%Y%m%d%H%M%S').strftime('%H:%M')
+        session_data['duration'] = session_details.get('duration_minutes')
+        template_name = session_details.get('template_name') or 'Allenamento Libero'
+        session_data['template_name'] = template_name
+        session_data['session_note'] = session_details.get('session_note')
+        session_data['session_rating'] = session_details.get('session_rating')
+        if template_name not in workouts_by_day[day]['template_names']:
+            workouts_by_day[day]['template_names'].append(template_name)
+        session_data['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
+
+    final_workouts = {}
+    for day, data in workouts_by_day.items():
+        sessions_payload = {}
+        for ts, s_data in data['sessions'].items():
+            session_dict = dict(s_data)
+            session_dict['exercises'] = {
+                name: sets for name, sets in s_data['exercises'].items()
+            }
+            sessions_payload[ts] = session_dict
+        final_workouts[day] = {
+            'date_formatted': data['date_formatted'],
+            'template_names': data['template_names'],
+            'sessions': sessions_payload,
+        }
+
     return render_template('admin_utente_diario_palestra.html', title=f'Diario Palestra di {user["username"]}', user=user, workouts_by_day=final_workouts)
 
 @admin_bp.route('/utente/<int:user_id>/diario_corsa')

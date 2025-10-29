@@ -87,6 +87,20 @@ CREATE TABLE diet_log (
     FOREIGN KEY (food_id) REFERENCES foods (id) ON DELETE CASCADE
 );
 
+CREATE TABLE intake_log (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    record_date DATE NOT NULL,
+    tracker_type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    unit TEXT NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_intake_log_user_date ON intake_log(user_id, record_date);
+
 CREATE TABLE cardio_log (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
