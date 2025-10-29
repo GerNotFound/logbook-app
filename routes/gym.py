@@ -8,7 +8,7 @@ from utils import execute_query
 from sqlalchemy.exc import IntegrityError
 from extensions import db
 from services.workout_service import get_templates_with_history, get_session_log_data
-from services.suggestion_service import get_catalog_suggestions
+from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
 
 gym_bp = Blueprint('gym', __name__)
 
@@ -385,14 +385,14 @@ def scheda():
                 flash('Si è verificato un errore durante il salvataggio.', 'danger')
         elif action == 'add_exercise':
             exercise_id = request.form.get('exercise_id')
+            exercise_name = (request.form.get('exercise_name') or '').strip()
             sets = (request.form.get('sets') or '').strip()
-            if not template_id or not exercise_id or not sets:
+            if not template_id or not sets:
                 flash('Compila tutti i campi per aggiungere un esercizio.', 'danger')
                 return redirect(url_for('gym.scheda'))
 
             try:
                 template_id_int = int(template_id)
-                exercise_id_int = int(exercise_id)
             except (TypeError, ValueError):
                 flash('Dati esercizio non validi.', 'danger')
                 return redirect(url_for('gym.scheda'))
@@ -402,12 +402,18 @@ def scheda():
                 flash('Scheda non trovata.', 'danger')
                 return redirect(url_for('gym.scheda'))
 
-            exercise = execute_query('SELECT id, user_id FROM exercises WHERE id = :id', {'id': exercise_id_int}, fetchone=True)
-            if not exercise or (exercise['user_id'] not in (user_id, None)):
-                flash('Esercizio non disponibile.', 'danger')
+            exercise_row = resolve_catalog_item(
+                'exercises',
+                user_id,
+                entry_id=exercise_id,
+                name=exercise_name,
+            )
+            if not exercise_row or exercise_row.get('user_id') not in (None, user_id):
+                flash('Seleziona un esercizio valido dall\'archivio.', 'danger')
                 return redirect(url_for('gym.scheda'))
+
             execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                          {'tid': template_id_int, 'eid': exercise_id_int, 'sets': sets}, commit=True)
+                          {'tid': template_id_int, 'eid': exercise_row['id'], 'sets': sets}, commit=True)
             flash('Esercizio aggiunto alla scheda.', 'success')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')

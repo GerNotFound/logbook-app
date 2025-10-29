@@ -3,6 +3,7 @@
 
     const DEFAULT_DELAY = 160;
     const DEFAULT_LIMIT = 5;
+    const SUPPORTS_ABORT_CONTROLLER = typeof window.AbortController === 'function';
 
     const normalizeText = (text) => {
         if (!text) {
@@ -20,7 +21,7 @@
         let debounceId = null;
 
         return (term, callback) => {
-            if (controller) {
+            if (SUPPORTS_ABORT_CONTROLLER && controller) {
                 controller.abort();
                 controller = null;
             }
@@ -36,11 +37,20 @@
             }
 
             debounceId = window.setTimeout(() => {
-                controller = new AbortController();
-                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
-                    signal: controller.signal,
+                if (SUPPORTS_ABORT_CONTROLLER) {
+                    controller = new AbortController();
+                }
+
+                const fetchOptions = {
                     headers: {'Accept': 'application/json'},
-                })
+                    credentials: 'same-origin',
+                };
+
+                if (SUPPORTS_ABORT_CONTROLLER && controller) {
+                    fetchOptions.signal = controller.signal;
+                }
+
+                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, fetchOptions)
                     .then((response) => (response.ok ? response.json() : {results: []}))
                     .then((data) => {
                         const rawResults = Array.isArray(data.results) ? data.results : [];

@@ -59,7 +59,7 @@
         <form method="POST" action="{{ url_for('gym.scheda') }}" id="add-exercise-form-{{ template.id }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_exercise"><input type="hidden" name="template_id" value="{{ template.id }}"><input type="hidden" name="exercise_id" class="exercise-id-input">
             <div class="row g-2 d-flex align-items-end">
-                <div class="col"><label class="form-label mb-1 label-sm">Esercizio</label><div class="suggestions-container"><input type="text" class="form-control exercise-search-input mb-0" placeholder="Cerca..." autocomplete="off" required><div class="suggestions-list suggestions-list-up"></div></div></div>
+                <div class="col"><label class="form-label mb-1 label-sm">Esercizio</label><div class="suggestions-container"><input type="text" name="exercise_name" class="form-control exercise-search-input mb-0" placeholder="Cerca..." autocomplete="off" required><div class="suggestions-list suggestions-list-up"></div></div></div>
                 <div class="col-auto w-80"><label class="form-label mb-1 label-sm">Serie</label><input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control mb-0" required></div>
                 <div class="col-auto"><button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button></div>
             </div>
