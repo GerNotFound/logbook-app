@@ -1,0 +1,10 @@
+# Environment and runtime files
+.env
+.env.*
+!.env.example
+.flaskenv
+instance/
+
+# Python cache artifacts
+__pycache__/
+*.py[cod]

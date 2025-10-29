@@ -1,0 +1,42 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-2 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ PROGRESSIONE</span></h1>
+        <h3 class="text-muted mb-4">{{ exercise.name }}</h3>
+    </div>
+</div>
+
+{% if sessions %}
+    {% for ts, session_data in sessions.items() %}
+    <div class="mb-3 p-3 border rounded">
+        <h5 class="mb-3">{{ session_data.date_formatted }}</h5>
+        
+        <table class="table table-sm table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>Set</th>
+                    <th>Reps</th>
+                    <th>Peso (kg)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in session_data.sets %}
+                <tr>
+                    <td>{{ s.set_number }}</td>
+                    <td>{{ s.reps }}</td>
+                    <td>{{ s.weight }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-secondary text-center">
+        Nessun dato storico trovato per questo esercizio.
+    </div>
+{% endif %}
+
+<a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom w-100 mt-2">INDIETRO</a>
+{% endblock %}

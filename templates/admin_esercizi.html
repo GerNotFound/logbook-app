@@ -1,0 +1,83 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="admin-brand brand-heading__brand">ADMIN</span><span class="brand-heading__section">/ ESERCIZI GLOBALI</span></h1>
+        <p class="text-muted">Questi esercizi saranno visibili a tutti gli utenti.</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Aggiungi Nuovo Esercizio Globale</h5>
+    <form method="POST" id="add-exercise-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_exercise">
+        <div class="row g-2">
+            <div class="col"><input type="text" name="name" class="form-control" placeholder="Nome Esercizio" required></div>
+            <div class="col-auto"><button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button></div>
+        </div>
+    </form>
+</div>
+
+<div class="table-responsive mb-4">
+    <table class="table table-bordered">
+        <thead class="table-dark">
+            <tr>
+                <th>Esercizio</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ex in exercises %}
+            <tr>
+                <td>{{ ex.name }}</td>
+                <td class="text-center align-middle">
+                    <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_exercise">
+                        <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete">X</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="2" class="text-center">Nessun esercizio globale nel database.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    const DRAFT_KEY_ADD_EXERCISE = `admin_add_exercise_draft`;
+    const addExerciseForm = document.getElementById('add-exercise-form');
+    const exerciseInput = addExerciseForm.querySelector('input[name="name"]');
+
+    function saveDraft() {
+        if (exerciseInput.value) {
+            localStorage.setItem(DRAFT_KEY_ADD_EXERCISE, exerciseInput.value);
+        } else {
+            localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE);
+        }
+    }
+
+    function loadDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_ADD_EXERCISE);
+        if (draft) {
+            exerciseInput.value = draft;
+        }
+    }
+
+    exerciseInput.addEventListener('input', saveDraft);
+    addExerciseForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE));
+    document.addEventListener('DOMContentLoaded', loadDraft);
+</script>
+{% endblock %}

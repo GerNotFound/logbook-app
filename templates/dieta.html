@@ -1,0 +1,176 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ DIETA</span></h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('nutrition.dieta', date_str=prev_day) }}" class="btn btn-outline-light">
+                <i class="bi bi-chevron-left me-1" aria-hidden="true"></i>
+                Prec.
+            </a>
+            <span class="text-center">
+                <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
+                {% if not is_today %}
+                    <a href="{{ url_for('nutrition.dieta') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
+                {% endif %}
+            </span>
+            <a href="{{ url_for('nutrition.dieta', date_str=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">
+                Succ.
+                <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded d-flex justify-content-between align-items-center">
+    <form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" id="day-type-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_day_type">
+        <div class="d-flex flex-column">
+            <button type="submit" name="day_type" value="ON" class="btn {% if current_day_type == 'ON' %}btn-light{% else %}btn-outline-light{% endif %} btn-sm mb-2 w-120">GIORNO ON</button>
+            <button type="submit" name="day_type" value="OFF" class="btn {% if current_day_type == 'OFF' %}btn-light{% else %}btn-outline-light{% endif %} btn-sm w-120">GIORNO OFF</button>
+        </div>
+    </form>
+    <div class="text-end">
+        <h5 class="mb-1">Obiettivi ({{ current_day_type }})</h5>
+        {% set targets = target_macros.on if current_day_type == 'ON' else target_macros.off %}
+        <p class="mb-0 text-muted text-sm">
+            P: {{ targets.p | round(1) }}g | 
+            C: {{ targets.c | round(1) }}g | 
+            G: {{ targets.f | round(1) }}g
+        </p>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" id="dieta-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add_food">
+    <input type="hidden" name="food_id" id="alimento-id">
+    <div class="mb-3 suggestions-container">
+        <label class="form-label">Cerca Alimento</label>
+        <input type="text" name="food_name" id="alimento-search" class="form-control"
+               placeholder="Inizia a digitare..." autocomplete="off" required>
+        <div id="suggestions" class="suggestions-list suggestions-list-up"></div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Peso (grammi)</label>
+        <input type="number" step="1" min="0" name="weight" class="form-control" placeholder="Peso in grammi" required>
+    </div>
+    <button type="submit" class="btn btn-custom w-100">AGGIUNGI ALIMENTO</button>
+</form>
+
+<div class="table-responsive mt-4">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Alimento</th>
+                <th>Peso</th>
+                <th>Proteine</th>
+                <th>Carboidrati</th>
+                <th>Grassi</th>
+                <th>Calorie</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in diet_log %}
+            <tr>
+                <td>{{ item.food_name }}{% if item.user_id is none %}<i class="bi bi-globe2 global-icon" title="Alimento globale" aria-label="Alimento globale"></i>{% endif %}</td>
+                <td>{{ item.weight | round(0) }}g</td>
+                <td>{{ item.protein | round(1) }}g</td>
+                <td>{{ item.carbs | round(1) }}g</td>
+                <td>{{ item.fat | round(1) }}g</td>
+                <td>{{ item.calories | round(0) }} kcal</td>
+                <td>
+                    <form method="POST" action="{{ url_for('nutrition.dieta', date_str=current_date_str) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_entry">
+                        <input type="hidden" name="entry_id" value="{{ item.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete" onclick="return confirm('Sei sicuro?')">X</button>
+                    </form>
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7" class="text-center">Nessun alimento aggiunto in questa data.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('nutrition.alimentazione') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
+<script nonce="{{ csp_nonce() }}">
+    const initializeDietaSuggestions = (suggestionsModule) => {
+        if (!suggestionsModule) {
+            console.error('Modulo suggerimenti non disponibile.');
+            return;
+        }
+
+        const searchInput = document.getElementById('alimento-search');
+        const foodIdInput = document.getElementById('alimento-id');
+        const suggestionsDiv = document.getElementById('suggestions');
+        const dietForm = document.getElementById('dieta-form');
+        const foodSuggestUrl = "{{ url_for('nutrition.suggest_foods') }}";
+
+        const suggestionInstance = suggestionsModule.initField({
+            input: searchInput,
+            hiddenInput: foodIdInput,
+            container: suggestionsDiv,
+            form: dietForm,
+            endpoint: foodSuggestUrl,
+            globalIconLabel: 'Alimento globale',
+        });
+
+        const DRAFT_KEY_DIET = `diet_draft_{{ session['user_id'] }}_{{ current_date_str }}`;
+        const dietInputs = dietForm.querySelectorAll('input[type="text"], input[type="number"]');
+
+        function saveDietDraft() {
+            const draftData = {};
+            dietInputs.forEach(input => { if (input.value) draftData[input.name] = input.value; });
+            localStorage.setItem(DRAFT_KEY_DIET, JSON.stringify(draftData));
+        }
+
+        function loadDietDraft() {
+            const draft = localStorage.getItem(DRAFT_KEY_DIET);
+            if (draft) {
+                const draftData = JSON.parse(draft);
+                dietInputs.forEach(input => {
+                    if (draftData[input.name] && input.name !== 'food_id') {
+                        input.value = draftData[input.name];
+                    }
+                });
+                if (draftData.food_name) {
+                    searchInput.value = draftData.food_name;
+                    if (suggestionInstance) {
+                        suggestionInstance.requestSuggestions();
+                    }
+                }
+            }
+        }
+
+        dietInputs.forEach(input => input.addEventListener('input', saveDietDraft));
+        dietForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_DIET));
+        loadDietDraft();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const moduleRef = window.LogbookCatalogSuggestions;
+        if (moduleRef) {
+            initializeDietaSuggestions(moduleRef);
+            return;
+        }
+
+        const readyHandler = (event) => {
+            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
+            initializeDietaSuggestions(moduleFromEvent);
+        };
+
+        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
+    });
+</script>
+{% endblock %}

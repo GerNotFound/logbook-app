@@ -1,0 +1,129 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ SCHEDA</span></h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Crea Nuova Scheda</h5>
+    <form id="create-template-form" method="POST" action="{{ url_for('gym.scheda') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_template">
+        <div class="row g-2 align-items-center">
+            <div class="col"><input type="text" name="template_name" class="form-control mb-0" placeholder="Es. Giorno A - Spinta" required></div>
+            <div class="col-auto"><button type="submit" class="btn btn-custom btn-custom-short">Crea</button></div>
+        </div>
+    </form>
+</div>
+
+{% if templates %}
+    {% for template in templates %}
+    <div class="mb-4 p-3 border rounded" id="template-{{ template.id }}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0 template-name">{{ template.name }}</h4>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal-{{ template.id }}">Rinomina</button>
+                <form method="POST" action="{{ url_for('gym.scheda') }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete_template"><input type="hidden" name="template_id" value="{{ template.id }}">
+                    <button type="submit" class="btn btn-sm btn-delete">Elimina</button>
+                </form>
+            </div>
+        </div>
+        <!-- MODIFICA QUI: Ripristinata classe semplice 'table-bordered' -->
+        <table class="table table-bordered table-sm">
+            <thead><tr><th>Esercizio</th><th>Serie</th><th></th></tr></thead>
+            <tbody>
+            {% for exercise in template.exercises %}
+                <tr id="tex-{{ exercise.id }}">
+                    <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td><td>{{ exercise.sets }}</td>
+                    <td class="text-center">
+                        <form method="POST" action="{{ url_for('gym.scheda') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_template_exercise">
+                            <input type="hidden" name="template_id" value="{{ template.id }}">
+                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete">X</button>
+                        </form>
+                    </td>
+                </tr>
+            {% else %}
+                <tr class="no-exercise-row"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="POST" action="{{ url_for('gym.scheda') }}" id="add-exercise-form-{{ template.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_exercise"><input type="hidden" name="template_id" value="{{ template.id }}"><input type="hidden" name="exercise_id" class="exercise-id-input">
+            <div class="row g-2 d-flex align-items-end">
+                <div class="col"><label class="form-label mb-1 label-sm">Esercizio</label><div class="suggestions-container"><input type="text" class="form-control exercise-search-input mb-0" placeholder="Cerca..." autocomplete="off" required><div class="suggestions-list suggestions-list-up"></div></div></div>
+                <div class="col-auto w-80"><label class="form-label mb-1 label-sm">Serie</label><input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control mb-0" required></div>
+                <div class="col-auto"><button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button></div>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal fade" id="renameTemplateModal-{{ template.id }}" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Rinomina Scheda</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <form method="POST" action="{{ url_for('gym.scheda') }}">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="template_id" value="{{ template.id }}"><input type="hidden" name="action" value="rename_template">
+                        <label for="new_template_name-{{ template.id }}" class="form-label">Nuovo nome</label>
+                        <input type="text" name="new_template_name" id="new_template_name-{{ template.id }}" class="form-control" value="{{ template.name }}" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-custom btn-custom-tight m-0">Salva</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-secondary text-center">Nessuna scheda di allenamento trovata.</div>
+{% endif %}
+<div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
+{% endblock %}
+{% block scripts %}
+<script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
+<script nonce="{{ csp_nonce() }}">
+    const initializeSchedaSuggestions = (suggestionsModule) => {
+        if (!suggestionsModule) {
+            console.error('Modulo suggerimenti non disponibile.');
+            return;
+        }
+
+        const exerciseSuggestUrl = "{{ url_for('gym.suggest_exercises') }}";
+
+        suggestionsModule.initCollection({
+            rootSelector: 'form[id^="add-exercise-form"]',
+            inputSelector: '.exercise-search-input',
+            hiddenSelector: '.exercise-id-input',
+            suggestionsSelector: '.suggestions-list',
+            endpoint: exerciseSuggestUrl,
+            globalIconLabel: 'Esercizio globale',
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const moduleRef = window.LogbookCatalogSuggestions;
+        if (moduleRef) {
+            initializeSchedaSuggestions(moduleRef);
+            return;
+        }
+
+        const readyHandler = (event) => {
+            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
+            initializeSchedaSuggestions(moduleFromEvent);
+        };
+
+        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
+    });
+</script>
+{% endblock %}
