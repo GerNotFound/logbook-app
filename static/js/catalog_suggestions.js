@@ -13,10 +13,12 @@
         if (typeof value !== 'string') {
             value = value == null ? '' : String(value);
         }
+
         value = value.trim();
         if (!value) {
             return '';
         }
+
         try {
             return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         } catch (error) {
@@ -24,7 +26,7 @@
         }
     };
 
-    const sanitizeItems = (items) => {
+    const buildCatalog = (items) => {
         if (!Array.isArray(items)) {
             return {list: [], exact: new Map()};
         }
@@ -33,11 +35,11 @@
         const exact = new Map();
 
         items.forEach((raw) => {
-            if (!raw || raw.id == null || typeof raw.name !== 'string') {
+            if (!raw || raw.id == null) {
                 return;
             }
 
-            const name = raw.name.trim();
+            const name = typeof raw.name === 'string' ? raw.name.trim() : '';
             if (!name) {
                 return;
             }
@@ -48,7 +50,8 @@
             }
 
             const entry = {
-                id: raw.id,
+                id: String(raw.id),
+                rawId: raw.id,
                 name,
                 normalized,
                 is_global: Boolean(raw.is_global),
@@ -69,6 +72,7 @@
         }
 
         let timer = null;
+        let requestId = 0;
 
         return (term) => new Promise((resolve) => {
             if (timer) {
@@ -78,10 +82,11 @@
 
             const cleaned = (term || '').trim();
             if (!cleaned) {
-                resolve([]);
+                resolve({list: [], exact: new Map(), token: ++requestId});
                 return;
             }
 
+            const token = ++requestId;
             timer = window.setTimeout(() => {
                 fetch(`${endpoint}?q=${encodeURIComponent(cleaned)}`, {
                     credentials: 'same-origin',
@@ -89,79 +94,194 @@
                 })
                     .then((response) => (response.ok ? response.json() : {results: []}))
                     .then((payload) => {
-                        const rows = Array.isArray(payload.results) ? payload.results : [];
-                        resolve(rows.slice(0, limit));
+                        const rows = Array.isArray(payload.results) ? payload.results.slice(0, limit) : [];
+                        resolve({
+                            ...buildCatalog(rows),
+                            token,
+                        });
                     })
-                    .catch(() => resolve([]));
+                    .catch(() => {
+                        resolve({list: [], exact: new Map(), token});
+                    });
             }, REMOTE_DELAY);
         });
     };
 
     const generateId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
-    const setupField = ({
-        input,
-        hiddenInput,
-        container,
-        form = null,
-        items = null,
-        endpoint = null,
-        limit = DEFAULT_LIMIT,
-        globalIconLabel = 'Elemento globale',
-    }) => {
-        if (!input || !hiddenInput || !container) {
-            return null;
-        }
+    class SuggestionsField {
+        constructor({
+            input,
+            hiddenInput,
+            container,
+            form = null,
+            items = null,
+            endpoint = null,
+            limit = DEFAULT_LIMIT,
+            globalIconLabel = 'Elemento globale',
+        }) {
+            this.input = input;
+            this.hiddenInput = hiddenInput;
+            this.container = container;
+            this.form = form;
+            this.limit = limit;
+            this.globalIconLabel = globalIconLabel;
 
-        const localData = sanitizeItems(items);
-        const remoteFetcher = localData.list.length ? null : createRemoteFetcher(endpoint, limit);
+            this.localCatalog = buildCatalog(items);
+            this.remoteFetcher = this.localCatalog.list.length ? null : createRemoteFetcher(endpoint, limit);
+            this.remoteCatalog = {list: [], exact: new Map()};
 
-        if (!localData.list.length && !remoteFetcher) {
-            return null;
-        }
-
-        if (!container.id) {
-            container.id = generateId('suggestions');
-        }
-
-        input.setAttribute('aria-controls', container.id);
-        input.setAttribute('aria-autocomplete', 'list');
-        container.setAttribute('role', 'listbox');
-
-        let activeIndex = -1;
-        let matches = [];
-        let requestToken = 0;
-        const cleanupFns = [];
-
-        const hideSuggestions = () => {
-            matches = [];
-            activeIndex = -1;
-            container.innerHTML = '';
-            container.classList.remove('is-visible', 'suggestions-list-up');
-            container.style.display = 'none';
-            container.style.visibility = 'hidden';
-            container.removeAttribute('aria-expanded');
-            input.removeAttribute('aria-expanded');
-        };
-
-        const clearInvalid = () => {
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
-        };
-
-        const setHiddenSelection = (item) => {
-            hiddenInput.value = item ? item.id : '';
-            if (item) {
-                hiddenInput.dataset.normalized = item.normalized;
-            } else {
-                delete hiddenInput.dataset.normalized;
+            if (!this.container.id) {
+                this.container.id = generateId('suggestions');
             }
-        };
 
-        const highlightActive = () => {
-            const nodes = container.querySelectorAll('.suggestion-item');
+            this.input.setAttribute('aria-controls', this.container.id);
+            this.input.setAttribute('aria-autocomplete', 'list');
+            this.container.setAttribute('role', 'listbox');
+
+            this.matches = [];
+            this.activeIndex = -1;
+            this.latestToken = 0;
+            this.cleanupFns = [];
+
+            this.registerEvents();
+        }
+
+        registerEvents() {
+            const handleInput = () => {
+                this.clearInvalid();
+                this.requestSuggestions();
+            };
+
+            const handleFocus = () => {
+                if ((this.input.value || '').trim()) {
+                    this.requestSuggestions();
+                }
+            };
+
+            const handleKeydown = (event) => {
+                switch (event.key) {
+                    case KEY_ARROW_DOWN:
+                        event.preventDefault();
+                        this.moveActive(1);
+                        break;
+                    case KEY_ARROW_UP:
+                        event.preventDefault();
+                        this.moveActive(-1);
+                        break;
+                    case KEY_ENTER:
+                        if (this.activeIndex >= 0 && this.matches[this.activeIndex]) {
+                            event.preventDefault();
+                            this.selectItem(this.matches[this.activeIndex]);
+                        }
+                        break;
+                    case KEY_ESCAPE:
+                        this.hideSuggestions();
+                        break;
+                    default:
+                        break;
+                }
+            };
+
+            const handleBlur = () => {
+                window.setTimeout(() => {
+                    if (!this.container.matches(':hover') && document.activeElement !== this.input) {
+                        this.hideSuggestions();
+                    }
+                }, 120);
+            };
+
+            this.input.addEventListener('input', handleInput);
+            this.input.addEventListener('focus', handleFocus);
+            this.input.addEventListener('keydown', handleKeydown);
+            this.input.addEventListener('blur', handleBlur);
+
+            this.cleanupFns.push(() => {
+                this.input.removeEventListener('input', handleInput);
+                this.input.removeEventListener('focus', handleFocus);
+                this.input.removeEventListener('keydown', handleKeydown);
+                this.input.removeEventListener('blur', handleBlur);
+            });
+
+            const handleOutsideClick = (event) => {
+                if (!this.container.contains(event.target) && event.target !== this.input) {
+                    this.hideSuggestions();
+                }
+            };
+
+            document.addEventListener('mousedown', handleOutsideClick);
+            this.cleanupFns.push(() => document.removeEventListener('mousedown', handleOutsideClick));
+
+            const handleResize = () => this.ensureOrientation();
+            window.addEventListener('resize', handleResize);
+            this.cleanupFns.push(() => window.removeEventListener('resize', handleResize));
+
+            if (this.form) {
+                const handleSubmit = (event) => {
+                    if (this.validateSelection()) {
+                        return;
+                    }
+
+                    this.input.classList.add('is-invalid');
+                    this.input.setAttribute('aria-invalid', 'true');
+                    this.requestSuggestions();
+                    event.preventDefault();
+                    event.stopPropagation();
+                };
+
+                this.form.addEventListener('submit', handleSubmit);
+                this.cleanupFns.push(() => this.form.removeEventListener('submit', handleSubmit));
+            }
+        }
+
+        destroy() {
+            this.hideSuggestions();
+            while (this.cleanupFns.length) {
+                const cleanup = this.cleanupFns.pop();
+                if (typeof cleanup === 'function') {
+                    cleanup();
+                }
+            }
+        }
+
+        clearInvalid() {
+            this.input.classList.remove('is-invalid');
+            this.input.removeAttribute('aria-invalid');
+        }
+
+        setHiddenSelection(item) {
+            if (item) {
+                this.hiddenInput.value = item.id;
+                this.hiddenInput.dataset.normalized = item.normalized;
+            } else {
+                this.hiddenInput.value = '';
+                delete this.hiddenInput.dataset.normalized;
+            }
+        }
+
+        ensureOrientation() {
+            if (!this.container.classList.contains('is-visible')) {
+                this.container.classList.remove('suggestions-list-up');
+                return;
+            }
+
+            const maxHeight = Math.min(this.container.scrollHeight || 0, 220);
+            const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+            const rect = this.input.getBoundingClientRect();
+            const spaceBelow = viewport - rect.bottom;
+            const spaceAbove = rect.top;
+
+            if (spaceBelow < maxHeight + 12 && spaceAbove > spaceBelow) {
+                this.container.classList.add('suggestions-list-up');
+            } else {
+                this.container.classList.remove('suggestions-list-up');
+            }
+        }
+
+        highlightActive() {
+            const nodes = this.container.querySelectorAll('.suggestion-item');
             nodes.forEach((node, index) => {
-                if (index === activeIndex) {
+                if (index === this.activeIndex) {
                     node.classList.add('active');
                     node.setAttribute('aria-selected', 'true');
                     if (typeof node.scrollIntoView === 'function') {
@@ -172,89 +292,81 @@
                     node.removeAttribute('aria-selected');
                 }
             });
-        };
+        }
 
-        const ensureOrientation = () => {
-            if (!container.classList.contains('is-visible')) {
-                container.classList.remove('suggestions-list-up');
-                return;
-            }
+        hideSuggestions() {
+            this.matches = [];
+            this.activeIndex = -1;
+            this.container.innerHTML = '';
+            this.container.classList.remove('is-visible', 'suggestions-list-up');
+            this.container.style.display = 'none';
+            this.container.style.visibility = 'hidden';
+            this.container.removeAttribute('aria-expanded');
+            this.input.removeAttribute('aria-expanded');
+        }
 
-            const maxHeight = Math.min(container.scrollHeight || 0, 220);
-            const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
-            const rect = input.getBoundingClientRect();
-            const spaceBelow = viewport - rect.bottom;
-            const spaceAbove = rect.top;
+        renderSuggestions(items) {
+            this.matches = Array.isArray(items) ? items.slice(0, this.limit) : [];
+            this.activeIndex = -1;
+            this.container.innerHTML = '';
 
-            if (spaceBelow < maxHeight + 12 && spaceAbove > spaceBelow) {
-                container.classList.add('suggestions-list-up');
-            } else {
-                container.classList.remove('suggestions-list-up');
-            }
-        };
-
-        const renderSuggestions = (itemsList) => {
-            matches = Array.isArray(itemsList) ? itemsList.slice(0, limit) : [];
-            activeIndex = -1;
-            container.innerHTML = '';
-
-            if (!matches.length) {
-                hideSuggestions();
+            if (!this.matches.length) {
+                this.hideSuggestions();
                 return;
             }
 
             const fragment = document.createDocumentFragment();
 
-            matches.forEach((item, index) => {
-                const option = document.createElement('button');
-                option.type = 'button';
-                option.className = 'suggestion-item';
-                option.setAttribute('role', 'option');
-                option.dataset.index = index;
+            this.matches.forEach((item, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'suggestion-item';
+                button.setAttribute('role', 'option');
+                button.dataset.index = String(index);
 
                 const label = document.createElement('span');
                 label.textContent = item.name;
-                option.appendChild(label);
+                button.appendChild(label);
 
                 if (item.is_global) {
                     const icon = document.createElement('i');
                     icon.className = 'bi bi-globe2 global-icon';
-                    icon.setAttribute('title', globalIconLabel);
-                    icon.setAttribute('aria-label', globalIconLabel);
-                    option.appendChild(icon);
+                    icon.setAttribute('title', this.globalIconLabel);
+                    icon.setAttribute('aria-label', this.globalIconLabel);
+                    button.appendChild(icon);
                 }
 
-                option.addEventListener('mousedown', (event) => {
+                button.addEventListener('mousedown', (event) => {
                     event.preventDefault();
-                    selectItem(item);
+                    this.selectItem(item);
                 });
 
-                option.addEventListener('mouseenter', () => {
-                    activeIndex = index;
-                    highlightActive();
+                button.addEventListener('mouseenter', () => {
+                    this.activeIndex = index;
+                    this.highlightActive();
                 });
 
-                fragment.appendChild(option);
+                fragment.appendChild(button);
             });
 
-            container.appendChild(fragment);
-            container.scrollTop = 0;
-            container.style.display = 'block';
-            container.style.visibility = 'visible';
-            container.classList.add('is-visible');
-            container.setAttribute('aria-expanded', 'true');
-            input.setAttribute('aria-expanded', 'true');
+            this.container.appendChild(fragment);
+            this.container.scrollTop = 0;
+            this.container.style.display = 'block';
+            this.container.style.visibility = 'visible';
+            this.container.classList.add('is-visible');
+            this.container.setAttribute('aria-expanded', 'true');
+            this.input.setAttribute('aria-expanded', 'true');
 
-            ensureOrientation();
-        };
+            this.ensureOrientation();
+        }
 
-        const filterLocal = (term) => {
+        filterLocal(term) {
             const normalized = safeNormalize(term);
             if (!normalized) {
                 return [];
             }
 
-            return localData.list
+            return this.localCatalog.list
                 .map((item) => ({item, position: item.normalized.indexOf(normalized)}))
                 .filter((entry) => entry.position !== -1)
                 .sort((a, b) => {
@@ -269,181 +381,129 @@
                     return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
                 })
                 .map((entry) => entry.item);
-        };
+        }
 
-        const selectItem = (item) => {
+        selectItem(item) {
             if (!item) {
                 return;
             }
 
-            input.value = item.name;
-            setHiddenSelection(item);
-            clearInvalid();
-            hideSuggestions();
-        };
+            this.input.value = item.name;
+            this.setHiddenSelection(item);
+            this.clearInvalid();
+            this.hideSuggestions();
+        }
 
-        const requestSuggestions = () => {
-            const term = input.value || '';
+        requestSuggestions() {
+            const term = this.input.value || '';
             const normalized = safeNormalize(term);
 
             if (!term.trim()) {
-                setHiddenSelection(null);
-                hideSuggestions();
+                this.setHiddenSelection(null);
+                this.hideSuggestions();
                 return;
             }
 
-            if (hiddenInput.dataset.normalized !== normalized) {
-                setHiddenSelection(null);
+            if (this.hiddenInput.dataset.normalized !== normalized) {
+                this.setHiddenSelection(null);
             }
 
-            const token = ++requestToken;
-
-            if (localData.list.length) {
-                renderSuggestions(filterLocal(term));
+            if (this.localCatalog.list.length) {
+                this.renderSuggestions(this.filterLocal(term));
                 return;
             }
 
-            remoteFetcher(term)
-                .then((results) => {
-                    if (token !== requestToken) {
-                        return;
-                    }
-
-                    const sanitized = sanitizeItems(results);
-
-                    sanitized.list.forEach((entry) => {
-                        localData.exact.set(entry.normalized, entry);
-                    });
-
-                    renderSuggestions(sanitized.list);
-                })
-                .catch(() => {
-                    if (token === requestToken) {
-                        hideSuggestions();
-                    }
-                });
-        };
-
-        const moveActive = (offset) => {
-            if (!matches.length) {
+            if (!this.remoteFetcher) {
+                this.renderSuggestions([]);
                 return;
             }
 
-            if (activeIndex === -1) {
-                activeIndex = offset > 0 ? 0 : matches.length - 1;
-            } else {
-                activeIndex = (activeIndex + offset + matches.length) % matches.length;
-            }
-
-            highlightActive();
-        };
-
-        const handleInput = () => {
-            clearInvalid();
-            requestSuggestions();
-        };
-
-        const handleFocus = () => {
-            if (input.value.trim()) {
-                requestSuggestions();
-            }
-        };
-
-        const handleKeydown = (event) => {
-            switch (event.key) {
-                case KEY_ARROW_DOWN:
-                    event.preventDefault();
-                    moveActive(1);
-                    break;
-                case KEY_ARROW_UP:
-                    event.preventDefault();
-                    moveActive(-1);
-                    break;
-                case KEY_ENTER:
-                    if (activeIndex >= 0 && matches[activeIndex]) {
-                        event.preventDefault();
-                        selectItem(matches[activeIndex]);
-                    }
-                    break;
-                case KEY_ESCAPE:
-                    hideSuggestions();
-                    break;
-                default:
-                    break;
-            }
-        };
-
-        const handleSubmit = (event) => {
-            const term = input.value || '';
-            const normalized = safeNormalize(term);
-
-            if (hiddenInput.dataset.normalized === normalized && hiddenInput.value) {
-                return;
-            }
-
-            const exactMatch = localData.exact.get(normalized);
-            if (exactMatch) {
-                selectItem(exactMatch);
-                return;
-            }
-
-            input.classList.add('is-invalid');
-            input.setAttribute('aria-invalid', 'true');
-            requestSuggestions();
-            event.preventDefault();
-            event.stopPropagation();
-        };
-
-        const handleOutsideClick = (event) => {
-            if (!container.contains(event.target) && event.target !== input) {
-                hideSuggestions();
-            }
-        };
-
-        const handleBlur = () => {
-            window.setTimeout(() => {
-                if (!container.matches(':hover') && document.activeElement !== input) {
-                    hideSuggestions();
+            this.remoteFetcher(term).then((result) => {
+                if (!result || typeof result !== 'object') {
+                    return;
                 }
-            }, 120);
-        };
 
-        input.addEventListener('input', handleInput);
-        input.addEventListener('focus', handleFocus);
-        input.addEventListener('keydown', handleKeydown);
-        input.addEventListener('blur', handleBlur);
+                const {list, exact, token} = result;
+                if (token && token < this.latestToken) {
+                    return;
+                }
 
-        cleanupFns.push(() => {
-            input.removeEventListener('input', handleInput);
-            input.removeEventListener('focus', handleFocus);
-            input.removeEventListener('keydown', handleKeydown);
-            input.removeEventListener('blur', handleBlur);
-        });
+                this.latestToken = token || this.latestToken;
+                this.remoteCatalog = {
+                    list: Array.isArray(list) ? list : [],
+                    exact: exact instanceof Map ? exact : new Map(),
+                };
 
-        if (form) {
-            form.addEventListener('submit', handleSubmit);
-            cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
+                this.renderSuggestions(this.remoteCatalog.list);
+            });
         }
 
-        document.addEventListener('mousedown', handleOutsideClick);
-        cleanupFns.push(() => document.removeEventListener('mousedown', handleOutsideClick));
+        moveActive(offset) {
+            if (!this.matches.length) {
+                return;
+            }
 
-        window.addEventListener('resize', ensureOrientation);
-        cleanupFns.push(() => window.removeEventListener('resize', ensureOrientation));
+            if (this.activeIndex === -1) {
+                this.activeIndex = offset > 0 ? 0 : this.matches.length - 1;
+            } else {
+                this.activeIndex = (this.activeIndex + offset + this.matches.length) % this.matches.length;
+            }
 
-        return {
-            requestSuggestions,
-            clear: hideSuggestions,
-            destroy: () => {
-                hideSuggestions();
-                while (cleanupFns.length) {
-                    const cleanup = cleanupFns.pop();
-                    if (typeof cleanup === 'function') {
-                        cleanup();
-                    }
-                }
-            },
-        };
+            this.highlightActive();
+        }
+
+        getExactMatch(normalized) {
+            if (!normalized) {
+                return null;
+            }
+
+            if (this.hiddenInput.dataset.normalized === normalized && this.hiddenInput.value) {
+                return {
+                    id: this.hiddenInput.value,
+                    name: this.input.value,
+                    normalized,
+                    is_global: false,
+                };
+            }
+
+            if (this.localCatalog.exact.has(normalized)) {
+                return this.localCatalog.exact.get(normalized);
+            }
+
+            if (this.remoteCatalog.exact.has(normalized)) {
+                return this.remoteCatalog.exact.get(normalized);
+            }
+
+            return null;
+        }
+
+        validateSelection() {
+            const term = this.input.value || '';
+            const normalized = safeNormalize(term);
+            const exact = this.getExactMatch(normalized);
+
+            if (exact) {
+                this.selectItem(exact);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    const setupField = (config) => {
+        if (!config || !config.input || !config.hiddenInput || !config.container) {
+            return null;
+        }
+
+        const items = Array.isArray(config.items) ? config.items : [];
+        const endpoint = config.endpoint || null;
+
+        if (!items.length && !endpoint) {
+            return null;
+        }
+
+        return new SuggestionsField(config);
     };
 
     const initField = (config) => setupField(config);
