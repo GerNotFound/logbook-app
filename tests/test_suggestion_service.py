@@ -24,7 +24,7 @@ def test_get_catalog_suggestions_normalizes_input(monkeypatch):
     assert results[1]['is_global'] is False
     assert captured['fetchall'] is True
     assert captured['params']['uid'] == 42
-    assert captured['params']['pattern'] == '%Panca%'
+    assert captured['params']['pattern'] == '%panca%'
     assert captured['params']['limit'] == 5
 
 
