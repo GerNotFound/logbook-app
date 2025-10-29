@@ -1,151 +1,92 @@
 (function (window, document) {
     'use strict';
 
-    const DEFAULT_LIMIT = 8;
-    const DEFAULT_DELAY = 160;
-
     const KEY_ENTER = 'Enter';
     const KEY_ESCAPE = 'Escape';
     const KEY_ARROW_UP = 'ArrowUp';
     const KEY_ARROW_DOWN = 'ArrowDown';
 
-    const normalizeText = (text) => {
-        if (!text) {
+    const DEFAULT_LIMIT = 10;
+    const REMOTE_DELAY = 200;
+
+    const safeNormalize = (value) => {
+        if (typeof value !== 'string') {
+            value = value == null ? '' : String(value);
+        }
+        value = value.trim();
+        if (!value) {
             return '';
         }
-
         try {
-            return text
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .toLowerCase();
+            return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         } catch (error) {
-            return String(text).toLowerCase();
+            return value.toLowerCase();
         }
     };
 
-    const sanitizeItem = (raw) => {
-        if (!raw || typeof raw.name !== 'string' || raw.id === undefined || raw.id === null) {
-            return null;
-        }
-
-        const trimmedName = raw.name.trim();
-        if (!trimmedName) {
-            return null;
-        }
-
-        const normalized = normalizeText(trimmedName);
-        if (!normalized) {
-            return null;
-        }
-
-        return {
-            id: raw.id,
-            name: trimmedName,
-            is_global: Boolean(raw.is_global),
-            normalized,
-        };
-    };
-
-    const prepareLocalItems = (items) => {
+    const sanitizeItems = (items) => {
         if (!Array.isArray(items)) {
             return {list: [], exact: new Map()};
         }
-
         const list = [];
         const exact = new Map();
-
         items.forEach((raw) => {
-            const item = sanitizeItem(raw);
-            if (!item) {
+            if (!raw || raw.id == null || typeof raw.name !== 'string') {
                 return;
             }
-            list.push(item);
-            if (!exact.has(item.normalized)) {
-                exact.set(item.normalized, item);
+            const trimmed = raw.name.trim();
+            if (!trimmed) {
+                return;
+            }
+            const normalized = safeNormalize(trimmed);
+            if (!normalized) {
+                return;
+            }
+            const entry = {
+                id: raw.id,
+                name: trimmed,
+                normalized,
+                is_global: Boolean(raw.is_global),
+            };
+            list.push(entry);
+            if (!exact.has(normalized)) {
+                exact.set(normalized, entry);
             }
         });
-
         return {list, exact};
     };
 
-    const createRemoteFetcher = (endpoint, limit, delay) => {
+    const createRemoteFetcher = (endpoint, limit) => {
         if (!endpoint) {
             return null;
         }
-
-        let timerId = null;
-
+        let timer = null;
         return (term) => new Promise((resolve) => {
-            if (timerId) {
-                window.clearTimeout(timerId);
-                timerId = null;
+            if (timer) {
+                window.clearTimeout(timer);
+                timer = null;
             }
-
-            if (!term) {
+            const cleaned = term.trim();
+            if (!cleaned) {
                 resolve([]);
                 return;
             }
-
-            timerId = window.setTimeout(() => {
-                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
-                    headers: {'Accept': 'application/json'},
+            timer = window.setTimeout(() => {
+                fetch(`${endpoint}?q=${encodeURIComponent(cleaned)}`, {
                     credentials: 'same-origin',
+                    headers: {'Accept': 'application/json'},
                 })
                     .then((response) => (response.ok ? response.json() : {results: []}))
                     .then((payload) => {
-                        const results = Array.isArray(payload.results) ? payload.results : [];
-                        const sanitized = results
-                            .map((item) => sanitizeItem(item))
-                            .filter(Boolean)
-                            .slice(0, limit);
-                        resolve(sanitized);
+                        const rows = Array.isArray(payload.results) ? payload.results : [];
+                        resolve(rows.slice(0, limit));
                     })
                     .catch(() => resolve([]));
-            }, delay);
+            }, REMOTE_DELAY);
         });
     };
 
-    const buildLocalMatcher = (items, limit) => {
-        const {list, exact} = prepareLocalItems(items);
-        if (!list.length) {
-            return null;
-        }
-
-        const match = (term) => {
-            const normalizedTerm = normalizeText(term);
-            if (!normalizedTerm) {
-                return [];
-            }
-
-            return list
-                .map((item) => {
-                    const index = item.normalized.indexOf(normalizedTerm);
-                    return index === -1 ? null : {item, index};
-                })
-                .filter(Boolean)
-                .sort((a, b) => {
-                    const aStarts = a.index === 0;
-                    const bStarts = b.index === 0;
-                    if (aStarts !== bStarts) {
-                        return aStarts ? -1 : 1;
-                    }
-                    if (a.index !== b.index) {
-                        return a.index - b.index;
-                    }
-                    return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
-                })
-                .slice(0, limit)
-                .map((entry) => entry.item);
-        };
-
-        return {
-            match,
-            exact,
-        };
-    };
-
-    const generateElementId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+    const generateId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
     const setupField = ({
         input,
@@ -155,119 +96,52 @@
         items = null,
         endpoint = null,
         limit = DEFAULT_LIMIT,
-        delay = DEFAULT_DELAY,
         globalIconLabel = 'Elemento globale',
     }) => {
         if (!input || !hiddenInput || !container) {
             return null;
         }
 
-        const localSource = buildLocalMatcher(items, limit);
-        const remoteFetcher = localSource ? null : createRemoteFetcher(endpoint, limit, delay);
-
-        if (!localSource && !remoteFetcher) {
+        const localData = sanitizeItems(items);
+        const remoteFetcher = localData.list.length ? null : createRemoteFetcher(endpoint, limit);
+        if (!localData.list.length && !remoteFetcher) {
             return null;
         }
 
         if (!container.id) {
-            container.id = generateElementId('suggestions');
+            container.id = generateId('suggestions');
         }
-
-        container.setAttribute('role', 'listbox');
         input.setAttribute('aria-controls', container.id);
         input.setAttribute('aria-autocomplete', 'list');
+        container.setAttribute('role', 'listbox');
 
+        let activeIndex = -1;
+        let matches = [];
+        let requestToken = 0;
         const cleanupFns = [];
-        const state = {
-            matches: [],
-            activeIndex: -1,
-            requestToken: 0,
-        };
-
-        const exactMap = localSource ? new Map(localSource.exact) : new Map();
-
-        const root =
-            container.closest('.suggestions-container') ||
-            container.parentElement ||
-            input.parentElement ||
-            container;
-
-        const clearInvalidState = () => {
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
-        };
 
         const hideSuggestions = () => {
+            matches = [];
+            activeIndex = -1;
+            container.innerHTML = '';
             container.classList.remove('is-visible', 'suggestions-list-up');
             container.style.display = 'none';
             container.style.visibility = 'hidden';
             container.removeAttribute('aria-expanded');
             input.removeAttribute('aria-expanded');
-            container.innerHTML = '';
-            state.matches = [];
-            state.activeIndex = -1;
         };
 
-        const clearActiveClasses = () => {
-            container.querySelectorAll('.suggestion-item').forEach((item) => {
-                item.classList.remove('active');
-                item.removeAttribute('aria-selected');
-            });
+        const clearInvalid = () => {
+            input.classList.remove('is-invalid');
+            input.removeAttribute('aria-invalid');
         };
 
-        const setActiveIndex = (index) => {
-            const itemsNodes = container.querySelectorAll('.suggestion-item');
-            if (!itemsNodes.length) {
-                state.activeIndex = -1;
-                return;
-            }
-
-            let nextIndex = index;
-            if (nextIndex < 0) {
-                nextIndex = itemsNodes.length - 1;
-            } else if (nextIndex >= itemsNodes.length) {
-                nextIndex = 0;
-            }
-
-            state.activeIndex = nextIndex;
-            clearActiveClasses();
-            const activeItem = itemsNodes[nextIndex];
-            if (activeItem) {
-                activeItem.classList.add('active');
-                activeItem.setAttribute('aria-selected', 'true');
-                if (typeof activeItem.scrollIntoView === 'function') {
-                    activeItem.scrollIntoView({block: 'nearest'});
-                }
-            }
-        };
-
-        const updateOrientation = () => {
-            if (!container.classList.contains('is-visible')) {
-                container.classList.remove('suggestions-list-up');
-                return;
-            }
-
-            let maxHeight = 220;
-            try {
-                const raw = window.getComputedStyle(container).maxHeight;
-                const parsed = parseInt(raw, 10);
-                if (!Number.isNaN(parsed)) {
-                    maxHeight = parsed;
-                }
-            } catch (error) {
-                // ignore style inspection errors
-            }
-
-            const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-            const inputRect = input.getBoundingClientRect();
-            const spaceBelow = viewportHeight - inputRect.bottom;
-            const spaceAbove = inputRect.top;
-            const listHeight = Math.min(container.scrollHeight || 0, maxHeight);
-
-            if (spaceBelow < listHeight + 12 && spaceAbove > spaceBelow) {
-                container.classList.add('suggestions-list-up');
+        const setHiddenSelection = (item) => {
+            hiddenInput.value = item ? item.id : '';
+            if (item) {
+                hiddenInput.dataset.normalized = item.normalized;
             } else {
-                container.classList.remove('suggestions-list-up');
+                delete hiddenInput.dataset.normalized;
             }
         };
 
@@ -276,25 +150,38 @@
                 return;
             }
             input.value = item.name;
-            hiddenInput.value = item.id;
-            hiddenInput.dataset.selectedTerm = item.normalized;
-            exactMap.set(item.normalized, item);
-            clearInvalidState();
+            setHiddenSelection(item);
+            clearInvalid();
             hideSuggestions();
         };
 
-        const renderSuggestions = (itemsList) => {
-            state.matches = Array.isArray(itemsList) ? itemsList.slice() : [];
-            state.activeIndex = -1;
+        const ensureOrientation = () => {
+            if (!container.classList.contains('is-visible')) {
+                container.classList.remove('suggestions-list-up');
+                return;
+            }
+            const maxHeight = Math.min(container.scrollHeight || 0, 220);
+            const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+            const rect = input.getBoundingClientRect();
+            const spaceBelow = viewport - rect.bottom;
+            const spaceAbove = rect.top;
+            if (spaceBelow < maxHeight + 12 && spaceAbove > spaceBelow) {
+                container.classList.add('suggestions-list-up');
+            } else {
+                container.classList.remove('suggestions-list-up');
+            }
+        };
 
-            if (!state.matches.length) {
+        const renderSuggestions = (itemsList) => {
+            matches = Array.isArray(itemsList) ? itemsList.slice(0, limit) : [];
+            activeIndex = -1;
+            container.innerHTML = '';
+            if (!matches.length) {
                 hideSuggestions();
                 return;
             }
 
-            container.innerHTML = '';
-
-            state.matches.forEach((item, index) => {
+            matches.forEach((item, index) => {
                 const option = document.createElement('button');
                 option.type = 'button';
                 option.className = 'suggestion-item';
@@ -313,10 +200,18 @@
                     option.appendChild(icon);
                 }
 
-                container.appendChild(option);
+                option.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    selectItem(item);
+                });
+                option.addEventListener('focus', () => {
+                    activeIndex = index;
+                });
+                option.addEventListener('mouseenter', () => {
+                    activeIndex = index;
+                });
 
-                option.addEventListener('mouseenter', () => setActiveIndex(index));
-                option.addEventListener('focus', () => setActiveIndex(index));
+                container.appendChild(option);
             });
 
             container.style.display = 'block';
@@ -325,106 +220,96 @@
             container.setAttribute('aria-expanded', 'true');
             input.setAttribute('aria-expanded', 'true');
             container.scrollTop = 0;
-            updateOrientation();
+            ensureOrientation();
         };
 
-        const resolveLocalExact = (term) => {
-            if (!term) {
-                return null;
+        const filterLocal = (term) => {
+            const normalized = safeNormalize(term);
+            if (!normalized) {
+                return [];
             }
-            return exactMap.get(normalizeText(term)) || null;
+            return localData.list
+                .map((item) => ({item, index: item.normalized.indexOf(normalized)}))
+                .filter((entry) => entry.index !== -1)
+                .sort((a, b) => {
+                    const aStarts = a.index === 0;
+                    const bStarts = b.index === 0;
+                    if (aStarts !== bStarts) {
+                        return aStarts ? -1 : 1;
+                    }
+                    if (a.index !== b.index) {
+                        return a.index - b.index;
+                    }
+                    return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
+                })
+                .map((entry) => entry.item);
         };
 
         const requestSuggestions = () => {
-            const term = input.value.trim();
-            const normalizedTerm = normalizeText(term);
-            const storedTerm = hiddenInput.dataset.selectedTerm || '';
-
-            if (storedTerm !== normalizedTerm) {
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.selectedTerm;
-            }
-
-            if (!term) {
+            const term = input.value || '';
+            const normalized = safeNormalize(term);
+            if (!term.trim()) {
+                setHiddenSelection(null);
                 hideSuggestions();
                 return;
             }
 
-            const handleResults = (results, token) => {
-                if (token !== state.requestToken) {
-                    return;
-                }
-                const validResults = (Array.isArray(results) ? results : [])
-                    .map((item) => sanitizeItem(item))
-                    .filter(Boolean)
-                    .slice(0, limit);
-
-                validResults.forEach((item) => {
-                    exactMap.set(item.normalized, item);
-                });
-
-                renderSuggestions(validResults);
-            };
-
-            const token = ++state.requestToken;
-
-            if (localSource) {
-                const results = localSource.match(term);
-                handleResults(results, token);
-                return;
+            const stored = hiddenInput.dataset.normalized || '';
+            if (stored !== normalized) {
+                setHiddenSelection(null);
             }
 
-            if (!remoteFetcher) {
-                hideSuggestions();
+            const token = ++requestToken;
+            if (localData.list.length) {
+                renderSuggestions(filterLocal(term));
                 return;
             }
 
             remoteFetcher(term)
-                .then((results) => handleResults(results, token))
+                .then((results) => {
+                    if (token !== requestToken) {
+                        return;
+                    }
+                    const sanitized = sanitizeItems(results).list;
+                    sanitized.forEach((entry) => {
+                        localData.exact.set(entry.normalized, entry);
+                    });
+                    renderSuggestions(sanitized);
+                })
                 .catch(() => {
-                    if (token === state.requestToken) {
+                    if (token === requestToken) {
                         hideSuggestions();
                     }
                 });
         };
 
-        const moveActive = (direction) => {
-            if (!state.matches.length) {
+        const moveActive = (offset) => {
+            if (!matches.length) {
                 return;
             }
-            if (state.activeIndex === -1) {
-                setActiveIndex(direction > 0 ? 0 : state.matches.length - 1);
+            if (activeIndex === -1) {
+                activeIndex = offset > 0 ? 0 : matches.length - 1;
             } else {
-                setActiveIndex(state.activeIndex + direction);
+                activeIndex = (activeIndex + offset + matches.length) % matches.length;
             }
+            const itemsNodes = container.querySelectorAll('.suggestion-item');
+            itemsNodes.forEach((node, idx) => {
+                if (idx === activeIndex) {
+                    node.classList.add('active');
+                    node.setAttribute('aria-selected', 'true');
+                    if (typeof node.scrollIntoView === 'function') {
+                        node.scrollIntoView({block: 'nearest'});
+                    }
+                } else {
+                    node.classList.remove('active');
+                    node.removeAttribute('aria-selected');
+                }
+            });
         };
 
         const handleInput = () => {
-            clearInvalidState();
+            clearInvalid();
             requestSuggestions();
-        };
-
-        const handleKeydown = (event) => {
-            if (event.key === KEY_ARROW_DOWN) {
-                event.preventDefault();
-                moveActive(1);
-                return;
-            }
-            if (event.key === KEY_ARROW_UP) {
-                event.preventDefault();
-                moveActive(-1);
-                return;
-            }
-            if (event.key === KEY_ENTER) {
-                if (state.activeIndex >= 0 && state.matches[state.activeIndex]) {
-                    event.preventDefault();
-                    selectItem(state.matches[state.activeIndex]);
-                }
-                return;
-            }
-            if (event.key === KEY_ESCAPE) {
-                hideSuggestions();
-            }
         };
 
         const handleFocus = () => {
@@ -433,40 +318,39 @@
             }
         };
 
-        const handleContainerClick = (event) => {
-            const target = event.target.closest('.suggestion-item');
-            if (!target) {
-                return;
+        const handleKeydown = (event) => {
+            switch (event.key) {
+                case KEY_ARROW_DOWN:
+                    event.preventDefault();
+                    moveActive(1);
+                    break;
+                case KEY_ARROW_UP:
+                    event.preventDefault();
+                    moveActive(-1);
+                    break;
+                case KEY_ENTER:
+                    if (activeIndex >= 0 && matches[activeIndex]) {
+                        event.preventDefault();
+                        selectItem(matches[activeIndex]);
+                    }
+                    break;
+                case KEY_ESCAPE:
+                    hideSuggestions();
+                    break;
+                default:
+                    break;
             }
-            event.preventDefault();
-            const index = Number.parseInt(target.dataset.index, 10);
-            if (Number.isNaN(index) || !state.matches[index]) {
-                return;
-            }
-            selectItem(state.matches[index]);
         };
 
         const handleSubmit = (event) => {
-            if (hiddenInput.value) {
+            const term = input.value || '';
+            const normalized = safeNormalize(term);
+            const stored = hiddenInput.dataset.normalized || '';
+            if (stored && stored === normalized && hiddenInput.value) {
                 return;
             }
 
-            const term = input.value.trim();
-            if (!term) {
-                hideSuggestions();
-                input.classList.add('is-invalid');
-                input.setAttribute('aria-invalid', 'true');
-                event.preventDefault();
-                return;
-            }
-
-            const normalizedTerm = normalizeText(term);
-            const storedTerm = hiddenInput.dataset.selectedTerm || '';
-            if (storedTerm && storedTerm === normalizedTerm) {
-                return;
-            }
-
-            const exact = resolveLocalExact(term);
+            const exact = localData.exact.get(normalized);
             if (exact) {
                 selectItem(exact);
                 return;
@@ -474,31 +358,35 @@
 
             input.classList.add('is-invalid');
             input.setAttribute('aria-invalid', 'true');
-            event.preventDefault();
             requestSuggestions();
-            input.focus();
+            event.preventDefault();
+            event.stopPropagation();
         };
 
-        const outsideClickListener = (event) => {
-            if (!root.contains(event.target)) {
+        const handleOutsideClick = (event) => {
+            if (!container.contains(event.target) && event.target !== input) {
                 hideSuggestions();
             }
         };
 
-        const resizeListener = () => updateOrientation();
+        const handleBlur = () => {
+            window.setTimeout(() => {
+                if (!container.matches(':hover') && document.activeElement !== input) {
+                    hideSuggestions();
+                }
+            }, 120);
+        };
 
         input.addEventListener('input', handleInput);
-        input.addEventListener('keydown', handleKeydown);
         input.addEventListener('focus', handleFocus);
-        container.addEventListener('mousedown', handleContainerClick);
-        container.addEventListener('click', handleContainerClick);
+        input.addEventListener('keydown', handleKeydown);
+        input.addEventListener('blur', handleBlur);
 
         cleanupFns.push(() => {
             input.removeEventListener('input', handleInput);
-            input.removeEventListener('keydown', handleKeydown);
             input.removeEventListener('focus', handleFocus);
-            container.removeEventListener('mousedown', handleContainerClick);
-            container.removeEventListener('click', handleContainerClick);
+            input.removeEventListener('keydown', handleKeydown);
+            input.removeEventListener('blur', handleBlur);
         });
 
         if (form) {
@@ -506,11 +394,11 @@
             cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
         }
 
-        document.addEventListener('mousedown', outsideClickListener);
-        cleanupFns.push(() => document.removeEventListener('mousedown', outsideClickListener));
+        document.addEventListener('mousedown', handleOutsideClick);
+        cleanupFns.push(() => document.removeEventListener('mousedown', handleOutsideClick));
 
-        window.addEventListener('resize', resizeListener);
-        cleanupFns.push(() => window.removeEventListener('resize', resizeListener));
+        window.addEventListener('resize', ensureOrientation);
+        cleanupFns.push(() => window.removeEventListener('resize', ensureOrientation));
 
         return {
             requestSuggestions,
@@ -538,18 +426,15 @@
         items = null,
         endpoint = null,
         limit = DEFAULT_LIMIT,
-        delay = DEFAULT_DELAY,
         globalIconLabel = 'Elemento globale',
     }) => {
         const roots = document.querySelectorAll(rootSelector);
         const instances = [];
-
         roots.forEach((root) => {
             const input = root.querySelector(inputSelector);
             const hiddenInput = root.querySelector(hiddenSelector);
             const container = root.querySelector(suggestionsSelector);
             const form = formSelector ? root.querySelector(formSelector) : root;
-
             const instance = setupField({
                 input,
                 hiddenInput,
@@ -558,22 +443,19 @@
                 items,
                 endpoint,
                 limit,
-                delay,
                 globalIconLabel,
             });
-
             if (instance) {
                 instances.push(instance);
             }
         });
-
         return instances;
     };
 
     window.LogbookCatalogSuggestions = {
         initField,
         initCollection,
-        normalizeText,
+        safeNormalize,
     };
 
     const readyEventName = 'logbook:suggestions:ready';
