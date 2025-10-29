@@ -116,12 +116,62 @@
         let currentItems = [];
         let activeIndex = -1;
 
+        const ORIENTATION_CLASS = 'suggestions-list-up';
+
+        const getMaxHeight = () => {
+            try {
+                const raw = window.getComputedStyle(container).maxHeight;
+                const parsed = parseInt(raw, 10);
+                return Number.isNaN(parsed) ? 220 : parsed;
+            } catch (error) {
+                return 220;
+            }
+        };
+
+        const updateOrientation = () => {
+            if (container.style.display !== 'block') {
+                container.classList.remove(ORIENTATION_CLASS);
+                return;
+            }
+
+            const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+            const inputRect = input.getBoundingClientRect();
+            const spaceBelow = viewportHeight - inputRect.bottom;
+            const spaceAbove = inputRect.top;
+            const listHeight = Math.min(container.scrollHeight || 0, getMaxHeight());
+
+            if (spaceBelow < listHeight + 12 && spaceAbove > listHeight + 12) {
+                container.classList.add(ORIENTATION_CLASS);
+            } else {
+                container.classList.remove(ORIENTATION_CLASS);
+            }
+        };
+
+        const handleResize = () => updateOrientation();
+        let resizeListenerActive = false;
+
+        const ensureResizeListener = () => {
+            if (!resizeListenerActive) {
+                window.addEventListener('resize', handleResize);
+                resizeListenerActive = true;
+            }
+        };
+
+        const removeResizeListener = () => {
+            if (resizeListenerActive) {
+                window.removeEventListener('resize', handleResize);
+                resizeListenerActive = false;
+            }
+        };
+
         const hideSuggestions = () => {
             container.style.display = 'none';
             container.innerHTML = '';
             container.removeAttribute('aria-expanded');
             currentItems = [];
             activeIndex = -1;
+            container.classList.remove(ORIENTATION_CLASS);
+            removeResizeListener();
         };
 
         const clearActiveClasses = () => {
@@ -216,6 +266,13 @@
             container.appendChild(fragment);
             container.style.display = 'block';
             container.setAttribute('aria-expanded', 'true');
+            container.scrollTop = 0;
+            ensureResizeListener();
+            if (typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(updateOrientation);
+            } else {
+                updateOrientation();
+            }
         };
 
         const moveActive = (direction) => {
@@ -290,13 +347,27 @@
         });
 
         if (form) {
-            form.addEventListener('submit', (event) => {
-                if (!hiddenInput.value) {
-                    event.preventDefault();
+            form.addEventListener('submit', () => {
+                if (hiddenInput.value) {
+                    return;
+                }
+
+                const term = input.value.trim();
+                if (!term) {
                     hideSuggestions();
                     input.classList.add('is-invalid');
                     input.setAttribute('aria-invalid', 'true');
-                    input.focus();
+                    return;
+                }
+
+                const normalizedTerm = normalizeText(term);
+                const storedTerm = hiddenInput.dataset.selectedTerm || '';
+                if (storedTerm && storedTerm === normalizedTerm) {
+                    return;
+                }
+
+                if (currentItems.length) {
+                    applySelection(currentItems[0]);
                 }
             });
         }
@@ -310,7 +381,10 @@
 
         return {
             requestSuggestions,
-            destroy: () => document.removeEventListener('click', outsideClickListener),
+            destroy: () => {
+                document.removeEventListener('click', outsideClickListener);
+                removeResizeListener();
+            },
             clear: hideSuggestions,
         };
     };
