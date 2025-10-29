@@ -99,14 +99,14 @@
             return;
         }
 
-        const exerciseSuggestUrl = "{{ url_for('gym.suggest_exercises') }}";
+        const exerciseOptions = {{ exercise_options|tojson|safe }};
 
         suggestionsModule.initCollection({
             rootSelector: 'form[id^="add-exercise-form"]',
             inputSelector: '.exercise-search-input',
             hiddenSelector: '.exercise-id-input',
             suggestionsSelector: '.suggestions-list',
-            endpoint: exerciseSuggestUrl,
+            items: exerciseOptions,
             globalIconLabel: 'Esercizio globale',
         });
     };

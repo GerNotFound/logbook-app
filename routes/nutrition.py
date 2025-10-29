@@ -370,6 +370,28 @@ def dieta(date_str):
 
     diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
                              {'uid': user_id, 'ld': current_date_str}, fetchall=True)
+
+    raw_food_options = execute_query(
+        """
+        SELECT id, name, user_id IS NULL AS is_global
+        FROM foods
+        WHERE user_id IS NULL OR user_id = :uid
+        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
+                 LOWER(name) ASC,
+                 name ASC
+        """,
+        {'uid': user_id},
+        fetchall=True,
+    ) or []
+
+    food_options = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': bool(row['is_global']),
+        }
+        for row in raw_food_options
+    ]
     
     totals = {'protein': sum(item['protein'] for item in diet_log), 'carbs': sum(item['carbs'] for item in diet_log), 'fat': sum(item['fat'] for item in diet_log), 'calories': sum(item['calories'] for item in diet_log)}
     targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
@@ -396,6 +418,7 @@ def dieta(date_str):
         prev_day=prev_day,
         next_day=next_day,
         is_today=is_today,
+        food_options=food_options,
     )
 
 @nutrition_bp.route('/alimenti', methods=['GET', 'POST'])

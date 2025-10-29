@@ -73,6 +73,62 @@
         };
     };
 
+    const createLocalSuggestionSource = (items, {limit = DEFAULT_LIMIT} = {}) => {
+        if (!Array.isArray(items) || !items.length) {
+            return (term, callback) => {
+                if (typeof callback === 'function') {
+                    callback([]);
+                }
+            };
+        }
+
+        const normalizedItems = items
+            .filter((item) => item && typeof item.name === 'string')
+            .map((item) => ({
+                original: item,
+                normalized: normalizeText(item.name),
+            }));
+
+        return (term, callback) => {
+            if (typeof callback !== 'function') {
+                return;
+            }
+
+            const normalizedTerm = normalizeText(term);
+            if (!normalizedTerm) {
+                callback([]);
+                return;
+            }
+
+            const matches = normalizedItems
+                .map((entry) => ({
+                    item: entry.original,
+                    normalized: entry.normalized,
+                    index: entry.normalized.indexOf(normalizedTerm),
+                }))
+                .filter((entry) => entry.index !== -1)
+                .sort((a, b) => {
+                    const aStarts = a.index === 0;
+                    const bStarts = b.index === 0;
+                    if (aStarts !== bStarts) {
+                        return aStarts ? -1 : 1;
+                    }
+                    if (a.index !== b.index) {
+                        return a.index - b.index;
+                    }
+                    return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
+                })
+                .slice(0, limit)
+                .map((entry) => ({
+                    id: entry.item.id,
+                    name: entry.item.name,
+                    is_global: Boolean(entry.item.is_global),
+                }));
+
+            callback(matches);
+        };
+    };
+
     const attachSelectionHandler = (element, handler) => {
         const listener = (event) => {
             event.preventDefault();
@@ -395,6 +451,7 @@
         hiddenSelector,
         suggestionsSelector,
         endpoint,
+        items,
         limit = DEFAULT_LIMIT,
         delay = DEFAULT_DELAY,
         globalIconLabel,
@@ -406,7 +463,14 @@
             const input = form.querySelector(inputSelector);
             const hidden = form.querySelector(hiddenSelector);
             const container = form.querySelector(suggestionsSelector);
-            const fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
+            let fetchSuggestions = null;
+
+            if (Array.isArray(items) && items.length) {
+                fetchSuggestions = createLocalSuggestionSource(items, {limit});
+            } else if (endpoint) {
+                fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
+            }
+
             const instance = setupField({
                 input,
                 hiddenInput: hidden,
@@ -430,11 +494,23 @@
         container,
         form = null,
         endpoint,
+        items,
         limit = DEFAULT_LIMIT,
         delay = DEFAULT_DELAY,
         globalIconLabel,
     }) => {
-        const fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
+        let fetchSuggestions = null;
+
+        if (Array.isArray(items) && items.length) {
+            fetchSuggestions = createLocalSuggestionSource(items, {limit});
+        } else if (endpoint) {
+            fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
+        }
+
+        if (!fetchSuggestions) {
+            return null;
+        }
+
         return setupField({
             input,
             hiddenInput,
