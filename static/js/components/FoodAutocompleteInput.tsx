@@ -16,6 +16,7 @@ export const FoodAutocompleteInput: React.FC<FoodAutocompleteInputProps> = ({
   const [inputValue, setInputValue] = useState("");
   const [filteredFoods, setFilteredFoods] = useState<string[]>([]);
   const [isFocused, setIsFocused] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -40,6 +41,7 @@ export const FoodAutocompleteInput: React.FC<FoodAutocompleteInputProps> = ({
         !wrapperRef.current.contains(event.target as Node)
       ) {
         setIsFocused(false);
+        setShowSuggestions(false);
       }
     };
 
@@ -62,20 +64,26 @@ export const FoodAutocompleteInput: React.FC<FoodAutocompleteInputProps> = ({
   const handleSuggestionClick = (food: string) => {
     setInputValue(food);
     setIsFocused(false);
+    setShowSuggestions(false);
     onFoodSelect(food);
   };
 
-  const showSuggestions = isFocused && filteredFoods.length > 0;
+  useEffect(() => {
+    const shouldShow = isFocused && filteredFoods.length > 0;
+    setShowSuggestions((prev) => (prev === shouldShow ? prev : shouldShow));
+  }, [isFocused, filteredFoods]);
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
+    <div
+      className="relative w-full text-left"
+      ref={wrapperRef}
+    >
       <input
         id={inputId}
         type="text"
         value={inputValue}
         onChange={handleInputChange}
         onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         className="w-full rounded-md border border-slate-700 bg-slate-900 py-2 px-3 text-slate-100 placeholder-slate-400 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
         aria-autocomplete="list"
@@ -86,7 +94,7 @@ export const FoodAutocompleteInput: React.FC<FoodAutocompleteInputProps> = ({
       {showSuggestions && (
         <ul
           id={`${inputId ?? "food"}-suggestions`}
-          className="absolute z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-md border border-slate-700 bg-slate-900 py-1 shadow-lg"
+          className="absolute left-0 right-0 z-20 mt-2 max-h-60 w-full overflow-y-auto rounded-md border border-slate-700 bg-slate-900 py-1 shadow-lg"
           role="listbox"
         >
           {filteredFoods.map((food) => (
