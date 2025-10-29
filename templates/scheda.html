@@ -59,7 +59,7 @@
         <form method="POST" action="{{ url_for('gym.scheda') }}" id="add-exercise-form-{{ template.id }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_exercise"><input type="hidden" name="template_id" value="{{ template.id }}"><input type="hidden" name="exercise_id" class="exercise-id-input">
             <div class="row g-2 d-flex align-items-end">
-                <div class="col"><label class="form-label mb-1 label-sm">Esercizio</label><div class="suggestions-container"><input type="text" name="exercise_name" class="form-control exercise-search-input mb-0" placeholder="Cerca..." autocomplete="off" required><div class="suggestions-list"></div></div></div>
+                <div class="col"><label class="form-label mb-1 label-sm">Esercizio</label><div class="suggestions-container"><input type="text" class="form-control exercise-search-input mb-0" placeholder="Cerca..." autocomplete="off" required><div class="suggestions-list"></div></div></div>
                 <div class="col-auto w-80"><label class="form-label mb-1 label-sm">Serie</label><input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control mb-0" required></div>
                 <div class="col-auto"><button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button></div>
             </div>
@@ -91,39 +91,51 @@
 <div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
 {% endblock %}
 {% block scripts %}
-<script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
 <script nonce="{{ csp_nonce() }}">
-    const initializeSchedaSuggestions = (suggestionsModule) => {
-        if (!suggestionsModule) {
-            console.error('Modulo suggerimenti non disponibile.');
-            return;
-        }
+    const allExercises = {{ all_exercises|tojson|safe }};
+    document.querySelectorAll('.exercise-search-input').forEach(searchInput => {
+        const parentForm = searchInput.closest('form');
+        const suggestionsDiv = parentForm.querySelector('.suggestions-list');
+        const exerciseIdInput = parentForm.querySelector('.exercise-id-input');
 
-        const exerciseOptions = {{ exercise_options|tojson|safe }};
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            exerciseIdInput.value = '';
+            suggestionsDiv.innerHTML = '';
+            if (searchTerm.length < 1) { suggestionsDiv.style.display = 'none'; return; }
 
-        suggestionsModule.initCollection({
-            rootSelector: 'form[id^="add-exercise-form"]',
-            inputSelector: '.exercise-search-input',
-            hiddenSelector: '.exercise-id-input',
-            suggestionsSelector: '.suggestions-list',
-            items: exerciseOptions,
-            globalIconLabel: 'Esercizio globale',
+            const filteredExercises = allExercises.filter(ex => ex.name.toLowerCase().includes(searchTerm)).slice(0, 8);
+            if (filteredExercises.length > 0) {
+                filteredExercises.forEach(ex => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    const label = document.createElement('span');
+                    label.textContent = ex.name;
+                    item.appendChild(label);
+                    if (ex.user_id === null) {
+                        const icon = document.createElement('i');
+                        icon.className = 'bi bi-globe2 global-icon';
+                        icon.setAttribute('title', 'Esercizio globale');
+                        icon.setAttribute('aria-label', 'Esercizio globale');
+                        item.appendChild(icon);
+                    }
+                    item.addEventListener('click', () => {
+                        searchInput.value = ex.name;
+                        exerciseIdInput.value = ex.id;
+                        suggestionsDiv.style.display = 'none';
+                    });
+                    suggestionsDiv.appendChild(item);
+                });
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
         });
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const moduleRef = window.LogbookCatalogSuggestions;
-        if (moduleRef) {
-            initializeSchedaSuggestions(moduleRef);
-            return;
+    });
+    document.addEventListener('click', (e) => {
+        if (!e.target.matches('.exercise-search-input')) {
+            document.querySelectorAll('.suggestions-list').forEach(div => div.style.display = 'none');
         }
-
-        const readyHandler = (event) => {
-            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
-            initializeSchedaSuggestions(moduleFromEvent);
-        };
-
-        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
     });
 </script>
 {% endblock %}

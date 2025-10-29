@@ -51,7 +51,6 @@
 <div class="d-flex flex-column align-items-center gap-1">
     <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-sm btn-outline-light">Gestisci</a>
     <span class="badge {% if user.is_online %}bg-success{% else %}bg-secondary{% endif %}">{{ 'Online' if user.is_online else 'Offline' }}</span>
-    <small class="text-muted small d-block mt-1">Ultima attività: {{ user.last_active_display }}</small>
 </div>
 </td>
 </tr>

@@ -8,21 +8,10 @@ from utils import execute_query
 from sqlalchemy.exc import IntegrityError
 from extensions import db
 from services.workout_service import get_templates_with_history, get_session_log_data
-from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
 
 gym_bp = Blueprint('gym', __name__)
 
 # --- ENDPOINT API PER AJAX ---
-
-@gym_bp.get('/api/suggest/exercises')
-@login_required
-def suggest_exercises():
-    user_id = session['user_id']
-    search_term = (request.args.get('q') or '').strip()
-
-    suggestions = get_catalog_suggestions('exercises', user_id, search_term)
-    return jsonify({'results': suggestions})
-
 
 @gym_bp.route('/scheda/rinomina', methods=['POST'])
 @login_required
@@ -385,14 +374,14 @@ def scheda():
                 flash('Si è verificato un errore durante il salvataggio.', 'danger')
         elif action == 'add_exercise':
             exercise_id = request.form.get('exercise_id')
-            exercise_name = (request.form.get('exercise_name') or '').strip()
             sets = (request.form.get('sets') or '').strip()
-            if not template_id or not sets:
+            if not template_id or not exercise_id or not sets:
                 flash('Compila tutti i campi per aggiungere un esercizio.', 'danger')
                 return redirect(url_for('gym.scheda'))
 
             try:
                 template_id_int = int(template_id)
+                exercise_id_int = int(exercise_id)
             except (TypeError, ValueError):
                 flash('Dati esercizio non validi.', 'danger')
                 return redirect(url_for('gym.scheda'))
@@ -402,18 +391,12 @@ def scheda():
                 flash('Scheda non trovata.', 'danger')
                 return redirect(url_for('gym.scheda'))
 
-            exercise_row = resolve_catalog_item(
-                'exercises',
-                user_id,
-                entry_id=exercise_id,
-                name=exercise_name,
-            )
-            if not exercise_row or exercise_row.get('user_id') not in (None, user_id):
-                flash('Seleziona un esercizio valido dall\'archivio.', 'danger')
+            exercise = execute_query('SELECT id, user_id FROM exercises WHERE id = :id', {'id': exercise_id_int}, fetchone=True)
+            if not exercise or (exercise['user_id'] not in (user_id, None)):
+                flash('Esercizio non disponibile.', 'danger')
                 return redirect(url_for('gym.scheda'))
-
             execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                          {'tid': template_id_int, 'eid': exercise_row['id'], 'sets': sets}, commit=True)
+                          {'tid': template_id_int, 'eid': exercise_id_int, 'sets': sets}, commit=True)
             flash('Esercizio aggiunto alla scheda.', 'success')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
@@ -435,29 +418,8 @@ def scheda():
         exercises = execute_query('SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': t['id']}, fetchall=True)
         template_dict['exercises'] = exercises
         templates.append(template_dict)
-    raw_exercise_options = execute_query(
-        """
-        SELECT id, name, user_id IS NULL AS is_global
-        FROM exercises
-        WHERE user_id IS NULL OR user_id = :uid
-        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
-                 LOWER(name) ASC,
-                 name ASC
-        """,
-        {'uid': user_id},
-        fetchall=True,
-    ) or []
-
-    exercise_options = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': bool(row['is_global']),
-        }
-        for row in raw_exercise_options
-    ]
-
-    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, is_superuser=is_superuser, exercise_options=exercise_options)
+    all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
+    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, all_exercises=all_exercises, is_superuser=is_superuser)
 
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required

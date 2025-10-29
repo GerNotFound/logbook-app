@@ -1,161 +1,12 @@
 # routes/nutrition.py
-from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash
 from datetime import date, datetime, timedelta
 from .auth import login_required
 from utils import execute_query
-from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from extensions import db
-from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
 
 nutrition_bp = Blueprint('nutrition', __name__)
-
-
-@nutrition_bp.get('/api/suggest/foods')
-@login_required
-def suggest_foods():
-    user_id = session['user_id']
-    search_term = (request.args.get('q') or '').strip()
-
-    suggestions = get_catalog_suggestions('foods', user_id, search_term)
-    return jsonify({'results': suggestions})
-
-
-TRACKER_DEFINITIONS = [
-    {
-        'key': 'water',
-        'label': 'Acqua',
-        'unit': 'ml',
-        'unit_singular': 'ml',
-        'unit_plural': 'ml',
-        'icon': 'bi-droplet',
-        'description': 'Monitora rapidamente quanta acqua bevi durante la giornata.',
-        'quick_add': [250, 500, 750],
-        'input_step': 50,
-        'placeholder': 'Quantità in ml',
-        'goal_hint': 'Suggerimento: punta a 2-3 litri al giorno.'
-    },
-    {
-        'key': 'coffee',
-        'label': 'Caffè',
-        'unit': 'tazze',
-        'unit_singular': 'tazza',
-        'unit_plural': 'tazze',
-        'icon': 'bi-cup-hot',
-        'description': 'Tieni sotto controllo il numero di caffè che assumi.',
-        'quick_add': [1, 2],
-        'input_step': 1,
-        'placeholder': 'Numero di tazze',
-        'goal_hint': 'Suggerimento: limita il consumo serale.'
-    },
-    {
-        'key': 'supplements',
-        'label': 'Integratori',
-        'unit': 'dosi',
-        'unit_singular': 'dose',
-        'unit_plural': 'dosi',
-        'icon': 'bi-capsule',
-        'description': 'Segna se hai assunto i tuoi integratori quotidiani.',
-        'quick_add': [1],
-        'input_step': 1,
-        'placeholder': 'Numero di dosi',
-        'goal_hint': 'Aggiungi una nota per ricordare quali integratori hai preso.'
-    },
-]
-
-TRACKER_LOOKUP = {tracker['key']: tracker for tracker in TRACKER_DEFINITIONS}
-
-
-_INTAKE_LOG_READY = False
-
-
-def ensure_intake_log_table() -> None:
-    """Guarantee the intake_log table exists before interacting with it."""
-
-    global _INTAKE_LOG_READY
-
-    if _INTAKE_LOG_READY:
-        return
-
-    inspector = inspect(db.engine)
-
-    if inspector.has_table('intake_log'):
-        _INTAKE_LOG_READY = True
-        return
-
-    statements = (
-        """
-        CREATE TABLE IF NOT EXISTS intake_log (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-            record_date DATE NOT NULL,
-            tracker_type TEXT NOT NULL,
-            amount REAL NOT NULL,
-            unit TEXT NOT NULL,
-            note TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        "CREATE INDEX IF NOT EXISTS idx_intake_log_user_date ON intake_log (user_id, record_date)",
-    )
-
-    with db.engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
-
-    _INTAKE_LOG_READY = True
-
-
-def _format_number(value):
-    if value is None:
-        return '0'
-    if float(value).is_integer():
-        return str(int(value))
-    return f"{value:.2f}".rstrip('0').rstrip('.')
-
-
-def _format_total(tracker, amount):
-    amount = amount or 0
-    if tracker['key'] == 'water':
-        if amount <= 0:
-            return '0 ml'
-        liters = amount / 1000
-        liters_label = f" ({liters:.2f} L)" if amount >= 1000 else ''
-        return f"{int(round(amount))} ml{liters_label}"
-    if tracker['key'] == 'coffee':
-        cups = _format_number(amount)
-        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
-        return f"{cups} {label}"
-    if tracker['key'] == 'supplements':
-        doses = _format_number(amount)
-        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
-        return f"{doses} {label}"
-    return f"{_format_number(amount)} {tracker['unit']}"
-
-
-def _format_entry_amount(tracker, amount):
-    amount = amount or 0
-    if tracker['key'] == 'water':
-        return f"{int(round(amount))} ml"
-    if tracker['key'] == 'coffee':
-        cups = _format_number(amount)
-        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
-        return f"{cups} {label}"
-    if tracker['key'] == 'supplements':
-        doses = _format_number(amount)
-        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
-        return f"{doses} {label}"
-    return f"{_format_number(amount)} {tracker['unit']}"
-
-
-def _format_quick_label(value, singular, plural):
-    try:
-        numeric_value = float(value)
-    except (TypeError, ValueError):
-        numeric_value = 0
-    label = singular if abs(numeric_value) == 1 else plural
-    display_value = _format_number(numeric_value)
-    return f"+{display_value} {label}"
 
 def update_daily_totals(user_id, date_str):
     totals_query = """
@@ -180,129 +31,6 @@ def update_daily_totals(user_id, date_str):
 @login_required
 def alimentazione():
     return render_template('alimentazione.html', title='Alimentazione')
-
-
-@nutrition_bp.route('/tracking', defaults={'date_str': None}, methods=['GET', 'POST'])
-@nutrition_bp.route('/tracking/<date_str>', methods=['GET', 'POST'])
-@login_required
-def tracking(date_str):
-    user_id = session['user_id']
-    ensure_intake_log_table()
-    if date_str:
-        try:
-            current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return redirect(url_for('nutrition.tracking'))
-    else:
-        current_date = date.today()
-
-    current_date_str = current_date.strftime('%Y-%m-%d')
-    prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
-    next_day = (current_date + timedelta(days=1)).strftime('%Y-%m-%d')
-    is_today = current_date == date.today()
-
-    if request.method == 'POST':
-        action = request.form.get('action', 'add_entry')
-        if action == 'delete_entry':
-            entry_id = request.form.get('entry_id')
-            if entry_id:
-                execute_query(
-                    'DELETE FROM intake_log WHERE id = :id AND user_id = :uid',
-                    {'id': entry_id, 'uid': user_id},
-                    commit=True,
-                )
-        else:
-            tracker_key = request.form.get('tracker_type')
-            tracker = TRACKER_LOOKUP.get(tracker_key)
-            if not tracker:
-                flash('Tracker non valido.', 'danger')
-                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
-
-            quick_amount = request.form.get('quick_amount')
-            amount_value = request.form.get('amount')
-            try:
-                amount = float(quick_amount or amount_value or 0)
-            except (ValueError, TypeError):
-                amount = 0
-
-            if amount <= 0:
-                flash('Inserisci una quantità valida.', 'danger')
-                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
-
-            note = (request.form.get('note') or '').strip()
-            execute_query(
-                'INSERT INTO intake_log (user_id, record_date, tracker_type, amount, unit, note) VALUES (:uid, :rd, :tt, :amt, :unit, :note)',
-                {
-                    'uid': user_id,
-                    'rd': current_date_str,
-                    'tt': tracker_key,
-                    'amt': amount,
-                    'unit': tracker['unit'],
-                    'note': note or None,
-                },
-                commit=True,
-            )
-
-        return redirect(url_for('nutrition.tracking', date_str=current_date_str))
-
-    rows = execute_query(
-        'SELECT id, tracker_type, amount, unit, note, created_at FROM intake_log WHERE user_id = :uid AND record_date = :rd ORDER BY created_at DESC',
-        {'uid': user_id, 'rd': current_date_str},
-        fetchall=True,
-    ) or []
-
-    totals = {tracker['key']: 0 for tracker in TRACKER_DEFINITIONS}
-    grouped_entries = {tracker['key']: [] for tracker in TRACKER_DEFINITIONS}
-
-    for row in rows:
-        tracker = TRACKER_LOOKUP.get(row['tracker_type'])
-        if not tracker:
-            continue
-        totals[row['tracker_type']] += row['amount']
-        created_at = row['created_at']
-        time_label = created_at.strftime('%H:%M') if created_at else ''
-        grouped_entries[row['tracker_type']].append(
-            {
-                'id': row['id'],
-                'amount_label': _format_entry_amount(tracker, row['amount']),
-                'note': row['note'],
-                'time_label': time_label,
-            }
-        )
-
-    tracker_cards = []
-    for tracker in TRACKER_DEFINITIONS:
-        unit_singular = tracker.get('unit_singular', tracker['unit'])
-        unit_plural = tracker.get('unit_plural', tracker['unit'])
-        quick_buttons = [
-            {
-                'value': quick,
-                'label': _format_quick_label(quick, unit_singular, unit_plural),
-            }
-            for quick in tracker.get('quick_add', [])
-        ]
-
-        tracker_cards.append(
-            {
-                **tracker,
-                'unit_singular': unit_singular,
-                'unit_plural': unit_plural,
-                'quick_buttons': quick_buttons,
-                'entries': grouped_entries.get(tracker['key'], []),
-                'total_label': _format_total(tracker, totals.get(tracker['key'])),
-            }
-        )
-
-    return render_template(
-        'tracking.html',
-        title='Tracking',
-        tracker_cards=tracker_cards,
-        date_formatted=current_date.strftime('%d %b %y'),
-        current_date_str=current_date_str,
-        prev_day=prev_day,
-        next_day=next_day,
-        is_today=is_today,
-    )
 
 @nutrition_bp.route('/diario_alimentare')
 @login_required
@@ -334,12 +62,8 @@ def dieta(date_str):
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_food':
-            food_data = resolve_catalog_item(
-                'foods',
-                user_id,
-                entry_id=request.form.get('food_id'),
-                name=request.form.get('food_name'),
-            )
+            food_name = request.form.get('food_name')
+            food_data = execute_query('SELECT * FROM foods WHERE name = :name AND (user_id IS NULL OR user_id = :uid)', {'name': food_name, 'uid': user_id}, fetchone=True)
             try: weight = float(request.form.get('weight', 0))
             except (ValueError, TypeError): weight = 0
 
@@ -351,7 +75,7 @@ def dieta(date_str):
                               {'uid': user_id, 'fid': food_data['id'], 'w': weight, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'ld': current_date_str}, commit=True)
                 update_daily_totals(user_id, current_date_str)
             else:
-                flash('Seleziona un alimento valido dall\'archivio e inserisci un peso maggiore di zero.', 'danger')
+                flash('Alimento non trovato o peso non valido.', 'danger')
 
         elif action == 'delete_entry':
             entry_id = request.form.get('entry_id')
@@ -368,30 +92,17 @@ def dieta(date_str):
         
         return redirect(url_for('nutrition.dieta', date_str=current_date_str))
 
-    diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
-                             {'uid': user_id, 'ld': current_date_str}, fetchall=True)
-
-    raw_food_options = execute_query(
-        """
-        SELECT id, name, user_id IS NULL AS is_global
-        FROM foods
-        WHERE user_id IS NULL OR user_id = :uid
-        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
-                 LOWER(name) ASC,
-                 name ASC
-        """,
-        {'uid': user_id},
-        fetchall=True,
-    ) or []
-
+    food_rows = execute_query('SELECT id, name, user_id FROM foods WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True) or []
     food_options = [
         {
             'id': row['id'],
             'name': row['name'],
-            'is_global': bool(row['is_global']),
+            'is_global': row['user_id'] is None
         }
-        for row in raw_food_options
+        for row in food_rows
     ]
+    diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
+                             {'uid': user_id, 'ld': current_date_str}, fetchall=True)
     
     totals = {'protein': sum(item['protein'] for item in diet_log), 'carbs': sum(item['carbs'] for item in diet_log), 'fat': sum(item['fat'] for item in diet_log), 'calories': sum(item['calories'] for item in diet_log)}
     targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
@@ -409,6 +120,7 @@ def dieta(date_str):
     return render_template(
         'dieta.html',
         title='Dieta',
+        food_options=food_options,
         diet_log=diet_log,
         totals=totals,
         date_formatted=current_date.strftime('%d %b %y'),
@@ -418,7 +130,6 @@ def dieta(date_str):
         prev_day=prev_day,
         next_day=next_day,
         is_today=is_today,
-        food_options=food_options,
     )
 
 @nutrition_bp.route('/alimenti', methods=['GET', 'POST'])
