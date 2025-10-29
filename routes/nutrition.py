@@ -6,7 +6,7 @@ from utils import execute_query
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from extensions import db
-from services.suggestion_service import get_catalog_suggestions
+from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -334,29 +334,12 @@ def dieta(date_str):
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_food':
-            food_id_raw = request.form.get('food_id')
-            food_data = None
-
-            if food_id_raw:
-                try:
-                    food_id = int(food_id_raw)
-                except (TypeError, ValueError):
-                    food_id = None
-                else:
-                    food_data = execute_query(
-                        'SELECT * FROM foods WHERE id = :id AND (user_id IS NULL OR user_id = :uid)',
-                        {'id': food_id, 'uid': user_id},
-                        fetchone=True,
-                    )
-
-            if not food_data:
-                food_name = request.form.get('food_name')
-                if food_name:
-                    food_data = execute_query(
-                        'SELECT * FROM foods WHERE LOWER(name) = LOWER(:name) AND (user_id IS NULL OR user_id = :uid)',
-                        {'name': food_name, 'uid': user_id},
-                        fetchone=True,
-                    )
+            food_data = resolve_catalog_item(
+                'foods',
+                user_id,
+                entry_id=request.form.get('food_id'),
+                name=request.form.get('food_name'),
+            )
             try: weight = float(request.form.get('weight', 0))
             except (ValueError, TypeError): weight = 0
 
@@ -368,7 +351,7 @@ def dieta(date_str):
                               {'uid': user_id, 'fid': food_data['id'], 'w': weight, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'ld': current_date_str}, commit=True)
                 update_daily_totals(user_id, current_date_str)
             else:
-                flash('Alimento non trovato o peso non valido.', 'danger')
+                flash('Seleziona un alimento valido dall\'archivio e inserisci un peso maggiore di zero.', 'danger')
 
         elif action == 'delete_entry':
             entry_id = request.form.get('entry_id')
@@ -387,6 +370,28 @@ def dieta(date_str):
 
     diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
                              {'uid': user_id, 'ld': current_date_str}, fetchall=True)
+
+    raw_food_options = execute_query(
+        """
+        SELECT id, name, user_id IS NULL AS is_global
+        FROM foods
+        WHERE user_id IS NULL OR user_id = :uid
+        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
+                 LOWER(name) ASC,
+                 name ASC
+        """,
+        {'uid': user_id},
+        fetchall=True,
+    ) or []
+
+    food_options = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': bool(row['is_global']),
+        }
+        for row in raw_food_options
+    ]
     
     totals = {'protein': sum(item['protein'] for item in diet_log), 'carbs': sum(item['carbs'] for item in diet_log), 'fat': sum(item['fat'] for item in diet_log), 'calories': sum(item['calories'] for item in diet_log)}
     targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
@@ -413,6 +418,7 @@ def dieta(date_str):
         prev_day=prev_day,
         next_day=next_day,
         is_today=is_today,
+        food_options=food_options,
     )
 
 @nutrition_bp.route('/alimenti', methods=['GET', 'POST'])

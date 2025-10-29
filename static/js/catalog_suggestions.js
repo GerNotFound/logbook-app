@@ -1,337 +1,544 @@
 (function (window, document) {
     'use strict';
 
-    const DEFAULT_DELAY = 160;
-    const DEFAULT_LIMIT = 5;
+    const KEY_ENTER = 'Enter';
+    const KEY_ESCAPE = 'Escape';
+    const KEY_ARROW_UP = 'ArrowUp';
+    const KEY_ARROW_DOWN = 'ArrowDown';
 
-    const normalizeText = (text) => {
-        if (!text) {
+    const DEFAULT_LIMIT = 12;
+    const REMOTE_DELAY = 220;
+
+    const safeNormalize = (value) => {
+        if (typeof value !== 'string') {
+            value = value == null ? '' : String(value);
+        }
+
+        value = value.trim();
+        if (!value) {
             return '';
         }
+
         try {
-            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         } catch (error) {
-            return text.toLowerCase();
+            return value.toLowerCase();
         }
     };
 
-    const createSuggestionFetcher = (endpoint, {delay = DEFAULT_DELAY, limit = DEFAULT_LIMIT, onError} = {}) => {
-        let controller = null;
-        let debounceId = null;
+    const buildCatalog = (items) => {
+        if (!Array.isArray(items)) {
+            return {list: [], exact: new Map()};
+        }
 
-        return (term, callback) => {
-            if (controller) {
-                controller.abort();
-                controller = null;
-            }
+        const list = [];
+        const exact = new Map();
 
-            if (debounceId) {
-                clearTimeout(debounceId);
-                debounceId = null;
-            }
-
-            if (!term) {
-                callback([]);
+        items.forEach((raw) => {
+            if (!raw || raw.id == null) {
                 return;
             }
 
-            debounceId = window.setTimeout(() => {
-                controller = new AbortController();
-                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
-                    signal: controller.signal,
-                    headers: {'Accept': 'application/json'},
-                })
-                    .then((response) => (response.ok ? response.json() : {results: []}))
-                    .then((data) => {
-                        const rawResults = Array.isArray(data.results) ? data.results : [];
-                        callback(rawResults.slice(0, limit));
-                    })
-                    .catch((error) => {
-                        if (error.name !== 'AbortError') {
-                            if (typeof onError === 'function') {
-                                onError(error);
-                            } else {
-                                console.error('Errore durante il recupero dei suggerimenti:', error);
-                            }
-                        }
-                        callback([]);
-                    })
-                    .finally(() => {
-                        controller = null;
-                    });
-            }, delay);
-        };
+            const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+            if (!name) {
+                return;
+            }
+
+            const normalized = safeNormalize(name);
+            if (!normalized) {
+                return;
+            }
+
+            const entry = {
+                id: String(raw.id),
+                rawId: raw.id,
+                name,
+                normalized,
+                is_global: Boolean(raw.is_global),
+            };
+
+            list.push(entry);
+            if (!exact.has(normalized)) {
+                exact.set(normalized, entry);
+            }
+        });
+
+        return {list, exact};
     };
 
-    const attachSelectionHandler = (element, handler) => {
-        const listener = (event) => {
-            event.preventDefault();
-            handler();
-        };
-
-        if (window.PointerEvent) {
-            element.addEventListener('pointerdown', listener);
-        } else {
-            element.addEventListener('mousedown', listener);
-            element.addEventListener('touchstart', listener);
-        }
-    };
-
-    const generateElementId = (prefix = 'suggestions') => {
-        return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
-    };
-
-    const setupField = ({
-        input,
-        hiddenInput,
-        container,
-        form = null,
-        fetchSuggestions,
-        globalIconLabel = 'Elemento globale',
-        maxResults = DEFAULT_LIMIT,
-    }) => {
-        if (!input || !hiddenInput || !container || typeof fetchSuggestions !== 'function') {
+    const createRemoteFetcher = (endpoint, limit) => {
+        if (!endpoint) {
             return null;
         }
 
-        const root = container.closest('.suggestions-container') || container.parentElement || container;
-        if (!container.id) {
-            container.id = generateElementId();
-        }
+        let timer = null;
+        let requestId = 0;
 
-        container.setAttribute('role', 'listbox');
-        input.setAttribute('aria-controls', container.id);
-        input.setAttribute('aria-autocomplete', 'list');
+        return (term) => new Promise((resolve) => {
+            if (timer) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
 
-        let currentItems = [];
-        let activeIndex = -1;
-
-        const hideSuggestions = () => {
-            container.style.display = 'none';
-            container.innerHTML = '';
-            container.removeAttribute('aria-expanded');
-            currentItems = [];
-            activeIndex = -1;
-        };
-
-        const clearActiveClasses = () => {
-            container.querySelectorAll('.suggestion-item').forEach((item) => {
-                item.classList.remove('active');
-                item.removeAttribute('aria-selected');
-            });
-        };
-
-        const setActiveIndex = (index) => {
-            const items = container.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                activeIndex = -1;
+            const cleaned = (term || '').trim();
+            if (!cleaned) {
+                resolve({list: [], exact: new Map(), token: ++requestId});
                 return;
             }
 
-            if (index < 0) {
-                index = items.length - 1;
-            } else if (index >= items.length) {
-                index = 0;
+            const token = ++requestId;
+            timer = window.setTimeout(() => {
+                fetch(`${endpoint}?q=${encodeURIComponent(cleaned)}`, {
+                    credentials: 'same-origin',
+                    headers: {'Accept': 'application/json'},
+                })
+                    .then((response) => (response.ok ? response.json() : {results: []}))
+                    .then((payload) => {
+                        const rows = Array.isArray(payload.results) ? payload.results.slice(0, limit) : [];
+                        resolve({
+                            ...buildCatalog(rows),
+                            token,
+                        });
+                    })
+                    .catch(() => {
+                        resolve({list: [], exact: new Map(), token});
+                    });
+            }, REMOTE_DELAY);
+        });
+    };
+
+    const generateId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+
+    class SuggestionsField {
+        constructor({
+            input,
+            hiddenInput,
+            container,
+            form = null,
+            items = null,
+            endpoint = null,
+            limit = DEFAULT_LIMIT,
+            globalIconLabel = 'Elemento globale',
+        }) {
+            this.input = input;
+            this.hiddenInput = hiddenInput;
+            this.container = container;
+            this.form = form;
+            this.limit = limit;
+            this.globalIconLabel = globalIconLabel;
+
+            this.localCatalog = buildCatalog(items);
+            this.remoteFetcher = this.localCatalog.list.length ? null : createRemoteFetcher(endpoint, limit);
+            this.remoteCatalog = {list: [], exact: new Map()};
+
+            if (!this.container.id) {
+                this.container.id = generateId('suggestions');
             }
 
-            activeIndex = index;
-            clearActiveClasses();
+            this.input.setAttribute('aria-controls', this.container.id);
+            this.input.setAttribute('aria-autocomplete', 'list');
+            this.container.setAttribute('role', 'listbox');
 
-            const activeItem = items[index];
-            if (activeItem) {
-                activeItem.classList.add('active');
-                activeItem.setAttribute('aria-selected', 'true');
-                activeItem.scrollIntoView({block: 'nearest'});
+            this.matches = [];
+            this.activeIndex = -1;
+            this.latestToken = 0;
+            this.cleanupFns = [];
+
+            this.registerEvents();
+        }
+
+        registerEvents() {
+            const handleInput = () => {
+                this.clearInvalid();
+                this.requestSuggestions();
+            };
+
+            const handleFocus = () => {
+                if ((this.input.value || '').trim()) {
+                    this.requestSuggestions();
+                }
+            };
+
+            const handleKeydown = (event) => {
+                switch (event.key) {
+                    case KEY_ARROW_DOWN:
+                        event.preventDefault();
+                        this.moveActive(1);
+                        break;
+                    case KEY_ARROW_UP:
+                        event.preventDefault();
+                        this.moveActive(-1);
+                        break;
+                    case KEY_ENTER:
+                        if (this.activeIndex >= 0 && this.matches[this.activeIndex]) {
+                            event.preventDefault();
+                            this.selectItem(this.matches[this.activeIndex]);
+                        }
+                        break;
+                    case KEY_ESCAPE:
+                        this.hideSuggestions();
+                        break;
+                    default:
+                        break;
+                }
+            };
+
+            const handleBlur = () => {
+                window.setTimeout(() => {
+                    if (!this.container.matches(':hover') && document.activeElement !== this.input) {
+                        this.hideSuggestions();
+                    }
+                }, 120);
+            };
+
+            this.input.addEventListener('input', handleInput);
+            this.input.addEventListener('focus', handleFocus);
+            this.input.addEventListener('keydown', handleKeydown);
+            this.input.addEventListener('blur', handleBlur);
+
+            this.cleanupFns.push(() => {
+                this.input.removeEventListener('input', handleInput);
+                this.input.removeEventListener('focus', handleFocus);
+                this.input.removeEventListener('keydown', handleKeydown);
+                this.input.removeEventListener('blur', handleBlur);
+            });
+
+            const handleOutsideClick = (event) => {
+                if (!this.container.contains(event.target) && event.target !== this.input) {
+                    this.hideSuggestions();
+                }
+            };
+
+            document.addEventListener('mousedown', handleOutsideClick);
+            this.cleanupFns.push(() => document.removeEventListener('mousedown', handleOutsideClick));
+
+            const handleResize = () => this.ensureOrientation();
+            window.addEventListener('resize', handleResize);
+            this.cleanupFns.push(() => window.removeEventListener('resize', handleResize));
+
+            if (this.form) {
+                const handleSubmit = (event) => {
+                    if (this.validateSelection()) {
+                        return;
+                    }
+
+                    this.input.classList.add('is-invalid');
+                    this.input.setAttribute('aria-invalid', 'true');
+                    this.requestSuggestions();
+                    event.preventDefault();
+                    event.stopPropagation();
+                };
+
+                this.form.addEventListener('submit', handleSubmit);
+                this.cleanupFns.push(() => this.form.removeEventListener('submit', handleSubmit));
             }
-        };
+        }
 
-        const applySelection = (item) => {
-            input.value = item.name;
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
-            hiddenInput.value = item.id;
-            hiddenInput.dataset.selectedTerm = normalizeText(item.name);
-            hideSuggestions();
-        };
+        destroy() {
+            this.hideSuggestions();
+            while (this.cleanupFns.length) {
+                const cleanup = this.cleanupFns.pop();
+                if (typeof cleanup === 'function') {
+                    cleanup();
+                }
+            }
+        }
 
-        const renderSuggestions = (items) => {
-            currentItems = items.slice(0, maxResults);
-            activeIndex = -1;
+        clearInvalid() {
+            this.input.classList.remove('is-invalid');
+            this.input.removeAttribute('aria-invalid');
+        }
 
-            if (!currentItems.length) {
-                hideSuggestions();
+        setHiddenSelection(item) {
+            if (item) {
+                this.hiddenInput.value = item.id;
+                this.hiddenInput.dataset.normalized = item.normalized;
+            } else {
+                this.hiddenInput.value = '';
+                delete this.hiddenInput.dataset.normalized;
+            }
+        }
+
+        ensureOrientation() {
+            if (!this.container.classList.contains('is-visible')) {
+                this.container.classList.remove('suggestions-list-up');
+                return;
+            }
+
+            const maxHeight = Math.min(this.container.scrollHeight || 0, 220);
+            const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+            const rect = this.input.getBoundingClientRect();
+            const spaceBelow = viewport - rect.bottom;
+            const spaceAbove = rect.top;
+
+            if (spaceBelow < maxHeight + 12 && spaceAbove > spaceBelow) {
+                this.container.classList.add('suggestions-list-up');
+            } else {
+                this.container.classList.remove('suggestions-list-up');
+            }
+        }
+
+        highlightActive() {
+            const nodes = this.container.querySelectorAll('.suggestion-item');
+            nodes.forEach((node, index) => {
+                if (index === this.activeIndex) {
+                    node.classList.add('active');
+                    node.setAttribute('aria-selected', 'true');
+                    if (typeof node.scrollIntoView === 'function') {
+                        node.scrollIntoView({block: 'nearest'});
+                    }
+                } else {
+                    node.classList.remove('active');
+                    node.removeAttribute('aria-selected');
+                }
+            });
+        }
+
+        hideSuggestions() {
+            this.matches = [];
+            this.activeIndex = -1;
+            this.container.innerHTML = '';
+            this.container.classList.remove('is-visible', 'suggestions-list-up');
+            this.container.style.display = 'none';
+            this.container.style.visibility = 'hidden';
+            this.container.removeAttribute('aria-expanded');
+            this.input.removeAttribute('aria-expanded');
+        }
+
+        renderSuggestions(items) {
+            this.matches = Array.isArray(items) ? items.slice(0, this.limit) : [];
+            this.activeIndex = -1;
+            this.container.innerHTML = '';
+
+            if (!this.matches.length) {
+                this.hideSuggestions();
                 return;
             }
 
             const fragment = document.createDocumentFragment();
 
-            currentItems.forEach((item, index) => {
-                const suggestion = document.createElement('div');
-                suggestion.className = 'suggestion-item';
-                suggestion.setAttribute('role', 'option');
-                suggestion.tabIndex = -1;
+            this.matches.forEach((item, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'suggestion-item';
+                button.setAttribute('role', 'option');
+                button.dataset.index = String(index);
 
                 const label = document.createElement('span');
                 label.textContent = item.name;
-                suggestion.appendChild(label);
+                button.appendChild(label);
 
                 if (item.is_global) {
                     const icon = document.createElement('i');
                     icon.className = 'bi bi-globe2 global-icon';
-                    icon.setAttribute('title', globalIconLabel);
-                    icon.setAttribute('aria-label', globalIconLabel);
-                    suggestion.appendChild(icon);
+                    icon.setAttribute('title', this.globalIconLabel);
+                    icon.setAttribute('aria-label', this.globalIconLabel);
+                    button.appendChild(icon);
                 }
 
-                attachSelectionHandler(suggestion, () => applySelection(item));
-
-                suggestion.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        applySelection(item);
-                    }
+                button.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    this.selectItem(item);
                 });
 
-                suggestion.addEventListener('mouseenter', () => {
-                    clearActiveClasses();
-                    suggestion.classList.add('active');
-                    suggestion.setAttribute('aria-selected', 'true');
-                    activeIndex = index;
+                button.addEventListener('mouseenter', () => {
+                    this.activeIndex = index;
+                    this.highlightActive();
                 });
 
-                fragment.appendChild(suggestion);
+                fragment.appendChild(button);
             });
 
-            container.innerHTML = '';
-            container.appendChild(fragment);
-            container.style.display = 'block';
-            container.setAttribute('aria-expanded', 'true');
-        };
+            this.container.appendChild(fragment);
+            this.container.scrollTop = 0;
+            this.container.style.display = 'block';
+            this.container.style.visibility = 'visible';
+            this.container.classList.add('is-visible');
+            this.container.setAttribute('aria-expanded', 'true');
+            this.input.setAttribute('aria-expanded', 'true');
 
-        const moveActive = (direction) => {
-            if (!currentItems.length) {
-                return;
-            }
-            const items = container.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                return;
-            }
+            this.ensureOrientation();
+        }
 
-            const nextIndex = activeIndex === -1 ? (direction > 0 ? 0 : items.length - 1) : activeIndex + direction;
-            setActiveIndex(nextIndex);
-        };
-
-        const applyActiveSelection = () => {
-            if (activeIndex < 0 || !currentItems[activeIndex]) {
-                return false;
-            }
-            applySelection(currentItems[activeIndex]);
-            return true;
-        };
-
-        const requestSuggestions = () => {
-            const term = input.value.trim();
-            const normalizedTerm = normalizeText(term);
-            const storedTerm = hiddenInput.dataset.selectedTerm || '';
-
-            if (storedTerm !== normalizedTerm) {
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.selectedTerm;
+        filterLocal(term) {
+            const normalized = safeNormalize(term);
+            if (!normalized) {
+                return [];
             }
 
-            if (!term) {
-                hideSuggestions();
+            return this.localCatalog.list
+                .map((item) => ({item, position: item.normalized.indexOf(normalized)}))
+                .filter((entry) => entry.position !== -1)
+                .sort((a, b) => {
+                    const aStarts = a.position === 0;
+                    const bStarts = b.position === 0;
+                    if (aStarts !== bStarts) {
+                        return aStarts ? -1 : 1;
+                    }
+                    if (a.position !== b.position) {
+                        return a.position - b.position;
+                    }
+                    return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
+                })
+                .map((entry) => entry.item);
+        }
+
+        selectItem(item) {
+            if (!item) {
                 return;
             }
 
-            fetchSuggestions(term, renderSuggestions);
-        };
+            this.input.value = item.name;
+            this.setHiddenSelection(item);
+            this.clearInvalid();
+            this.hideSuggestions();
+        }
 
-        input.addEventListener('input', () => {
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
-            requestSuggestions();
-        });
+        requestSuggestions() {
+            const term = this.input.value || '';
+            const normalized = safeNormalize(term);
 
-        input.addEventListener('focus', requestSuggestions);
-
-        input.addEventListener('keydown', (event) => {
-            if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                moveActive(1);
+            if (!term.trim()) {
+                this.setHiddenSelection(null);
+                this.hideSuggestions();
                 return;
             }
-            if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                moveActive(-1);
+
+            if (this.hiddenInput.dataset.normalized !== normalized) {
+                this.setHiddenSelection(null);
+            }
+
+            if (this.localCatalog.list.length) {
+                this.renderSuggestions(this.filterLocal(term));
                 return;
             }
-            if (event.key === 'Enter') {
-                if (applyActiveSelection()) {
-                    event.preventDefault();
+
+            if (!this.remoteFetcher) {
+                this.renderSuggestions([]);
+                return;
+            }
+
+            this.remoteFetcher(term).then((result) => {
+                if (!result || typeof result !== 'object') {
+                    return;
                 }
-                return;
-            }
-            if (event.key === 'Escape') {
-                hideSuggestions();
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.selectedTerm;
-            }
-        });
 
-        if (form) {
-            form.addEventListener('submit', (event) => {
-                if (!hiddenInput.value) {
-                    event.preventDefault();
-                    hideSuggestions();
-                    input.classList.add('is-invalid');
-                    input.setAttribute('aria-invalid', 'true');
-                    input.focus();
+                const {list, exact, token} = result;
+                if (token && token < this.latestToken) {
+                    return;
                 }
+
+                this.latestToken = token || this.latestToken;
+                this.remoteCatalog = {
+                    list: Array.isArray(list) ? list : [],
+                    exact: exact instanceof Map ? exact : new Map(),
+                };
+
+                this.renderSuggestions(this.remoteCatalog.list);
             });
         }
 
-        const outsideClickListener = (event) => {
-            if (!root.contains(event.target)) {
-                hideSuggestions();
+        moveActive(offset) {
+            if (!this.matches.length) {
+                return;
             }
-        };
-        document.addEventListener('click', outsideClickListener);
 
-        return {
-            requestSuggestions,
-            destroy: () => document.removeEventListener('click', outsideClickListener),
-            clear: hideSuggestions,
-        };
+            if (this.activeIndex === -1) {
+                this.activeIndex = offset > 0 ? 0 : this.matches.length - 1;
+            } else {
+                this.activeIndex = (this.activeIndex + offset + this.matches.length) % this.matches.length;
+            }
+
+            this.highlightActive();
+        }
+
+        getExactMatch(normalized) {
+            if (!normalized) {
+                return null;
+            }
+
+            if (this.hiddenInput.dataset.normalized === normalized && this.hiddenInput.value) {
+                return {
+                    id: this.hiddenInput.value,
+                    name: this.input.value,
+                    normalized,
+                    is_global: false,
+                };
+            }
+
+            if (this.localCatalog.exact.has(normalized)) {
+                return this.localCatalog.exact.get(normalized);
+            }
+
+            if (this.remoteCatalog.exact.has(normalized)) {
+                return this.remoteCatalog.exact.get(normalized);
+            }
+
+            return null;
+        }
+
+        validateSelection() {
+            const term = this.input.value || '';
+            const normalized = safeNormalize(term);
+            const exact = this.getExactMatch(normalized);
+
+            if (exact) {
+                this.selectItem(exact);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    const setupField = (config) => {
+        if (!config || !config.input || !config.hiddenInput || !config.container) {
+            return null;
+        }
+
+        const items = Array.isArray(config.items) ? config.items : [];
+        const endpoint = config.endpoint || null;
+
+        if (!items.length && !endpoint) {
+            return null;
+        }
+
+        return new SuggestionsField(config);
     };
+
+    const initField = (config) => setupField(config);
 
     const initCollection = ({
         rootSelector,
         inputSelector,
         hiddenSelector,
         suggestionsSelector,
-        endpoint,
+        formSelector = null,
+        items = null,
+        endpoint = null,
         limit = DEFAULT_LIMIT,
-        delay = DEFAULT_DELAY,
-        globalIconLabel,
+        globalIconLabel = 'Elemento globale',
     }) => {
-        const forms = document.querySelectorAll(rootSelector);
+        const roots = document.querySelectorAll(rootSelector);
         const instances = [];
 
-        forms.forEach((form) => {
-            const input = form.querySelector(inputSelector);
-            const hidden = form.querySelector(hiddenSelector);
-            const container = form.querySelector(suggestionsSelector);
-            const fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
+        roots.forEach((root) => {
+            const input = root.querySelector(inputSelector);
+            const hiddenInput = root.querySelector(hiddenSelector);
+            const container = root.querySelector(suggestionsSelector);
+            const form = formSelector ? root.querySelector(formSelector) : root;
+
             const instance = setupField({
                 input,
-                hiddenInput: hidden,
+                hiddenInput,
                 container,
                 form,
-                fetchSuggestions,
+                items,
+                endpoint,
+                limit,
                 globalIconLabel,
-                maxResults: limit,
             });
+
             if (instance) {
                 instances.push(instance);
             }
@@ -340,40 +547,19 @@
         return instances;
     };
 
-    const initField = ({
-        input,
-        hiddenInput,
-        container,
-        form = null,
-        endpoint,
-        limit = DEFAULT_LIMIT,
-        delay = DEFAULT_DELAY,
-        globalIconLabel,
-    }) => {
-        const fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
-        return setupField({
-            input,
-            hiddenInput,
-            container,
-            form,
-            fetchSuggestions,
-            globalIconLabel,
-            maxResults: limit,
-        });
-    };
-
     window.LogbookCatalogSuggestions = {
-        initCollection,
         initField,
-        normalizeText,
+        initCollection,
+        safeNormalize,
     };
 
     const readyEventName = 'logbook:suggestions:ready';
+
     try {
         window.dispatchEvent(new CustomEvent(readyEventName, {detail: window.LogbookCatalogSuggestions}));
     } catch (error) {
-        const fallbackEvent = document.createEvent('CustomEvent');
-        fallbackEvent.initCustomEvent(readyEventName, false, false, window.LogbookCatalogSuggestions);
-        window.dispatchEvent(fallbackEvent);
+        const fallback = document.createEvent('CustomEvent');
+        fallback.initCustomEvent(readyEventName, false, false, window.LogbookCatalogSuggestions);
+        window.dispatchEvent(fallback);
     }
 })(window, document);
