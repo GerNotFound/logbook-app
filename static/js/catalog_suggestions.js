@@ -222,6 +222,7 @@
 
         const hideSuggestions = () => {
             container.style.display = 'none';
+            container.classList.remove('is-visible');
             container.innerHTML = '';
             container.removeAttribute('aria-expanded');
             currentItems = [];
@@ -321,6 +322,7 @@
             container.innerHTML = '';
             container.appendChild(fragment);
             container.style.display = 'block';
+            container.classList.add('is-visible');
             container.setAttribute('aria-expanded', 'true');
             container.scrollTop = 0;
             ensureResizeListener();
@@ -403,7 +405,7 @@
         });
 
         if (form) {
-            form.addEventListener('submit', () => {
+            form.addEventListener('submit', (event) => {
                 if (hiddenInput.value) {
                     return;
                 }
@@ -413,6 +415,12 @@
                     hideSuggestions();
                     input.classList.add('is-invalid');
                     input.setAttribute('aria-invalid', 'true');
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                        if (typeof event.stopImmediatePropagation === 'function') {
+                            event.stopImmediatePropagation();
+                        }
+                    }
                     return;
                 }
 
@@ -422,9 +430,23 @@
                     return;
                 }
 
-                if (currentItems.length) {
-                    applySelection(currentItems[0]);
+                const exactMatch = currentItems.find((item) => normalizeText(item.name) === normalizedTerm);
+                if (exactMatch) {
+                    applySelection(exactMatch);
+                    return;
                 }
+
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                        event.stopImmediatePropagation();
+                    }
+                }
+
+                requestSuggestions();
+                input.classList.add('is-invalid');
+                input.setAttribute('aria-invalid', 'true');
+                input.focus();
             });
         }
 
