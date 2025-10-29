@@ -368,7 +368,7 @@ def dieta(date_str):
                               {'uid': user_id, 'fid': food_data['id'], 'w': weight, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'ld': current_date_str}, commit=True)
                 update_daily_totals(user_id, current_date_str)
             else:
-                flash('Alimento non trovato o peso non valido.', 'danger')
+                flash('Seleziona un alimento valido dall\'archivio e inserisci un peso maggiore di zero.', 'danger')
 
         elif action == 'delete_entry':
             entry_id = request.form.get('entry_id')

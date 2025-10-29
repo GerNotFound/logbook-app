@@ -47,20 +47,26 @@ def get_catalog_suggestions(
     if limit_value <= 0:
         limit_value = 5
 
-    # ``ILIKE`` keeps the query simple while supporting case-insensitive search.
-    # Results are already ordered prioritising global entries on top of the list.
+    normalized = sanitized.lower()
+    pattern = f"%{normalized}%"
+
+    # ``LOWER`` keeps the lookup portable across SQLite/PostgreSQL while still
+    # providing a case-insensitive match. Results are ordered with global entries
+    # (``user_id`` NULL) first, then alphabetically by name.
     rows: Iterable[Dict[str, object]] = execute_query(
         f"""
         SELECT id, name, user_id IS NULL AS is_global
         FROM {table_name}
         WHERE (user_id IS NULL OR user_id = :uid)
-          AND name ILIKE :pattern
-        ORDER BY (user_id IS NULL) DESC, name ASC
+          AND LOWER(name) LIKE :pattern
+        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
+                 LOWER(name) ASC,
+                 name ASC
         LIMIT :limit
         """,
         {
             'uid': user_id,
-            'pattern': f"%{sanitized}%",
+            'pattern': pattern,
             'limit': limit_value,
         },
         fetchall=True,
