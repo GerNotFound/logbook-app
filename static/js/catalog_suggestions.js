@@ -6,8 +6,8 @@
     const KEY_ARROW_UP = 'ArrowUp';
     const KEY_ARROW_DOWN = 'ArrowDown';
 
-    const DEFAULT_LIMIT = 10;
-    const REMOTE_DELAY = 200;
+    const DEFAULT_LIMIT = 12;
+    const REMOTE_DELAY = 220;
 
     const safeNormalize = (value) => {
         if (typeof value !== 'string') {
@@ -28,31 +28,38 @@
         if (!Array.isArray(items)) {
             return {list: [], exact: new Map()};
         }
+
         const list = [];
         const exact = new Map();
+
         items.forEach((raw) => {
             if (!raw || raw.id == null || typeof raw.name !== 'string') {
                 return;
             }
-            const trimmed = raw.name.trim();
-            if (!trimmed) {
+
+            const name = raw.name.trim();
+            if (!name) {
                 return;
             }
-            const normalized = safeNormalize(trimmed);
+
+            const normalized = safeNormalize(name);
             if (!normalized) {
                 return;
             }
+
             const entry = {
                 id: raw.id,
-                name: trimmed,
+                name,
                 normalized,
                 is_global: Boolean(raw.is_global),
             };
+
             list.push(entry);
             if (!exact.has(normalized)) {
                 exact.set(normalized, entry);
             }
         });
+
         return {list, exact};
     };
 
@@ -60,17 +67,21 @@
         if (!endpoint) {
             return null;
         }
+
         let timer = null;
+
         return (term) => new Promise((resolve) => {
             if (timer) {
                 window.clearTimeout(timer);
                 timer = null;
             }
-            const cleaned = term.trim();
+
+            const cleaned = (term || '').trim();
             if (!cleaned) {
                 resolve([]);
                 return;
             }
+
             timer = window.setTimeout(() => {
                 fetch(`${endpoint}?q=${encodeURIComponent(cleaned)}`, {
                     credentials: 'same-origin',
@@ -104,6 +115,7 @@
 
         const localData = sanitizeItems(items);
         const remoteFetcher = localData.list.length ? null : createRemoteFetcher(endpoint, limit);
+
         if (!localData.list.length && !remoteFetcher) {
             return null;
         }
@@ -111,6 +123,7 @@
         if (!container.id) {
             container.id = generateId('suggestions');
         }
+
         input.setAttribute('aria-controls', container.id);
         input.setAttribute('aria-autocomplete', 'list');
         container.setAttribute('role', 'listbox');
@@ -145,14 +158,20 @@
             }
         };
 
-        const selectItem = (item) => {
-            if (!item) {
-                return;
-            }
-            input.value = item.name;
-            setHiddenSelection(item);
-            clearInvalid();
-            hideSuggestions();
+        const highlightActive = () => {
+            const nodes = container.querySelectorAll('.suggestion-item');
+            nodes.forEach((node, index) => {
+                if (index === activeIndex) {
+                    node.classList.add('active');
+                    node.setAttribute('aria-selected', 'true');
+                    if (typeof node.scrollIntoView === 'function') {
+                        node.scrollIntoView({block: 'nearest'});
+                    }
+                } else {
+                    node.classList.remove('active');
+                    node.removeAttribute('aria-selected');
+                }
+            });
         };
 
         const ensureOrientation = () => {
@@ -160,11 +179,13 @@
                 container.classList.remove('suggestions-list-up');
                 return;
             }
+
             const maxHeight = Math.min(container.scrollHeight || 0, 220);
             const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
             const rect = input.getBoundingClientRect();
             const spaceBelow = viewport - rect.bottom;
             const spaceAbove = rect.top;
+
             if (spaceBelow < maxHeight + 12 && spaceAbove > spaceBelow) {
                 container.classList.add('suggestions-list-up');
             } else {
@@ -176,10 +197,13 @@
             matches = Array.isArray(itemsList) ? itemsList.slice(0, limit) : [];
             activeIndex = -1;
             container.innerHTML = '';
+
             if (!matches.length) {
                 hideSuggestions();
                 return;
             }
+
+            const fragment = document.createDocumentFragment();
 
             matches.forEach((item, index) => {
                 const option = document.createElement('button');
@@ -204,22 +228,23 @@
                     event.preventDefault();
                     selectItem(item);
                 });
-                option.addEventListener('focus', () => {
-                    activeIndex = index;
-                });
+
                 option.addEventListener('mouseenter', () => {
                     activeIndex = index;
+                    highlightActive();
                 });
 
-                container.appendChild(option);
+                fragment.appendChild(option);
             });
 
+            container.appendChild(fragment);
+            container.scrollTop = 0;
             container.style.display = 'block';
             container.style.visibility = 'visible';
             container.classList.add('is-visible');
             container.setAttribute('aria-expanded', 'true');
             input.setAttribute('aria-expanded', 'true');
-            container.scrollTop = 0;
+
             ensureOrientation();
         };
 
@@ -228,38 +253,51 @@
             if (!normalized) {
                 return [];
             }
+
             return localData.list
-                .map((item) => ({item, index: item.normalized.indexOf(normalized)}))
-                .filter((entry) => entry.index !== -1)
+                .map((item) => ({item, position: item.normalized.indexOf(normalized)}))
+                .filter((entry) => entry.position !== -1)
                 .sort((a, b) => {
-                    const aStarts = a.index === 0;
-                    const bStarts = b.index === 0;
+                    const aStarts = a.position === 0;
+                    const bStarts = b.position === 0;
                     if (aStarts !== bStarts) {
                         return aStarts ? -1 : 1;
                     }
-                    if (a.index !== b.index) {
-                        return a.index - b.index;
+                    if (a.position !== b.position) {
+                        return a.position - b.position;
                     }
                     return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
                 })
                 .map((entry) => entry.item);
         };
 
+        const selectItem = (item) => {
+            if (!item) {
+                return;
+            }
+
+            input.value = item.name;
+            setHiddenSelection(item);
+            clearInvalid();
+            hideSuggestions();
+        };
+
         const requestSuggestions = () => {
             const term = input.value || '';
             const normalized = safeNormalize(term);
+
             if (!term.trim()) {
                 setHiddenSelection(null);
                 hideSuggestions();
                 return;
             }
 
-            const stored = hiddenInput.dataset.normalized || '';
-            if (stored !== normalized) {
+            if (hiddenInput.dataset.normalized !== normalized) {
                 setHiddenSelection(null);
             }
 
             const token = ++requestToken;
+
             if (localData.list.length) {
                 renderSuggestions(filterLocal(term));
                 return;
@@ -270,11 +308,14 @@
                     if (token !== requestToken) {
                         return;
                     }
-                    const sanitized = sanitizeItems(results).list;
-                    sanitized.forEach((entry) => {
+
+                    const sanitized = sanitizeItems(results);
+
+                    sanitized.list.forEach((entry) => {
                         localData.exact.set(entry.normalized, entry);
                     });
-                    renderSuggestions(sanitized);
+
+                    renderSuggestions(sanitized.list);
                 })
                 .catch(() => {
                     if (token === requestToken) {
@@ -287,24 +328,14 @@
             if (!matches.length) {
                 return;
             }
+
             if (activeIndex === -1) {
                 activeIndex = offset > 0 ? 0 : matches.length - 1;
             } else {
                 activeIndex = (activeIndex + offset + matches.length) % matches.length;
             }
-            const itemsNodes = container.querySelectorAll('.suggestion-item');
-            itemsNodes.forEach((node, idx) => {
-                if (idx === activeIndex) {
-                    node.classList.add('active');
-                    node.setAttribute('aria-selected', 'true');
-                    if (typeof node.scrollIntoView === 'function') {
-                        node.scrollIntoView({block: 'nearest'});
-                    }
-                } else {
-                    node.classList.remove('active');
-                    node.removeAttribute('aria-selected');
-                }
-            });
+
+            highlightActive();
         };
 
         const handleInput = () => {
@@ -345,14 +376,14 @@
         const handleSubmit = (event) => {
             const term = input.value || '';
             const normalized = safeNormalize(term);
-            const stored = hiddenInput.dataset.normalized || '';
-            if (stored && stored === normalized && hiddenInput.value) {
+
+            if (hiddenInput.dataset.normalized === normalized && hiddenInput.value) {
                 return;
             }
 
-            const exact = localData.exact.get(normalized);
-            if (exact) {
-                selectItem(exact);
+            const exactMatch = localData.exact.get(normalized);
+            if (exactMatch) {
+                selectItem(exactMatch);
                 return;
             }
 
@@ -430,11 +461,13 @@
     }) => {
         const roots = document.querySelectorAll(rootSelector);
         const instances = [];
+
         roots.forEach((root) => {
             const input = root.querySelector(inputSelector);
             const hiddenInput = root.querySelector(hiddenSelector);
             const container = root.querySelector(suggestionsSelector);
             const form = formSelector ? root.querySelector(formSelector) : root;
+
             const instance = setupField({
                 input,
                 hiddenInput,
@@ -445,10 +478,12 @@
                 limit,
                 globalIconLabel,
             });
+
             if (instance) {
                 instances.push(instance);
             }
         });
+
         return instances;
     };
 
@@ -459,6 +494,7 @@
     };
 
     const readyEventName = 'logbook:suggestions:ready';
+
     try {
         window.dispatchEvent(new CustomEvent(readyEventName, {detail: window.LogbookCatalogSuggestions}));
     } catch (error) {
