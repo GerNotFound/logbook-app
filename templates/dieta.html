@@ -125,14 +125,14 @@
         const foodIdInput = document.getElementById('alimento-id');
         const suggestionsDiv = document.getElementById('suggestions');
         const dietForm = document.getElementById('dieta-form');
-        const foodSuggestUrl = "{{ url_for('nutrition.suggest_foods') }}";
+        const foodOptions = {{ food_options|tojson|safe }};
 
         const suggestionInstance = suggestionsModule.initField({
             input: searchInput,
             hiddenInput: foodIdInput,
             container: suggestionsDiv,
             form: dietForm,
-            endpoint: foodSuggestUrl,
+            items: foodOptions,
             globalIconLabel: 'Alimento globale',
         });
 
