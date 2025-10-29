@@ -57,7 +57,14 @@
             </tbody>
         </table>
         <div class="text-end">
-            <button type="button" class="btn btn-custom btn-custom-short" data-bs-toggle="modal" data-bs-target="#addExerciseModal" data-template-id="{{ template.id }}">Aggiungi</button>
+            <button
+                type="button"
+                class="btn btn-custom btn-custom-short"
+                data-bs-toggle="modal"
+                data-bs-target="#addExerciseModal"
+                data-template-id="{{ template.id }}"
+                data-template-exercise-ids='{{ template.exercises | map(attribute="exercise_id") | list | tojson | safe }}'
+            >Aggiungi</button>
         </div>
     </div>
 
@@ -166,6 +173,10 @@
             if (suggestionInstance && typeof suggestionInstance.hideSuggestions === 'function') {
                 suggestionInstance.hideSuggestions();
             }
+
+            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
+                suggestionInstance.setPreferredIds([]);
+            }
         };
 
         modalElement.addEventListener('show.bs.modal', (event) => {
@@ -173,6 +184,24 @@
             const trigger = event.relatedTarget;
             if (templateIdInput) {
                 templateIdInput.value = trigger ? (trigger.getAttribute('data-template-id') || '') : '';
+            }
+
+            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
+                const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : null;
+                let parsedIds = [];
+
+                if (idsRaw) {
+                    try {
+                        const candidate = JSON.parse(idsRaw);
+                        if (Array.isArray(candidate)) {
+                            parsedIds = candidate;
+                        }
+                    } catch (error) {
+                        parsedIds = [];
+                    }
+                }
+
+                suggestionInstance.setPreferredIds(parsedIds);
             }
         });
 

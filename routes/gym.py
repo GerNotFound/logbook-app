@@ -432,8 +432,16 @@ def scheda():
     templates = []
     for t in templates_raw:
         template_dict = dict(t)
-        exercises = execute_query('SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': t['id']}, fetchall=True)
-        template_dict['exercises'] = exercises
+        exercises = execute_query(
+            'SELECT te.id, te.exercise_id, e.name, e.user_id, te.sets '
+            'FROM template_exercises te '
+            'JOIN exercises e ON te.exercise_id = e.id '
+            'WHERE te.template_id = :tid '
+            'ORDER BY te.id',
+            {'tid': t['id']},
+            fetchall=True,
+        )
+        template_dict['exercises'] = [dict(row) for row in exercises]
         templates.append(template_dict)
     raw_exercise_options = execute_query(
         """
