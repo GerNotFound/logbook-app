@@ -143,6 +143,7 @@
             this.activeIndex = -1;
             this.latestToken = 0;
             this.cleanupFns = [];
+            this.preferredIds = new Set();
 
             this.registerEvents();
         }
@@ -154,9 +155,7 @@
             };
 
             const handleFocus = () => {
-                if ((this.input.value || '').trim()) {
-                    this.requestSuggestions();
-                }
+                this.requestSuggestions({allowEmpty: true});
             };
 
             const handleKeydown = (event) => {
@@ -224,7 +223,7 @@
 
                     this.input.classList.add('is-invalid');
                     this.input.setAttribute('aria-invalid', 'true');
-                    this.requestSuggestions();
+                    this.requestSuggestions({allowEmpty: true});
                     event.preventDefault();
                     event.stopPropagation();
                 };
@@ -257,6 +256,43 @@
                 this.hiddenInput.value = '';
                 delete this.hiddenInput.dataset.normalized;
             }
+        }
+
+        setPreferredIds(ids) {
+            if (Array.isArray(ids) && ids.length) {
+                const normalizedIds = ids
+                    .map((value) => {
+                        if (value == null) {
+                            return null;
+                        }
+
+                        return String(value);
+                    })
+                    .filter((value) => value !== null && value !== '');
+
+                this.preferredIds = new Set(normalizedIds);
+            } else {
+                this.preferredIds = new Set();
+            }
+        }
+
+        orderByPreference(items = []) {
+            if (!Array.isArray(items) || !this.preferredIds.size) {
+                return Array.isArray(items) ? items.slice() : [];
+            }
+
+            const preferred = [];
+            const others = [];
+
+            items.forEach((item) => {
+                if (item && this.preferredIds.has(item.id)) {
+                    preferred.push(item);
+                } else if (item) {
+                    others.push(item);
+                }
+            });
+
+            return preferred.concat(others);
         }
 
         ensureOrientation() {
@@ -306,7 +342,9 @@
         }
 
         renderSuggestions(items) {
-            this.matches = Array.isArray(items) ? items.slice(0, this.limit) : [];
+            const baseItems = Array.isArray(items) ? items : [];
+            const orderedItems = this.orderByPreference(baseItems);
+            this.matches = orderedItems.slice(0, this.limit);
             this.activeIndex = -1;
             this.container.innerHTML = '';
 
@@ -363,24 +401,34 @@
         filterLocal(term) {
             const normalized = safeNormalize(term);
             if (!normalized) {
-                return [];
+                return this.orderByPreference(this.localCatalog.list);
             }
 
-            return this.localCatalog.list
+            const entries = this.localCatalog.list
                 .map((item) => ({item, position: item.normalized.indexOf(normalized)}))
-                .filter((entry) => entry.position !== -1)
-                .sort((a, b) => {
-                    const aStarts = a.position === 0;
-                    const bStarts = b.position === 0;
-                    if (aStarts !== bStarts) {
-                        return aStarts ? -1 : 1;
-                    }
-                    if (a.position !== b.position) {
-                        return a.position - b.position;
-                    }
-                    return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
-                })
-                .map((entry) => entry.item);
+                .filter((entry) => entry.position !== -1);
+
+            entries.sort((a, b) => {
+                const aPreferred = this.preferredIds.size && this.preferredIds.has(a.item.id);
+                const bPreferred = this.preferredIds.size && this.preferredIds.has(b.item.id);
+                if (aPreferred !== bPreferred) {
+                    return aPreferred ? -1 : 1;
+                }
+
+                const aStarts = a.position === 0;
+                const bStarts = b.position === 0;
+                if (aStarts !== bStarts) {
+                    return aStarts ? -1 : 1;
+                }
+
+                if (a.position !== b.position) {
+                    return a.position - b.position;
+                }
+
+                return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
+            });
+
+            return entries.map((entry) => entry.item);
         }
 
         selectItem(item) {
@@ -394,12 +442,51 @@
             this.hideSuggestions();
         }
 
-        requestSuggestions() {
+        requestSuggestions(options = {}) {
+            const allowEmpty = Boolean(options.allowEmpty);
             const term = this.input.value || '';
             const normalized = safeNormalize(term);
 
             if (!term.trim()) {
                 this.setHiddenSelection(null);
+                if (allowEmpty) {
+                    if (this.localCatalog.list.length) {
+                        this.renderSuggestions(this.localCatalog.list);
+                        return;
+                    }
+
+                    if (this.remoteCatalog.list.length) {
+                        this.renderSuggestions(this.remoteCatalog.list);
+                        return;
+                    }
+
+                    if (this.remoteFetcher) {
+                        this.remoteFetcher('').then((result) => {
+                            if (!result || typeof result !== 'object') {
+                                this.hideSuggestions();
+                                return;
+                            }
+
+                            const {list, exact, token} = result;
+                            if (token && token < this.latestToken) {
+                                return;
+                            }
+
+                            this.latestToken = token || this.latestToken;
+                            this.remoteCatalog = {
+                                list: Array.isArray(list) ? list : [],
+                                exact: exact instanceof Map ? exact : new Map(),
+                            };
+
+                            this.renderSuggestions(this.remoteCatalog.list);
+                        });
+                        return;
+                    }
+
+                    this.hideSuggestions();
+                    return;
+                }
+
                 this.hideSuggestions();
                 return;
             }
