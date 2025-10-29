@@ -91,23 +91,24 @@ def test_resolve_catalog_item_exact_name(monkeypatch):
     assert result['user_id'] == 3
 
 
-def test_resolve_catalog_item_uses_suggestions(monkeypatch):
-    queries = []
+def test_resolve_catalog_item_requires_exact_match(monkeypatch):
+    calls = {'suggestions': 0}
 
     def fake_execute_query(query, params, *, fetchone=False, fetchall=False):
-        queries.append(query.strip())
-        if 'LOWER(name) = LOWER(:name)' in query:
+        if 'WHERE id = :id' in query:
             return None
-        if 'WHERE id = :id' in query and fetchone:
-            if params['id'] == 99:
-                return {'id': 99, 'name': 'Pectoral Fly', 'user_id': None, 'ref_weight': 1, 'protein': 0, 'carbs': 0, 'fat': 0, 'calories': 0}
+        if 'LOWER(name) = LOWER(:name)' in query:
             return None
         raise AssertionError('Unexpected query execution')
 
+    def fake_get_catalog_suggestions(*args, **kwargs):
+        calls['suggestions'] += 1
+        return [{'id': 99, 'name': 'Pectoral Fly', 'is_global': True}]
+
     monkeypatch.setattr('services.suggestion_service.execute_query', fake_execute_query)
-    monkeypatch.setattr('services.suggestion_service.get_catalog_suggestions', lambda *args, **kwargs: [{'id': 99, 'name': 'Pectoral Fly', 'is_global': True}])
+    monkeypatch.setattr('services.suggestion_service.get_catalog_suggestions', fake_get_catalog_suggestions)
 
     result = resolve_catalog_item('exercises', 11, entry_id=None, name='pecto')
 
-    assert result['id'] == 99
-    assert any('FROM exercises' in query for query in queries)
+    assert result is None
+    assert calls['suggestions'] == 0

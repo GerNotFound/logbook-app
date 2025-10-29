@@ -1,9 +1,8 @@
 (function (window, document) {
     'use strict';
 
-    const DEFAULT_DELAY = 160;
-    const DEFAULT_LIMIT = 5;
-    const SUPPORTS_ABORT_CONTROLLER = typeof window.AbortController === 'function';
+    const DEFAULT_LIMIT = 8;
+    const DEFAULT_DELAY = 150;
 
     const normalizeText = (text) => {
         if (!text) {
@@ -12,101 +11,78 @@
         try {
             return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         } catch (error) {
-            return text.toLowerCase();
+            return String(text).toLowerCase();
         }
     };
 
-    const createSuggestionFetcher = (endpoint, {delay = DEFAULT_DELAY, limit = DEFAULT_LIMIT, onError} = {}) => {
-        let controller = null;
-        let debounceId = null;
+    const generateElementId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
-        return (term, callback) => {
-            if (SUPPORTS_ABORT_CONTROLLER && controller) {
-                controller.abort();
-                controller = null;
-            }
+    const createRemoteFetcher = (endpoint, limit, delay) => {
+        let timerId = null;
 
-            if (debounceId) {
-                clearTimeout(debounceId);
-                debounceId = null;
+        return (term) => new Promise((resolve) => {
+            if (timerId) {
+                window.clearTimeout(timerId);
+                timerId = null;
             }
 
             if (!term) {
-                callback([]);
+                resolve([]);
                 return;
             }
 
-            debounceId = window.setTimeout(() => {
-                if (SUPPORTS_ABORT_CONTROLLER) {
-                    controller = new AbortController();
-                }
-
-                const fetchOptions = {
+            timerId = window.setTimeout(() => {
+                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, {
                     headers: {'Accept': 'application/json'},
                     credentials: 'same-origin',
-                };
-
-                if (SUPPORTS_ABORT_CONTROLLER && controller) {
-                    fetchOptions.signal = controller.signal;
-                }
-
-                fetch(`${endpoint}?q=${encodeURIComponent(term)}`, fetchOptions)
+                })
                     .then((response) => (response.ok ? response.json() : {results: []}))
-                    .then((data) => {
-                        const rawResults = Array.isArray(data.results) ? data.results : [];
-                        callback(rawResults.slice(0, limit));
+                    .then((payload) => {
+                        const results = Array.isArray(payload.results) ? payload.results : [];
+                        resolve(results.slice(0, limit));
                     })
-                    .catch((error) => {
-                        if (error.name !== 'AbortError') {
-                            if (typeof onError === 'function') {
-                                onError(error);
-                            } else {
-                                console.error('Errore durante il recupero dei suggerimenti:', error);
-                            }
-                        }
-                        callback([]);
-                    })
-                    .finally(() => {
-                        controller = null;
-                    });
+                    .catch(() => resolve([]));
             }, delay);
-        };
+        });
     };
 
-    const createLocalSuggestionSource = (items, {limit = DEFAULT_LIMIT} = {}) => {
+    const createLocalSource = (items, limit) => {
         if (!Array.isArray(items) || !items.length) {
-            return (term, callback) => {
-                if (typeof callback === 'function') {
-                    callback([]);
-                }
-            };
+            return null;
         }
 
-        const normalizedItems = items
-            .filter((item) => item && typeof item.name === 'string')
+        const indexed = items
+            .filter((item) => item && typeof item.name === 'string' && item.id !== undefined)
             .map((item) => ({
-                original: item,
+                id: item.id,
+                name: item.name,
+                is_global: Boolean(item.is_global),
                 normalized: normalizeText(item.name),
             }));
 
-        return (term, callback) => {
-            if (typeof callback !== 'function') {
-                return;
-            }
+        if (!indexed.length) {
+            return null;
+        }
 
+        const exactMap = new Map();
+        indexed.forEach((item) => {
+            if (!exactMap.has(item.normalized)) {
+                exactMap.set(item.normalized, item);
+            }
+        });
+
+        const request = (term) => {
             const normalizedTerm = normalizeText(term);
             if (!normalizedTerm) {
-                callback([]);
-                return;
+                return Promise.resolve([]);
             }
 
-            const matches = normalizedItems
-                .map((entry) => ({
-                    item: entry.original,
-                    normalized: entry.normalized,
-                    index: entry.normalized.indexOf(normalizedTerm),
-                }))
-                .filter((entry) => entry.index !== -1)
+            const matches = indexed
+                .map((item) => {
+                    const index = item.normalized.indexOf(normalizedTerm);
+                    return index === -1 ? null : {item, index};
+                })
+                .filter(Boolean)
                 .sort((a, b) => {
                     const aStarts = a.index === 0;
                     const bStarts = b.index === 0;
@@ -119,32 +95,36 @@
                     return a.item.name.localeCompare(b.item.name, 'it', {sensitivity: 'base'});
                 })
                 .slice(0, limit)
-                .map((entry) => ({
-                    id: entry.item.id,
-                    name: entry.item.name,
-                    is_global: Boolean(entry.item.is_global),
-                }));
+                .map((entry) => entry.item);
 
-            callback(matches);
+            return Promise.resolve(matches);
+        };
+
+        return {
+            type: 'local',
+            request,
+            exactLookup: (normalizedName) => exactMap.get(normalizedName) || null,
         };
     };
 
-    const attachSelectionHandler = (element, handler) => {
-        const listener = (event) => {
-            event.preventDefault();
-            handler();
-        };
-
-        if (window.PointerEvent) {
-            element.addEventListener('pointerdown', listener);
-        } else {
-            element.addEventListener('mousedown', listener);
-            element.addEventListener('touchstart', listener);
+    const createRemoteSource = (endpoint, limit, delay) => {
+        if (!endpoint) {
+            return null;
         }
-    };
 
-    const generateElementId = (prefix = 'suggestions') => {
-        return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+        const fetcher = createRemoteFetcher(endpoint, limit, delay);
+
+        return {
+            type: 'remote',
+            request: (term) => fetcher(term).then((results) =>
+                (Array.isArray(results) ? results : []).map((item) => ({
+                    id: item.id,
+                    name: item.name,
+                    is_global: Boolean(item.is_global),
+                    normalized: normalizeText(item.name),
+                }))),
+            exactLookup: () => null,
+        };
     };
 
     const setupField = ({
@@ -152,83 +132,54 @@
         hiddenInput,
         container,
         form = null,
-        fetchSuggestions,
+        items = null,
+        endpoint = null,
+        limit = DEFAULT_LIMIT,
+        delay = DEFAULT_DELAY,
         globalIconLabel = 'Elemento globale',
-        maxResults = DEFAULT_LIMIT,
     }) => {
-        if (!input || !hiddenInput || !container || typeof fetchSuggestions !== 'function') {
+        if (!input || !hiddenInput || !container) {
             return null;
         }
 
-        const root = container.closest('.suggestions-container') || container.parentElement || container;
+        const source =
+            createLocalSource(items, limit) ||
+            createRemoteSource(endpoint, limit, delay);
+
+        if (!source) {
+            return null;
+        }
+
         if (!container.id) {
-            container.id = generateElementId();
+            container.id = generateElementId('suggestions');
         }
 
         container.setAttribute('role', 'listbox');
         input.setAttribute('aria-controls', container.id);
         input.setAttribute('aria-autocomplete', 'list');
 
-        let currentItems = [];
-        let activeIndex = -1;
-
-        const ORIENTATION_CLASS = 'suggestions-list-up';
-
-        const getMaxHeight = () => {
-            try {
-                const raw = window.getComputedStyle(container).maxHeight;
-                const parsed = parseInt(raw, 10);
-                return Number.isNaN(parsed) ? 220 : parsed;
-            } catch (error) {
-                return 220;
-            }
+        const cleanupFns = [];
+        const state = {
+            matches: [],
+            activeIndex: -1,
+            requestToken: 0,
         };
 
-        const updateOrientation = () => {
-            if (container.style.display !== 'block') {
-                container.classList.remove(ORIENTATION_CLASS);
-                return;
-            }
+        const root = container.closest('.suggestions-container') || container.parentElement || input.parentElement || container;
 
-            const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-            const inputRect = input.getBoundingClientRect();
-            const spaceBelow = viewportHeight - inputRect.bottom;
-            const spaceAbove = inputRect.top;
-            const listHeight = Math.min(container.scrollHeight || 0, getMaxHeight());
-
-            if (spaceBelow < listHeight + 12 && spaceAbove > listHeight + 12) {
-                container.classList.add(ORIENTATION_CLASS);
-            } else {
-                container.classList.remove(ORIENTATION_CLASS);
-            }
-        };
-
-        const handleResize = () => updateOrientation();
-        let resizeListenerActive = false;
-
-        const ensureResizeListener = () => {
-            if (!resizeListenerActive) {
-                window.addEventListener('resize', handleResize);
-                resizeListenerActive = true;
-            }
-        };
-
-        const removeResizeListener = () => {
-            if (resizeListenerActive) {
-                window.removeEventListener('resize', handleResize);
-                resizeListenerActive = false;
-            }
+        const clearInvalidState = () => {
+            input.classList.remove('is-invalid');
+            input.removeAttribute('aria-invalid');
         };
 
         const hideSuggestions = () => {
+            container.classList.remove('is-visible', 'suggestions-list-up');
             container.style.display = 'none';
-            container.classList.remove('is-visible');
-            container.innerHTML = '';
             container.removeAttribute('aria-expanded');
-            currentItems = [];
-            activeIndex = -1;
-            container.classList.remove(ORIENTATION_CLASS);
-            removeResizeListener();
+            input.removeAttribute('aria-expanded');
+            container.innerHTML = '';
+            state.matches = [];
+            state.activeIndex = -1;
         };
 
         const clearActiveClasses = () => {
@@ -239,119 +190,127 @@
         };
 
         const setActiveIndex = (index) => {
-            const items = container.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                activeIndex = -1;
+            const itemsNodes = container.querySelectorAll('.suggestion-item');
+            if (!itemsNodes.length) {
+                state.activeIndex = -1;
                 return;
             }
 
-            if (index < 0) {
-                index = items.length - 1;
-            } else if (index >= items.length) {
-                index = 0;
+            let nextIndex = index;
+            if (nextIndex < 0) {
+                nextIndex = itemsNodes.length - 1;
+            } else if (nextIndex >= itemsNodes.length) {
+                nextIndex = 0;
             }
 
-            activeIndex = index;
+            state.activeIndex = nextIndex;
             clearActiveClasses();
-
-            const activeItem = items[index];
+            const activeItem = itemsNodes[nextIndex];
             if (activeItem) {
                 activeItem.classList.add('active');
                 activeItem.setAttribute('aria-selected', 'true');
-                activeItem.scrollIntoView({block: 'nearest'});
+                if (typeof activeItem.scrollIntoView === 'function') {
+                    activeItem.scrollIntoView({block: 'nearest'});
+                }
             }
         };
 
-        const applySelection = (item) => {
+        const updateOrientation = () => {
+            if (!container.classList.contains('is-visible')) {
+                container.classList.remove('suggestions-list-up');
+                return;
+            }
+
+            let maxHeight = 220;
+            try {
+                const raw = window.getComputedStyle(container).maxHeight;
+                const parsed = parseInt(raw, 10);
+                if (!Number.isNaN(parsed)) {
+                    maxHeight = parsed;
+                }
+            } catch (error) {
+                // ignore
+            }
+
+            const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+            const inputRect = input.getBoundingClientRect();
+            const spaceBelow = viewportHeight - inputRect.bottom;
+            const spaceAbove = inputRect.top;
+            const listHeight = Math.min(container.scrollHeight || 0, maxHeight);
+
+            if (spaceBelow < listHeight + 12 && spaceAbove > spaceBelow) {
+                container.classList.add('suggestions-list-up');
+            } else {
+                container.classList.remove('suggestions-list-up');
+            }
+        };
+
+        const selectItem = (item) => {
+            if (!item) {
+                return;
+            }
             input.value = item.name;
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
             hiddenInput.value = item.id;
-            hiddenInput.dataset.selectedTerm = normalizeText(item.name);
+            hiddenInput.dataset.selectedTerm = item.normalized;
+            clearInvalidState();
             hideSuggestions();
         };
 
-        const renderSuggestions = (items) => {
-            currentItems = items.slice(0, maxResults);
-            activeIndex = -1;
+        const renderSuggestions = (itemsList) => {
+            state.matches = Array.isArray(itemsList) ? itemsList.slice() : [];
+            state.activeIndex = -1;
 
-            if (!currentItems.length) {
+            if (!state.matches.length) {
                 hideSuggestions();
                 return;
             }
 
-            const fragment = document.createDocumentFragment();
+            container.innerHTML = '';
 
-            currentItems.forEach((item, index) => {
-                const suggestion = document.createElement('div');
-                suggestion.className = 'suggestion-item';
-                suggestion.setAttribute('role', 'option');
-                suggestion.tabIndex = -1;
+            state.matches.forEach((item, index) => {
+                const option = document.createElement('div');
+                option.className = 'suggestion-item';
+                option.setAttribute('role', 'option');
+                option.tabIndex = -1;
 
                 const label = document.createElement('span');
                 label.textContent = item.name;
-                suggestion.appendChild(label);
+                option.appendChild(label);
 
                 if (item.is_global) {
                     const icon = document.createElement('i');
                     icon.className = 'bi bi-globe2 global-icon';
                     icon.setAttribute('title', globalIconLabel);
                     icon.setAttribute('aria-label', globalIconLabel);
-                    suggestion.appendChild(icon);
+                    option.appendChild(icon);
                 }
 
-                attachSelectionHandler(suggestion, () => applySelection(item));
-
-                suggestion.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        applySelection(item);
-                    }
+                option.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    selectItem(item);
                 });
 
-                suggestion.addEventListener('mouseenter', () => {
+                option.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    selectItem(item);
+                });
+
+                option.addEventListener('mouseenter', () => {
+                    state.activeIndex = index;
                     clearActiveClasses();
-                    suggestion.classList.add('active');
-                    suggestion.setAttribute('aria-selected', 'true');
-                    activeIndex = index;
+                    option.classList.add('active');
+                    option.setAttribute('aria-selected', 'true');
                 });
 
-                fragment.appendChild(suggestion);
+                container.appendChild(option);
             });
 
-            container.innerHTML = '';
-            container.appendChild(fragment);
             container.style.display = 'block';
             container.classList.add('is-visible');
             container.setAttribute('aria-expanded', 'true');
+            input.setAttribute('aria-expanded', 'true');
             container.scrollTop = 0;
-            ensureResizeListener();
-            if (typeof window.requestAnimationFrame === 'function') {
-                window.requestAnimationFrame(updateOrientation);
-            } else {
-                updateOrientation();
-            }
-        };
-
-        const moveActive = (direction) => {
-            if (!currentItems.length) {
-                return;
-            }
-            const items = container.querySelectorAll('.suggestion-item');
-            if (!items.length) {
-                return;
-            }
-
-            const nextIndex = activeIndex === -1 ? (direction > 0 ? 0 : items.length - 1) : activeIndex + direction;
-            setActiveIndex(nextIndex);
-        };
-
-        const applyActiveSelection = () => {
-            if (activeIndex < 0 || !currentItems[activeIndex]) {
-                return false;
-            }
-            applySelection(currentItems[activeIndex]);
-            return true;
+            updateOrientation();
         };
 
         const requestSuggestions = () => {
@@ -369,18 +328,36 @@
                 return;
             }
 
-            fetchSuggestions(term, renderSuggestions);
+            const token = ++state.requestToken;
+            source
+                .request(term)
+                .then((results) => {
+                    if (token !== state.requestToken) {
+                        return;
+                    }
+                    renderSuggestions(results.slice(0, limit));
+                })
+                .catch(() => {
+                    if (token !== state.requestToken) {
+                        return;
+                    }
+                    hideSuggestions();
+                });
         };
 
-        input.addEventListener('input', () => {
-            input.classList.remove('is-invalid');
-            input.removeAttribute('aria-invalid');
+        const moveActive = (direction) => {
+            if (!state.matches.length) {
+                return;
+            }
+            setActiveIndex(state.activeIndex === -1 ? (direction > 0 ? 0 : state.matches.length - 1) : state.activeIndex + direction);
+        };
+
+        const handleInput = () => {
+            clearInvalidState();
             requestSuggestions();
-        });
+        };
 
-        input.addEventListener('focus', requestSuggestions);
-
-        input.addEventListener('keydown', (event) => {
+        const handleKeydown = (event) => {
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 moveActive(1);
@@ -392,116 +369,137 @@
                 return;
             }
             if (event.key === 'Enter') {
-                if (applyActiveSelection()) {
+                if (state.activeIndex >= 0 && state.matches[state.activeIndex]) {
                     event.preventDefault();
+                    selectItem(state.matches[state.activeIndex]);
                 }
                 return;
             }
             if (event.key === 'Escape') {
                 hideSuggestions();
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.selectedTerm;
             }
-        });
+        };
 
-        if (form) {
-            form.addEventListener('submit', (event) => {
-                if (hiddenInput.value) {
-                    return;
-                }
-
-                const term = input.value.trim();
-                if (!term) {
-                    hideSuggestions();
-                    input.classList.add('is-invalid');
-                    input.setAttribute('aria-invalid', 'true');
-                    if (event && typeof event.preventDefault === 'function') {
-                        event.preventDefault();
-                        if (typeof event.stopImmediatePropagation === 'function') {
-                            event.stopImmediatePropagation();
-                        }
-                    }
-                    return;
-                }
-
-                const normalizedTerm = normalizeText(term);
-                const storedTerm = hiddenInput.dataset.selectedTerm || '';
-                if (storedTerm && storedTerm === normalizedTerm) {
-                    return;
-                }
-
-                const exactMatch = currentItems.find((item) => normalizeText(item.name) === normalizedTerm);
-                if (exactMatch) {
-                    applySelection(exactMatch);
-                    return;
-                }
-
-                if (event && typeof event.preventDefault === 'function') {
-                    event.preventDefault();
-                    if (typeof event.stopImmediatePropagation === 'function') {
-                        event.stopImmediatePropagation();
-                    }
-                }
-
+        const handleFocus = () => {
+            if (input.value.trim()) {
                 requestSuggestions();
+            }
+        };
+
+        const handleSubmit = (event) => {
+            if (hiddenInput.value) {
+                return;
+            }
+
+            const term = input.value.trim();
+            if (!term) {
+                hideSuggestions();
                 input.classList.add('is-invalid');
                 input.setAttribute('aria-invalid', 'true');
-                input.focus();
-            });
-        }
+                event.preventDefault();
+                return;
+            }
+
+            const normalizedTerm = normalizeText(term);
+            const storedTerm = hiddenInput.dataset.selectedTerm || '';
+            if (storedTerm && storedTerm === normalizedTerm) {
+                return;
+            }
+
+            if (typeof source.exactLookup === 'function') {
+                const exact = source.exactLookup(normalizedTerm);
+                if (exact) {
+                    selectItem(exact);
+                    return;
+                }
+            }
+
+            input.classList.add('is-invalid');
+            input.setAttribute('aria-invalid', 'true');
+            event.preventDefault();
+            requestSuggestions();
+            input.focus();
+        };
 
         const outsideClickListener = (event) => {
             if (!root.contains(event.target)) {
                 hideSuggestions();
             }
         };
-        document.addEventListener('click', outsideClickListener);
+
+        const resizeListener = () => updateOrientation();
+
+        input.addEventListener('input', handleInput);
+        input.addEventListener('keydown', handleKeydown);
+        input.addEventListener('focus', handleFocus);
+
+        cleanupFns.push(() => {
+            input.removeEventListener('input', handleInput);
+            input.removeEventListener('keydown', handleKeydown);
+            input.removeEventListener('focus', handleFocus);
+        });
+
+        if (form) {
+            form.addEventListener('submit', handleSubmit);
+            cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
+        }
+
+        document.addEventListener('mousedown', outsideClickListener);
+        cleanupFns.push(() => document.removeEventListener('mousedown', outsideClickListener));
+
+        window.addEventListener('resize', resizeListener);
+        cleanupFns.push(() => window.removeEventListener('resize', resizeListener));
 
         return {
             requestSuggestions,
-            destroy: () => {
-                document.removeEventListener('click', outsideClickListener);
-                removeResizeListener();
-            },
             clear: hideSuggestions,
+            destroy: () => {
+                hideSuggestions();
+                while (cleanupFns.length) {
+                    const cleanup = cleanupFns.pop();
+                    if (typeof cleanup === 'function') {
+                        cleanup();
+                    }
+                }
+            },
         };
     };
+
+    const initField = (config) => setupField(config);
 
     const initCollection = ({
         rootSelector,
         inputSelector,
         hiddenSelector,
         suggestionsSelector,
-        endpoint,
-        items,
+        formSelector = null,
+        items = null,
+        endpoint = null,
         limit = DEFAULT_LIMIT,
         delay = DEFAULT_DELAY,
-        globalIconLabel,
+        globalIconLabel = 'Elemento globale',
     }) => {
-        const forms = document.querySelectorAll(rootSelector);
+        const roots = document.querySelectorAll(rootSelector);
         const instances = [];
 
-        forms.forEach((form) => {
-            const input = form.querySelector(inputSelector);
-            const hidden = form.querySelector(hiddenSelector);
-            const container = form.querySelector(suggestionsSelector);
-            let fetchSuggestions = null;
-
-            if (Array.isArray(items) && items.length) {
-                fetchSuggestions = createLocalSuggestionSource(items, {limit});
-            } else if (endpoint) {
-                fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
-            }
+        roots.forEach((root) => {
+            const input = root.querySelector(inputSelector);
+            const hiddenInput = root.querySelector(hiddenSelector);
+            const container = root.querySelector(suggestionsSelector);
+            const form = formSelector ? root.querySelector(formSelector) : root;
 
             const instance = setupField({
                 input,
-                hiddenInput: hidden,
+                hiddenInput,
                 container,
                 form,
-                fetchSuggestions,
+                items,
+                endpoint,
+                limit,
+                delay,
                 globalIconLabel,
-                maxResults: limit,
             });
+
             if (instance) {
                 instances.push(instance);
             }
@@ -510,43 +508,9 @@
         return instances;
     };
 
-    const initField = ({
-        input,
-        hiddenInput,
-        container,
-        form = null,
-        endpoint,
-        items,
-        limit = DEFAULT_LIMIT,
-        delay = DEFAULT_DELAY,
-        globalIconLabel,
-    }) => {
-        let fetchSuggestions = null;
-
-        if (Array.isArray(items) && items.length) {
-            fetchSuggestions = createLocalSuggestionSource(items, {limit});
-        } else if (endpoint) {
-            fetchSuggestions = createSuggestionFetcher(endpoint, {delay, limit});
-        }
-
-        if (!fetchSuggestions) {
-            return null;
-        }
-
-        return setupField({
-            input,
-            hiddenInput,
-            container,
-            form,
-            fetchSuggestions,
-            globalIconLabel,
-            maxResults: limit,
-        });
-    };
-
     window.LogbookCatalogSuggestions = {
-        initCollection,
         initField,
+        initCollection,
         normalizeText,
     };
 
@@ -554,8 +518,8 @@
     try {
         window.dispatchEvent(new CustomEvent(readyEventName, {detail: window.LogbookCatalogSuggestions}));
     } catch (error) {
-        const fallbackEvent = document.createEvent('CustomEvent');
-        fallbackEvent.initCustomEvent(readyEventName, false, false, window.LogbookCatalogSuggestions);
-        window.dispatchEvent(fallbackEvent);
+        const fallback = document.createEvent('CustomEvent');
+        fallback.initCustomEvent(readyEventName, false, false, window.LogbookCatalogSuggestions);
+        window.dispatchEvent(fallback);
     }
 })(window, document);

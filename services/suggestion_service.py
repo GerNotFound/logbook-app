@@ -91,11 +91,10 @@ def resolve_catalog_item(
 ) -> Optional[Dict[str, object]]:
     """Return a catalog row matching either the provided id or name.
 
-    The resolver first attempts to look up the explicit ``entry_id``. If it is not
-    provided or the lookup fails, an exact case-insensitive name match is tried.
-    As a final fallback a prefix/substring lookup reuses the autosuggest service
-    so that partially typed values (e.g. ``"pa"``) can still resolve to the first
-    available suggestion.
+    Only explicit identifiers or exact (case-insensitive) name matches are
+    considered valid. This forces callers to capture the identifier associated
+    with the user's selection instead of "guessing" a best match from a partial
+    term, which previously led to unintended insertions.
     """
 
     table_name = _TABLE_MAP.get(resource)
@@ -141,19 +140,5 @@ def resolve_catalog_item(
     if exact_match:
         return exact_match
 
-    suggestions = get_catalog_suggestions(resource, user_id, sanitized_name, limit=1)
-    if not suggestions:
-        return None
-
-    resolved_id = suggestions[0]['id']
-    return execute_query(
-        f"""
-        SELECT *
-        FROM {table_name}
-        WHERE id = :id AND (user_id IS NULL OR user_id = :uid)
-        LIMIT 1
-        """,
-        {'id': resolved_id, 'uid': user_id},
-        fetchone=True,
-    )
+    return None
 
