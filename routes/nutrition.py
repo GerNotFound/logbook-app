@@ -1,12 +1,17 @@
 # routes/nutrition.py
-from flask import Blueprint, render_template, request, redirect, url_for, session, g, flash, jsonify
+from __future__ import annotations
+
 from datetime import date, datetime, timedelta
-from .auth import login_required
-from utils import execute_query
+from typing import Iterable, Optional
+
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
+
+from .auth import login_required
 from extensions import db
 from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
+from utils import execute_query
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -65,6 +70,17 @@ TRACKER_DEFINITIONS = [
 
 TRACKER_LOOKUP = {tracker['key']: tracker for tracker in TRACKER_DEFINITIONS}
 
+DEFAULT_TARGETS = {
+    'days_on': 3,
+    'days_off': 4,
+    'p_on': 1.8,
+    'c_on': 5.0,
+    'f_on': 0.55,
+    'p_off': 1.8,
+    'c_off': 3.0,
+    'f_off': 0.70,
+}
+
 
 _INTAKE_LOG_READY = False
 
@@ -106,7 +122,7 @@ def ensure_intake_log_table() -> None:
     _INTAKE_LOG_READY = True
 
 
-def _format_number(value):
+def _format_number(value: Optional[float]):
     if value is None:
         return '0'
     if float(value).is_integer():
@@ -114,7 +130,13 @@ def _format_number(value):
     return f"{value:.2f}".rstrip('0').rstrip('.')
 
 
-def _format_total(tracker, amount):
+def _unit_label(tracker: dict, amount: float) -> str:
+    singular = tracker.get('unit_singular', tracker['unit'])
+    plural = tracker.get('unit_plural', tracker['unit'])
+    return singular if float(amount) == 1 else plural
+
+
+def _format_total(tracker: dict, amount: Optional[float]):
     amount = amount or 0
     if tracker['key'] == 'water':
         if amount <= 0:
@@ -122,30 +144,16 @@ def _format_total(tracker, amount):
         liters = amount / 1000
         liters_label = f" ({liters:.2f} L)" if amount >= 1000 else ''
         return f"{int(round(amount))} ml{liters_label}"
-    if tracker['key'] == 'coffee':
-        cups = _format_number(amount)
-        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
-        return f"{cups} {label}"
-    if tracker['key'] == 'supplements':
-        doses = _format_number(amount)
-        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
-        return f"{doses} {label}"
-    return f"{_format_number(amount)} {tracker['unit']}"
+
+    label = _unit_label(tracker, amount)
+    return f"{_format_number(amount)} {label}"
 
 
-def _format_entry_amount(tracker, amount):
+def _format_entry_amount(tracker: dict, amount: Optional[float]):
     amount = amount or 0
     if tracker['key'] == 'water':
         return f"{int(round(amount))} ml"
-    if tracker['key'] == 'coffee':
-        cups = _format_number(amount)
-        label = tracker.get('unit_singular', 'tazza') if float(amount) == 1 else tracker.get('unit_plural', 'tazze')
-        return f"{cups} {label}"
-    if tracker['key'] == 'supplements':
-        doses = _format_number(amount)
-        label = tracker.get('unit_singular', 'dose') if float(amount) == 1 else tracker.get('unit_plural', 'dosi')
-        return f"{doses} {label}"
-    return f"{_format_number(amount)} {tracker['unit']}"
+    return f"{_format_number(amount)} {_unit_label(tracker, amount)}"
 
 
 def _format_quick_label(value, singular, plural):
@@ -157,15 +165,248 @@ def _format_quick_label(value, singular, plural):
     display_value = _format_number(numeric_value)
     return f"+{display_value} {label}"
 
+
+def _parse_date_or_today(date_str: Optional[str]) -> tuple[date, str, str, str, bool]:
+    if date_str:
+        try:
+            current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return _parse_date_or_today(None)
+    else:
+        current_date = date.today()
+
+    current_date_str = current_date.strftime('%Y-%m-%d')
+    prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+    next_day = (current_date + timedelta(days=1)).strftime('%Y-%m-%d')
+    return current_date, current_date_str, prev_day, next_day, current_date == date.today()
+
+
+def _build_quick_buttons(tracker: dict) -> list[dict[str, str]]:
+    unit_singular = tracker.get('unit_singular', tracker['unit'])
+    unit_plural = tracker.get('unit_plural', tracker['unit'])
+    return [
+        {
+            'value': quick,
+            'label': _format_quick_label(quick, unit_singular, unit_plural),
+        }
+        for quick in tracker.get('quick_add', [])
+    ]
+
+
+def _build_tracker_cards(entries: Iterable[dict], totals: dict[str, float]) -> list[dict]:
+    grouped_entries = {tracker['key']: [] for tracker in TRACKER_DEFINITIONS}
+    for row in entries:
+        tracker = TRACKER_LOOKUP.get(row['tracker_type'])
+        if not tracker:
+            continue
+        grouped_entries[row['tracker_type']].append({
+            'id': row['id'],
+            'amount_label': _format_entry_amount(tracker, row['amount']),
+            'note': row['note'],
+            'time_label': row['created_at'].strftime('%H:%M') if row['created_at'] else '',
+        })
+
+    tracker_cards = []
+    for tracker in TRACKER_DEFINITIONS:
+        tracker_cards.append({
+            **tracker,
+            'unit_singular': tracker.get('unit_singular', tracker['unit']),
+            'unit_plural': tracker.get('unit_plural', tracker['unit']),
+            'quick_buttons': _build_quick_buttons(tracker),
+            'entries': grouped_entries.get(tracker['key'], []),
+            'total_label': _format_total(tracker, totals.get(tracker['key'])),
+        })
+    return tracker_cards
+
+
+def _fetch_intake_entries(user_id: int, date_str: str) -> list[dict]:
+    rows = execute_query(
+        'SELECT id, tracker_type, amount, unit, note, created_at '
+        'FROM intake_log WHERE user_id = :uid AND record_date = :rd ORDER BY created_at DESC',
+        {'uid': user_id, 'rd': date_str},
+        fetchall=True,
+    )
+    return rows or []
+
+
+def _calculate_tracker_totals(entries: Iterable[dict]) -> dict[str, float]:
+    totals = {tracker['key']: 0.0 for tracker in TRACKER_DEFINITIONS}
+    for row in entries:
+        tracker_key = row.get('tracker_type')
+        if tracker_key in totals:
+            totals[tracker_key] += row.get('amount') or 0
+    return totals
+
+
+def _parse_amount(quick_amount: Optional[str], amount_value: Optional[str]) -> float:
+    try:
+        return float(quick_amount or amount_value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _handle_tracker_post(user_id: int, current_date: str) -> Optional[str]:
+    action = request.form.get('action', 'add_entry')
+    if action == 'delete_entry':
+        entry_id = request.form.get('entry_id')
+        if entry_id:
+            execute_query(
+                'DELETE FROM intake_log WHERE id = :id AND user_id = :uid',
+                {'id': entry_id, 'uid': user_id},
+                commit=True,
+            )
+        return None
+
+    tracker_key = request.form.get('tracker_type')
+    tracker = TRACKER_LOOKUP.get(tracker_key)
+    if not tracker:
+        return 'Tracker non valido.'
+
+    amount = _parse_amount(request.form.get('quick_amount'), request.form.get('amount'))
+    if amount <= 0:
+        return 'Inserisci una quantità valida.'
+
+    note = (request.form.get('note') or '').strip()
+    execute_query(
+        'INSERT INTO intake_log (user_id, record_date, tracker_type, amount, unit, note) '
+        'VALUES (:uid, :rd, :tt, :amt, :unit, :note)',
+        {
+            'uid': user_id,
+            'rd': current_date,
+            'tt': tracker_key,
+            'amt': amount,
+            'unit': tracker['unit'],
+            'note': note or None,
+        },
+        commit=True,
+    )
+    return None
+
+
+def _fetch_diet_log(user_id: int, date_str: str) -> list[dict]:
+    return execute_query(
+        'SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories '
+        'FROM diet_log dl JOIN foods f ON dl.food_id = f.id '
+        'WHERE dl.user_id = :uid AND dl.log_date = :ld',
+        {'uid': user_id, 'ld': date_str},
+        fetchall=True,
+    ) or []
+
+
+def _fetch_food_options(user_id: int) -> list[dict]:
+    raw_food_options = execute_query(
+        """
+        SELECT id, name, user_id IS NULL AS is_global
+        FROM foods
+        WHERE user_id IS NULL OR user_id = :uid
+        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
+                 LOWER(name) ASC,
+                 name ASC
+        """,
+        {'uid': user_id},
+        fetchall=True,
+    ) or []
+    return [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': bool(row['is_global']),
+        }
+        for row in raw_food_options
+    ]
+
+
+def _calculate_diet_totals(entries: Iterable[dict]) -> dict[str, float]:
+    totals = {'protein': 0.0, 'carbs': 0.0, 'fat': 0.0, 'calories': 0.0}
+    for item in entries:
+        totals['protein'] += item.get('protein') or 0
+        totals['carbs'] += item.get('carbs') or 0
+        totals['fat'] += item.get('fat') or 0
+        totals['calories'] += item.get('calories') or 0
+    return totals
+
+
+def _latest_weight(user_id: int) -> float:
+    weight_row = execute_query(
+        'SELECT weight FROM daily_data WHERE user_id = :uid AND weight IS NOT NULL '
+        'ORDER BY record_date DESC LIMIT 1',
+        {'uid': user_id},
+        fetchone=True,
+    )
+    return weight_row['weight'] if weight_row else 0.0
+
+
+def _fetch_macro_targets(user_id: int) -> dict:
+    targets_row = execute_query(
+        'SELECT * FROM user_macro_targets WHERE user_id = :uid',
+        {'uid': user_id},
+        fetchone=True,
+    )
+    return dict(targets_row) if targets_row else DEFAULT_TARGETS.copy()
+
+
+def _calculate_target_macros(weight: float, targets_config: dict) -> dict[str, dict[str, float]]:
+    target_macros = {'on': {'p': 0.0, 'c': 0.0, 'f': 0.0}, 'off': {'p': 0.0, 'c': 0.0, 'f': 0.0}}
+    if weight <= 0:
+        return target_macros
+
+    for phase in ('on', 'off'):
+        target_macros[phase]['p'] = targets_config[f'p_{phase}'] * weight
+        target_macros[phase]['c'] = targets_config[f'c_{phase}'] * weight
+        target_macros[phase]['f'] = targets_config[f'f_{phase}'] * weight
+    return target_macros
+
+
+def _calculate_macro_overview(latest_weight: float, targets: dict) -> dict[str, float]:
+    calcs = {
+        'p_on_g': 0.0,
+        'c_on_g': 0.0,
+        'f_on_g': 0.0,
+        'cal_on': 0.0,
+        'p_off_g': 0.0,
+        'c_off_g': 0.0,
+        'f_off_g': 0.0,
+        'cal_off': 0.0,
+        'weekly_cal': 0.0,
+        'avg_daily_cal': 0.0,
+        'cg_ratio': 0.0,
+    }
+
+    if latest_weight <= 0:
+        return calcs
+
+    calcs['p_on_g'] = targets['p_on'] * latest_weight
+    calcs['c_on_g'] = targets['c_on'] * latest_weight
+    calcs['f_on_g'] = targets['f_on'] * latest_weight
+    calcs['cal_on'] = (calcs['p_on_g'] * 4) + (calcs['c_on_g'] * 4) + (calcs['f_on_g'] * 9)
+
+    calcs['p_off_g'] = targets['p_off'] * latest_weight
+    calcs['c_off_g'] = targets['c_off'] * latest_weight
+    calcs['f_off_g'] = targets['f_off'] * latest_weight
+    calcs['cal_off'] = (calcs['p_off_g'] * 4) + (calcs['c_off_g'] * 4) + (calcs['f_off_g'] * 9)
+
+    calcs['weekly_cal'] = (calcs['cal_on'] * targets['days_on']) + (calcs['cal_off'] * targets['days_off'])
+    if targets['days_on'] + targets['days_off'] > 0:
+        calcs['avg_daily_cal'] = calcs['weekly_cal'] / 7
+
+    weekly_carbs = (calcs['c_on_g'] * targets['days_on']) + (calcs['c_off_g'] * targets['days_off'])
+    weekly_fat = (calcs['f_on_g'] * targets['days_on']) + (calcs['f_off_g'] * targets['days_off'])
+    if weekly_fat > 0:
+        calcs['cg_ratio'] = weekly_carbs / weekly_fat
+
+    return calcs
+
 def update_daily_totals(user_id, date_str):
     totals_query = """
-        SELECT SUM(protein) as p, SUM(carbs) as c, SUM(fat) as f, SUM(calories) as cal 
+        SELECT SUM(protein) as p, SUM(carbs) as c, SUM(fat) as f, SUM(calories) as cal
         FROM diet_log WHERE user_id = :user_id AND log_date = :date_str
     """
     totals = execute_query(totals_query, {'user_id': user_id, 'date_str': date_str}, fetchone=True)
     
-    total_protein = totals['p'] or 0; total_carbs = totals['c'] or 0
-    total_fat = totals['f'] or 0; total_calories = totals['cal'] or 0
+    total_protein = totals.get('p') or 0
+    total_carbs = totals.get('c') or 0
+    total_fat = totals.get('f') or 0
+    total_calories = totals.get('cal') or 0
     
     upsert_query = """
         INSERT INTO daily_data (user_id, record_date, total_protein, total_carbs, total_fat, calories) 
@@ -175,6 +416,69 @@ def update_daily_totals(user_id, date_str):
         total_fat = EXCLUDED.total_fat, calories = EXCLUDED.calories
     """
     execute_query(upsert_query, {'user_id': user_id, 'date_str': date_str, 'tp': total_protein, 'tc': total_carbs, 'tf': total_fat, 'cal': total_calories}, commit=True)
+
+
+def _handle_dieta_post(user_id: int, current_date_str: str) -> tuple[Optional[str], Optional[str]]:
+    action = request.form.get('action')
+
+    if action == 'add_food':
+        food_data = resolve_catalog_item(
+            'foods',
+            user_id,
+            entry_id=request.form.get('food_id'),
+            name=request.form.get('food_name'),
+        )
+        try:
+            weight = float(request.form.get('weight', 0))
+        except (ValueError, TypeError):
+            weight = 0
+
+        if not (food_data and weight > 0):
+            return 'danger', "Seleziona un alimento valido dall'archivio e inserisci un peso maggiore di zero."
+
+        factor = weight / food_data['ref_weight']
+        protein = food_data['protein'] * factor
+        carbs = food_data['carbs'] * factor
+        fat = food_data['fat'] * factor
+        calories = (protein * 4) + (carbs * 4) + (fat * 9)
+        execute_query(
+            'INSERT INTO diet_log (user_id, food_id, weight, protein, carbs, fat, calories, log_date) '
+            'VALUES (:uid, :fid, :w, :p, :c, :f, :cal, :ld)',
+            {
+                'uid': user_id,
+                'fid': food_data['id'],
+                'w': weight,
+                'p': protein,
+                'c': carbs,
+                'f': fat,
+                'cal': calories,
+                'ld': current_date_str,
+            },
+            commit=True,
+        )
+        update_daily_totals(user_id, current_date_str)
+        return None, None
+
+    if action == 'delete_entry':
+        entry_id = request.form.get('entry_id')
+        execute_query(
+            'DELETE FROM diet_log WHERE id = :id AND user_id = :uid',
+            {'id': entry_id, 'uid': user_id},
+            commit=True,
+        )
+        update_daily_totals(user_id, current_date_str)
+        return None, None
+
+    if action == 'set_day_type':
+        day_type = request.form.get('day_type')
+        query = """
+            INSERT INTO daily_data (user_id, record_date, day_type) VALUES (:uid, :rd, :dt)
+            ON CONFLICT(user_id, record_date) DO UPDATE SET day_type = EXCLUDED.day_type
+        """
+        execute_query(query, {'uid': user_id, 'rd': current_date_str, 'dt': day_type}, commit=True)
+        return None, None
+
+    return None, None
 
 @nutrition_bp.route('/alimentazione')
 @login_required
@@ -188,110 +492,17 @@ def alimentazione():
 def tracking(date_str):
     user_id = session['user_id']
     ensure_intake_log_table()
-    if date_str:
-        try:
-            current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return redirect(url_for('nutrition.tracking'))
-    else:
-        current_date = date.today()
-
-    current_date_str = current_date.strftime('%Y-%m-%d')
-    prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
-    next_day = (current_date + timedelta(days=1)).strftime('%Y-%m-%d')
-    is_today = current_date == date.today()
+    current_date, current_date_str, prev_day, next_day, is_today = _parse_date_or_today(date_str)
 
     if request.method == 'POST':
-        action = request.form.get('action', 'add_entry')
-        if action == 'delete_entry':
-            entry_id = request.form.get('entry_id')
-            if entry_id:
-                execute_query(
-                    'DELETE FROM intake_log WHERE id = :id AND user_id = :uid',
-                    {'id': entry_id, 'uid': user_id},
-                    commit=True,
-                )
-        else:
-            tracker_key = request.form.get('tracker_type')
-            tracker = TRACKER_LOOKUP.get(tracker_key)
-            if not tracker:
-                flash('Tracker non valido.', 'danger')
-                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
-
-            quick_amount = request.form.get('quick_amount')
-            amount_value = request.form.get('amount')
-            try:
-                amount = float(quick_amount or amount_value or 0)
-            except (ValueError, TypeError):
-                amount = 0
-
-            if amount <= 0:
-                flash('Inserisci una quantità valida.', 'danger')
-                return redirect(url_for('nutrition.tracking', date_str=current_date_str))
-
-            note = (request.form.get('note') or '').strip()
-            execute_query(
-                'INSERT INTO intake_log (user_id, record_date, tracker_type, amount, unit, note) VALUES (:uid, :rd, :tt, :amt, :unit, :note)',
-                {
-                    'uid': user_id,
-                    'rd': current_date_str,
-                    'tt': tracker_key,
-                    'amt': amount,
-                    'unit': tracker['unit'],
-                    'note': note or None,
-                },
-                commit=True,
-            )
-
+        error = _handle_tracker_post(user_id, current_date_str)
+        if error:
+            flash(error, 'danger')
         return redirect(url_for('nutrition.tracking', date_str=current_date_str))
 
-    rows = execute_query(
-        'SELECT id, tracker_type, amount, unit, note, created_at FROM intake_log WHERE user_id = :uid AND record_date = :rd ORDER BY created_at DESC',
-        {'uid': user_id, 'rd': current_date_str},
-        fetchall=True,
-    ) or []
-
-    totals = {tracker['key']: 0 for tracker in TRACKER_DEFINITIONS}
-    grouped_entries = {tracker['key']: [] for tracker in TRACKER_DEFINITIONS}
-
-    for row in rows:
-        tracker = TRACKER_LOOKUP.get(row['tracker_type'])
-        if not tracker:
-            continue
-        totals[row['tracker_type']] += row['amount']
-        created_at = row['created_at']
-        time_label = created_at.strftime('%H:%M') if created_at else ''
-        grouped_entries[row['tracker_type']].append(
-            {
-                'id': row['id'],
-                'amount_label': _format_entry_amount(tracker, row['amount']),
-                'note': row['note'],
-                'time_label': time_label,
-            }
-        )
-
-    tracker_cards = []
-    for tracker in TRACKER_DEFINITIONS:
-        unit_singular = tracker.get('unit_singular', tracker['unit'])
-        unit_plural = tracker.get('unit_plural', tracker['unit'])
-        quick_buttons = [
-            {
-                'value': quick,
-                'label': _format_quick_label(quick, unit_singular, unit_plural),
-            }
-            for quick in tracker.get('quick_add', [])
-        ]
-
-        tracker_cards.append(
-            {
-                **tracker,
-                'unit_singular': unit_singular,
-                'unit_plural': unit_plural,
-                'quick_buttons': quick_buttons,
-                'entries': grouped_entries.get(tracker['key'], []),
-                'total_label': _format_total(tracker, totals.get(tracker['key'])),
-            }
-        )
+    rows = _fetch_intake_entries(user_id, current_date_str)
+    totals = _calculate_tracker_totals(rows)
+    tracker_cards = _build_tracker_cards(rows, totals)
 
     return render_template(
         'tracking.html',
@@ -323,89 +534,24 @@ def diario_alimentare():
 @login_required
 def dieta(date_str):
     user_id = session['user_id']
-    if date_str:
-        try: current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError: return redirect(url_for('nutrition.dieta'))
-    else: current_date = date.today()
-        
-    current_date_str = current_date.strftime('%Y-%m-%d'); prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
-    next_day = (current_date + timedelta(days=1)).strftime('%Y-%m-%d'); is_today = (current_date == date.today())
-    
+    current_date, current_date_str, prev_day, next_day, is_today = _parse_date_or_today(date_str)
+
     if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'add_food':
-            food_data = resolve_catalog_item(
-                'foods',
-                user_id,
-                entry_id=request.form.get('food_id'),
-                name=request.form.get('food_name'),
-            )
-            try: weight = float(request.form.get('weight', 0))
-            except (ValueError, TypeError): weight = 0
-
-            if food_data and weight > 0:
-                factor = weight / food_data['ref_weight']
-                protein = food_data['protein'] * factor; carbs = food_data['carbs'] * factor; fat = food_data['fat'] * factor
-                calories = (protein * 4) + (carbs * 4) + (fat * 9)
-                execute_query('INSERT INTO diet_log (user_id, food_id, weight, protein, carbs, fat, calories, log_date) VALUES (:uid, :fid, :w, :p, :c, :f, :cal, :ld)',
-                              {'uid': user_id, 'fid': food_data['id'], 'w': weight, 'p': protein, 'c': carbs, 'f': fat, 'cal': calories, 'ld': current_date_str}, commit=True)
-                update_daily_totals(user_id, current_date_str)
-            else:
-                flash('Seleziona un alimento valido dall\'archivio e inserisci un peso maggiore di zero.', 'danger')
-
-        elif action == 'delete_entry':
-            entry_id = request.form.get('entry_id')
-            execute_query('DELETE FROM diet_log WHERE id = :id AND user_id = :uid', {'id': entry_id, 'uid': user_id}, commit=True)
-            update_daily_totals(user_id, current_date_str)
-        
-        elif action == 'set_day_type':
-            day_type = request.form.get('day_type')
-            query = """
-                INSERT INTO daily_data (user_id, record_date, day_type) VALUES (:uid, :rd, :dt)
-                ON CONFLICT(user_id, record_date) DO UPDATE SET day_type = EXCLUDED.day_type
-            """
-            execute_query(query, {'uid': user_id, 'rd': current_date_str, 'dt': day_type}, commit=True)
-        
+        category, message = _handle_dieta_post(user_id, current_date_str)
+        if message:
+            flash(message, category or 'info')
         return redirect(url_for('nutrition.dieta', date_str=current_date_str))
 
-    diet_log = execute_query('SELECT dl.id, f.name as food_name, f.user_id, dl.weight, dl.protein, dl.carbs, dl.fat, dl.calories FROM diet_log dl JOIN foods f ON dl.food_id = f.id WHERE dl.user_id = :uid AND dl.log_date = :ld',
-                             {'uid': user_id, 'ld': current_date_str}, fetchall=True)
+    diet_log = _fetch_diet_log(user_id, current_date_str)
+    food_options = _fetch_food_options(user_id)
+    totals = _calculate_diet_totals(diet_log)
+    targets_config = _fetch_macro_targets(user_id)
+    latest_weight = _latest_weight(user_id)
+    target_macros = _calculate_target_macros(latest_weight, targets_config)
 
-    raw_food_options = execute_query(
-        """
-        SELECT id, name, user_id IS NULL AS is_global
-        FROM foods
-        WHERE user_id IS NULL OR user_id = :uid
-        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
-                 LOWER(name) ASC,
-                 name ASC
-        """,
-        {'uid': user_id},
-        fetchall=True,
-    ) or []
-
-    food_options = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': bool(row['is_global']),
-        }
-        for row in raw_food_options
-    ]
-    
-    totals = {'protein': sum(item['protein'] for item in diet_log), 'carbs': sum(item['carbs'] for item in diet_log), 'fat': sum(item['fat'] for item in diet_log), 'calories': sum(item['calories'] for item in diet_log)}
-    targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
-    targets_config = dict(targets_row) if targets_row else {'p_on': 1.8, 'c_on': 5.0, 'f_on': 0.55, 'p_off': 1.8, 'c_off': 3.0, 'f_off': 0.70}
-    latest_weight_data = execute_query('SELECT weight FROM daily_data WHERE user_id = :uid AND weight IS NOT NULL ORDER BY record_date DESC LIMIT 1', {'uid': user_id}, fetchone=True)
-    latest_weight = latest_weight_data['weight'] if latest_weight_data else 0
-    target_macros = {'on': {'p': 0, 'c': 0, 'f': 0}, 'off': {'p': 0, 'c': 0, 'f': 0}}
-    if latest_weight > 0:
-        target_macros['on']['p'] = targets_config['p_on'] * latest_weight; target_macros['on']['c'] = targets_config['c_on'] * latest_weight; target_macros['on']['f'] = targets_config['f_on'] * latest_weight
-        target_macros['off']['p'] = targets_config['p_off'] * latest_weight; target_macros['off']['c'] = targets_config['c_off'] * latest_weight; target_macros['off']['f'] = targets_config['f_off'] * latest_weight
-    
     today_data = execute_query('SELECT day_type FROM daily_data WHERE user_id = :uid AND record_date = :rd', {'uid': user_id, 'rd': current_date_str}, fetchone=True)
     current_day_type = today_data['day_type'] if today_data and today_data.get('day_type') else 'ON'
-    
+
     return render_template(
         'dieta.html',
         title='Dieta',
@@ -502,15 +648,15 @@ def alimenti():
 @login_required
 def macros():
     user_id = session['user_id']
-    latest_weight_data = execute_query('SELECT weight FROM daily_data WHERE user_id = :uid AND weight IS NOT NULL ORDER BY record_date DESC LIMIT 1', {'uid': user_id}, fetchone=True)
-    latest_weight = latest_weight_data['weight'] if latest_weight_data else 0
+    latest_weight = _latest_weight(user_id)
     if request.method == 'POST':
         try:
-            days_on = int(request.form.get('days_on') or 0); days_off = int(request.form.get('days_off') or 0)
+            days_on = int(request.form.get('days_on') or 0)
+            days_off = int(request.form.get('days_off') or 0)
             if days_on + days_off > 7:
                 flash('La somma dei giorni ON e OFF non può superare 7.', 'danger')
                 return redirect(url_for('nutrition.macros'))
-            
+
             query = """
                 INSERT INTO user_macro_targets (user_id, days_on, days_off, p_on, c_on, f_on, p_off, c_off, f_off) 
                 VALUES (:uid, :d_on, :d_off, :p_on, :c_on, :f_on, :p_off, :c_off, :f_off) 
@@ -519,9 +665,15 @@ def macros():
                 f_on=excluded.f_on, p_off=excluded.p_off, c_off=excluded.c_off, f_off=excluded.f_off
             """
             params = {
-                'uid': user_id, 'd_on': days_on, 'd_off': days_off,
-                'p_on': float(request.form.get('p_on') or 1.8), 'c_on': float(request.form.get('c_on') or 5.0), 'f_on': float(request.form.get('f_on') or 0.55),
-                'p_off': float(request.form.get('p_off') or 1.8), 'c_off': float(request.form.get('c_off') or 3.0), 'f_off': float(request.form.get('f_off') or 0.70)
+                'uid': user_id,
+                'd_on': days_on,
+                'd_off': days_off,
+                'p_on': float(request.form.get('p_on') or DEFAULT_TARGETS['p_on']),
+                'c_on': float(request.form.get('c_on') or DEFAULT_TARGETS['c_on']),
+                'f_on': float(request.form.get('f_on') or DEFAULT_TARGETS['f_on']),
+                'p_off': float(request.form.get('p_off') or DEFAULT_TARGETS['p_off']),
+                'c_off': float(request.form.get('c_off') or DEFAULT_TARGETS['c_off']),
+                'f_off': float(request.form.get('f_off') or DEFAULT_TARGETS['f_off']),
             }
             execute_query(query, params, commit=True)
             flash('Obiettivi macro salvati con successo.', 'success')
@@ -529,32 +681,8 @@ def macros():
         except (ValueError, TypeError):
             flash('Assicurati di inserire valori numerici validi.', 'danger')
             return redirect(url_for('nutrition.macros'))
-            
-    targets_row = execute_query('SELECT * FROM user_macro_targets WHERE user_id = :uid', {'uid': user_id}, fetchone=True)
-    targets = dict(targets_row) if targets_row else {'days_on': 3, 'days_off': 4, 'p_on': 1.8, 'c_on': 5.0, 'f_on': 0.55, 'p_off': 1.8, 'c_off': 3.0, 'f_off': 0.70}
-    
-    calcs = {
-        'p_on_g': 0, 'c_on_g': 0, 'f_on_g': 0, 'cal_on': 0,
-        'p_off_g': 0, 'c_off_g': 0, 'f_off_g': 0, 'cal_off': 0,
-        'weekly_cal': 0, 'avg_daily_cal': 0, 'cg_ratio': 0
-    }
 
-    if latest_weight > 0:
-        calcs['p_on_g'] = targets['p_on'] * latest_weight
-        calcs['c_on_g'] = targets['c_on'] * latest_weight
-        calcs['f_on_g'] = targets['f_on'] * latest_weight
-        calcs['cal_on'] = (calcs['p_on_g'] * 4) + (calcs['c_on_g'] * 4) + (calcs['f_on_g'] * 9)
-        calcs['p_off_g'] = targets['p_off'] * latest_weight
-        calcs['c_off_g'] = targets['c_off'] * latest_weight
-        calcs['f_off_g'] = targets['f_off'] * latest_weight
-        calcs['cal_off'] = (calcs['p_off_g'] * 4) + (calcs['c_off_g'] * 4) + (calcs['f_off_g'] * 9)
-        calcs['weekly_cal'] = (calcs['cal_on'] * targets['days_on']) + (calcs['cal_off'] * targets['days_off'])
-        total_days = targets['days_on'] + targets['days_off']
-        if total_days > 0:
-            calcs['avg_daily_cal'] = calcs['weekly_cal'] / 7
-        weekly_carbs = (calcs['c_on_g'] * targets['days_on']) + (calcs['c_off_g'] * targets['days_off'])
-        weekly_fat = (calcs['f_on_g'] * targets['days_on']) + (calcs['f_off_g'] * targets['days_off'])
-        if weekly_fat > 0:
-            calcs['cg_ratio'] = weekly_carbs / weekly_fat
-    
+    targets = _fetch_macro_targets(user_id)
+    calcs = _calculate_macro_overview(latest_weight, targets)
+
     return render_template('macros.html', title='Macros', targets=targets, latest_weight=latest_weight, calcs=calcs)

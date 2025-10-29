@@ -154,9 +154,7 @@
             };
 
             const handleFocus = () => {
-                if ((this.input.value || '').trim()) {
-                    this.requestSuggestions();
-                }
+                this.requestSuggestions({allowEmpty: true});
             };
 
             const handleKeydown = (event) => {
@@ -224,7 +222,7 @@
 
                     this.input.classList.add('is-invalid');
                     this.input.setAttribute('aria-invalid', 'true');
-                    this.requestSuggestions();
+                    this.requestSuggestions({allowEmpty: true});
                     event.preventDefault();
                     event.stopPropagation();
                 };
@@ -394,12 +392,51 @@
             this.hideSuggestions();
         }
 
-        requestSuggestions() {
+        requestSuggestions(options = {}) {
+            const allowEmpty = Boolean(options.allowEmpty);
             const term = this.input.value || '';
             const normalized = safeNormalize(term);
 
             if (!term.trim()) {
                 this.setHiddenSelection(null);
+                if (allowEmpty) {
+                    if (this.localCatalog.list.length) {
+                        this.renderSuggestions(this.localCatalog.list);
+                        return;
+                    }
+
+                    if (this.remoteCatalog.list.length) {
+                        this.renderSuggestions(this.remoteCatalog.list);
+                        return;
+                    }
+
+                    if (this.remoteFetcher) {
+                        this.remoteFetcher('').then((result) => {
+                            if (!result || typeof result !== 'object') {
+                                this.hideSuggestions();
+                                return;
+                            }
+
+                            const {list, exact, token} = result;
+                            if (token && token < this.latestToken) {
+                                return;
+                            }
+
+                            this.latestToken = token || this.latestToken;
+                            this.remoteCatalog = {
+                                list: Array.isArray(list) ? list : [],
+                                exact: exact instanceof Map ? exact : new Map(),
+                            };
+
+                            this.renderSuggestions(this.remoteCatalog.list);
+                        });
+                        return;
+                    }
+
+                    this.hideSuggestions();
+                    return;
+                }
+
                 this.hideSuggestions();
                 return;
             }
