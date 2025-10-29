@@ -6,7 +6,7 @@ from utils import execute_query
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from extensions import db
-from services.suggestion_service import get_catalog_suggestions
+from services.suggestion_service import get_catalog_suggestions, resolve_catalog_item
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -334,29 +334,12 @@ def dieta(date_str):
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_food':
-            food_id_raw = request.form.get('food_id')
-            food_data = None
-
-            if food_id_raw:
-                try:
-                    food_id = int(food_id_raw)
-                except (TypeError, ValueError):
-                    food_id = None
-                else:
-                    food_data = execute_query(
-                        'SELECT * FROM foods WHERE id = :id AND (user_id IS NULL OR user_id = :uid)',
-                        {'id': food_id, 'uid': user_id},
-                        fetchone=True,
-                    )
-
-            if not food_data:
-                food_name = request.form.get('food_name')
-                if food_name:
-                    food_data = execute_query(
-                        'SELECT * FROM foods WHERE LOWER(name) = LOWER(:name) AND (user_id IS NULL OR user_id = :uid)',
-                        {'name': food_name, 'uid': user_id},
-                        fetchone=True,
-                    )
+            food_data = resolve_catalog_item(
+                'foods',
+                user_id,
+                entry_id=request.form.get('food_id'),
+                name=request.form.get('food_name'),
+            )
             try: weight = float(request.form.get('weight', 0))
             except (ValueError, TypeError): weight = 0
 
