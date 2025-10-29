@@ -2,22 +2,78 @@
     'use strict';
 
     const DEFAULT_LIMIT = 8;
-    const DEFAULT_DELAY = 150;
+    const DEFAULT_DELAY = 160;
+
+    const KEY_ENTER = 'Enter';
+    const KEY_ESCAPE = 'Escape';
+    const KEY_ARROW_UP = 'ArrowUp';
+    const KEY_ARROW_DOWN = 'ArrowDown';
 
     const normalizeText = (text) => {
         if (!text) {
             return '';
         }
+
         try {
-            return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            return text
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
         } catch (error) {
             return String(text).toLowerCase();
         }
     };
 
-    const generateElementId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+    const sanitizeItem = (raw) => {
+        if (!raw || typeof raw.name !== 'string' || raw.id === undefined || raw.id === null) {
+            return null;
+        }
+
+        const trimmedName = raw.name.trim();
+        if (!trimmedName) {
+            return null;
+        }
+
+        const normalized = normalizeText(trimmedName);
+        if (!normalized) {
+            return null;
+        }
+
+        return {
+            id: raw.id,
+            name: trimmedName,
+            is_global: Boolean(raw.is_global),
+            normalized,
+        };
+    };
+
+    const prepareLocalItems = (items) => {
+        if (!Array.isArray(items)) {
+            return {list: [], exact: new Map()};
+        }
+
+        const list = [];
+        const exact = new Map();
+
+        items.forEach((raw) => {
+            const item = sanitizeItem(raw);
+            if (!item) {
+                return;
+            }
+            list.push(item);
+            if (!exact.has(item.normalized)) {
+                exact.set(item.normalized, item);
+            }
+        });
+
+        return {list, exact};
+    };
 
     const createRemoteFetcher = (endpoint, limit, delay) => {
+        if (!endpoint) {
+            return null;
+        }
+
         let timerId = null;
 
         return (term) => new Promise((resolve) => {
@@ -39,45 +95,30 @@
                     .then((response) => (response.ok ? response.json() : {results: []}))
                     .then((payload) => {
                         const results = Array.isArray(payload.results) ? payload.results : [];
-                        resolve(results.slice(0, limit));
+                        const sanitized = results
+                            .map((item) => sanitizeItem(item))
+                            .filter(Boolean)
+                            .slice(0, limit);
+                        resolve(sanitized);
                     })
                     .catch(() => resolve([]));
             }, delay);
         });
     };
 
-    const createLocalSource = (items, limit) => {
-        if (!Array.isArray(items) || !items.length) {
+    const buildLocalMatcher = (items, limit) => {
+        const {list, exact} = prepareLocalItems(items);
+        if (!list.length) {
             return null;
         }
 
-        const indexed = items
-            .filter((item) => item && typeof item.name === 'string' && item.id !== undefined)
-            .map((item) => ({
-                id: item.id,
-                name: item.name,
-                is_global: Boolean(item.is_global),
-                normalized: normalizeText(item.name),
-            }));
-
-        if (!indexed.length) {
-            return null;
-        }
-
-        const exactMap = new Map();
-        indexed.forEach((item) => {
-            if (!exactMap.has(item.normalized)) {
-                exactMap.set(item.normalized, item);
-            }
-        });
-
-        const request = (term) => {
+        const match = (term) => {
             const normalizedTerm = normalizeText(term);
             if (!normalizedTerm) {
-                return Promise.resolve([]);
+                return [];
             }
 
-            const matches = indexed
+            return list
                 .map((item) => {
                     const index = item.normalized.indexOf(normalizedTerm);
                     return index === -1 ? null : {item, index};
@@ -96,36 +137,15 @@
                 })
                 .slice(0, limit)
                 .map((entry) => entry.item);
-
-            return Promise.resolve(matches);
         };
 
         return {
-            type: 'local',
-            request,
-            exactLookup: (normalizedName) => exactMap.get(normalizedName) || null,
+            match,
+            exact,
         };
     };
 
-    const createRemoteSource = (endpoint, limit, delay) => {
-        if (!endpoint) {
-            return null;
-        }
-
-        const fetcher = createRemoteFetcher(endpoint, limit, delay);
-
-        return {
-            type: 'remote',
-            request: (term) => fetcher(term).then((results) =>
-                (Array.isArray(results) ? results : []).map((item) => ({
-                    id: item.id,
-                    name: item.name,
-                    is_global: Boolean(item.is_global),
-                    normalized: normalizeText(item.name),
-                }))),
-            exactLookup: () => null,
-        };
-    };
+    const generateElementId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
     const setupField = ({
         input,
@@ -142,11 +162,10 @@
             return null;
         }
 
-        const source =
-            createLocalSource(items, limit) ||
-            createRemoteSource(endpoint, limit, delay);
+        const localSource = buildLocalMatcher(items, limit);
+        const remoteFetcher = localSource ? null : createRemoteFetcher(endpoint, limit, delay);
 
-        if (!source) {
+        if (!localSource && !remoteFetcher) {
             return null;
         }
 
@@ -165,7 +184,13 @@
             requestToken: 0,
         };
 
-        const root = container.closest('.suggestions-container') || container.parentElement || input.parentElement || container;
+        const exactMap = localSource ? new Map(localSource.exact) : new Map();
+
+        const root =
+            container.closest('.suggestions-container') ||
+            container.parentElement ||
+            input.parentElement ||
+            container;
 
         const clearInvalidState = () => {
             input.classList.remove('is-invalid');
@@ -175,6 +200,7 @@
         const hideSuggestions = () => {
             container.classList.remove('is-visible', 'suggestions-list-up');
             container.style.display = 'none';
+            container.style.visibility = 'hidden';
             container.removeAttribute('aria-expanded');
             input.removeAttribute('aria-expanded');
             container.innerHTML = '';
@@ -229,7 +255,7 @@
                     maxHeight = parsed;
                 }
             } catch (error) {
-                // ignore
+                // ignore style inspection errors
             }
 
             const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -252,6 +278,7 @@
             input.value = item.name;
             hiddenInput.value = item.id;
             hiddenInput.dataset.selectedTerm = item.normalized;
+            exactMap.set(item.normalized, item);
             clearInvalidState();
             hideSuggestions();
         };
@@ -268,10 +295,11 @@
             container.innerHTML = '';
 
             state.matches.forEach((item, index) => {
-                const option = document.createElement('div');
+                const option = document.createElement('button');
+                option.type = 'button';
                 option.className = 'suggestion-item';
                 option.setAttribute('role', 'option');
-                option.tabIndex = -1;
+                option.dataset.index = index;
 
                 const label = document.createElement('span');
                 label.textContent = item.name;
@@ -285,32 +313,26 @@
                     option.appendChild(icon);
                 }
 
-                option.addEventListener('mousedown', (event) => {
-                    event.preventDefault();
-                    selectItem(item);
-                });
-
-                option.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    selectItem(item);
-                });
-
-                option.addEventListener('mouseenter', () => {
-                    state.activeIndex = index;
-                    clearActiveClasses();
-                    option.classList.add('active');
-                    option.setAttribute('aria-selected', 'true');
-                });
-
                 container.appendChild(option);
+
+                option.addEventListener('mouseenter', () => setActiveIndex(index));
+                option.addEventListener('focus', () => setActiveIndex(index));
             });
 
             container.style.display = 'block';
+            container.style.visibility = 'visible';
             container.classList.add('is-visible');
             container.setAttribute('aria-expanded', 'true');
             input.setAttribute('aria-expanded', 'true');
             container.scrollTop = 0;
             updateOrientation();
+        };
+
+        const resolveLocalExact = (term) => {
+            if (!term) {
+                return null;
+            }
+            return exactMap.get(normalizeText(term)) || null;
         };
 
         const requestSuggestions = () => {
@@ -328,20 +350,41 @@
                 return;
             }
 
+            const handleResults = (results, token) => {
+                if (token !== state.requestToken) {
+                    return;
+                }
+                const validResults = (Array.isArray(results) ? results : [])
+                    .map((item) => sanitizeItem(item))
+                    .filter(Boolean)
+                    .slice(0, limit);
+
+                validResults.forEach((item) => {
+                    exactMap.set(item.normalized, item);
+                });
+
+                renderSuggestions(validResults);
+            };
+
             const token = ++state.requestToken;
-            source
-                .request(term)
-                .then((results) => {
-                    if (token !== state.requestToken) {
-                        return;
-                    }
-                    renderSuggestions(results.slice(0, limit));
-                })
+
+            if (localSource) {
+                const results = localSource.match(term);
+                handleResults(results, token);
+                return;
+            }
+
+            if (!remoteFetcher) {
+                hideSuggestions();
+                return;
+            }
+
+            remoteFetcher(term)
+                .then((results) => handleResults(results, token))
                 .catch(() => {
-                    if (token !== state.requestToken) {
-                        return;
+                    if (token === state.requestToken) {
+                        hideSuggestions();
                     }
-                    hideSuggestions();
                 });
         };
 
@@ -349,7 +392,11 @@
             if (!state.matches.length) {
                 return;
             }
-            setActiveIndex(state.activeIndex === -1 ? (direction > 0 ? 0 : state.matches.length - 1) : state.activeIndex + direction);
+            if (state.activeIndex === -1) {
+                setActiveIndex(direction > 0 ? 0 : state.matches.length - 1);
+            } else {
+                setActiveIndex(state.activeIndex + direction);
+            }
         };
 
         const handleInput = () => {
@@ -358,24 +405,24 @@
         };
 
         const handleKeydown = (event) => {
-            if (event.key === 'ArrowDown') {
+            if (event.key === KEY_ARROW_DOWN) {
                 event.preventDefault();
                 moveActive(1);
                 return;
             }
-            if (event.key === 'ArrowUp') {
+            if (event.key === KEY_ARROW_UP) {
                 event.preventDefault();
                 moveActive(-1);
                 return;
             }
-            if (event.key === 'Enter') {
+            if (event.key === KEY_ENTER) {
                 if (state.activeIndex >= 0 && state.matches[state.activeIndex]) {
                     event.preventDefault();
                     selectItem(state.matches[state.activeIndex]);
                 }
                 return;
             }
-            if (event.key === 'Escape') {
+            if (event.key === KEY_ESCAPE) {
                 hideSuggestions();
             }
         };
@@ -384,6 +431,19 @@
             if (input.value.trim()) {
                 requestSuggestions();
             }
+        };
+
+        const handleContainerClick = (event) => {
+            const target = event.target.closest('.suggestion-item');
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            const index = Number.parseInt(target.dataset.index, 10);
+            if (Number.isNaN(index) || !state.matches[index]) {
+                return;
+            }
+            selectItem(state.matches[index]);
         };
 
         const handleSubmit = (event) => {
@@ -406,12 +466,10 @@
                 return;
             }
 
-            if (typeof source.exactLookup === 'function') {
-                const exact = source.exactLookup(normalizedTerm);
-                if (exact) {
-                    selectItem(exact);
-                    return;
-                }
+            const exact = resolveLocalExact(term);
+            if (exact) {
+                selectItem(exact);
+                return;
             }
 
             input.classList.add('is-invalid');
@@ -432,11 +490,15 @@
         input.addEventListener('input', handleInput);
         input.addEventListener('keydown', handleKeydown);
         input.addEventListener('focus', handleFocus);
+        container.addEventListener('mousedown', handleContainerClick);
+        container.addEventListener('click', handleContainerClick);
 
         cleanupFns.push(() => {
             input.removeEventListener('input', handleInput);
             input.removeEventListener('keydown', handleKeydown);
             input.removeEventListener('focus', handleFocus);
+            container.removeEventListener('mousedown', handleContainerClick);
+            container.removeEventListener('click', handleContainerClick);
         });
 
         if (form) {
