@@ -448,29 +448,8 @@ def scheda():
         )
         template_dict['exercises'] = [dict(row) for row in exercises]
         templates.append(template_dict)
-    raw_exercise_options = execute_query(
-        """
-        SELECT id, name, user_id IS NULL AS is_global
-        FROM exercises
-        WHERE user_id IS NULL OR user_id = :uid
-        ORDER BY CASE WHEN user_id IS NULL THEN 0 ELSE 1 END,
-                 LOWER(name) ASC,
-                 name ASC
-        """,
-        {'uid': user_id},
-        fetchall=True,
-    ) or []
-
-    exercise_options = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': bool(row['is_global']),
-        }
-        for row in raw_exercise_options
-    ]
-
-    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, is_superuser=is_superuser, exercise_options=exercise_options)
+    
+    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, is_superuser=is_superuser)
 
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required

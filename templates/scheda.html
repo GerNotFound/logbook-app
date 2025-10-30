@@ -203,14 +203,12 @@
         const initializeSuggestions = (suggestionsModule) => {
             if (!suggestionsModule) return;
             
-            const exerciseOptions = {{ exercise_options|tojson|safe }};
-
             const suggestionInstance = suggestionsModule.initField({
                 input: addExerciseForm.querySelector('.exercise-search-input'),
                 hiddenInput: addExerciseForm.querySelector('.exercise-id-input'),
                 container: addExerciseForm.querySelector('.suggestions-list'),
                 form: addExerciseForm,
-                items: exerciseOptions,
+                endpoint: "{{ url_for('gym.suggest_exercises') }}",
                 globalIconLabel: 'Esercizio globale'
             });
 
