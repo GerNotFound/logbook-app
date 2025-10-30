@@ -112,7 +112,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-custom w-100 m-0">SALVA</button>
+                    <button type="button" id="save-exercise-btn" class="btn btn-custom w-100 m-0">SALVA</button>
                 </div>
             </form>
         </div>
@@ -145,7 +145,7 @@
             <td>${exercise.sets}</td>
             <td class="text-center">
                 <form method="POST" action="{{ url_for('gym.scheda') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="csrf_token" value="${csrf_token}">
                     <input type="hidden" name="action" value="delete_template_exercise">
                     <input type="hidden" name="template_id" value="${templateId}">
                     <input type="hidden" name="template_exercise_id" value="${exercise.id}">
@@ -162,43 +162,9 @@
         form.querySelector('input[name="exercise_name"]').focus();
     }
 
-    function initializePage() {
+    function initializeSuggestions(suggestionsModule) {
         const addExerciseForm = document.getElementById('add-exercise-modal-form');
         const addExerciseModal = document.getElementById('addExerciseModal');
-
-        addExerciseForm.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            submitButton.disabled = true;
-            submitButton.textContent = 'Salvataggio...';
-
-            try {
-                const response = await fetch("{{ url_for('gym.aggiungi_esercizio_ajax') }}", {
-                    method: 'POST',
-                    body: new FormData(this)
-                });
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    onAddExerciseSuccess(data);
-                } else {
-                    alert(data.error || 'Si è verificato un errore.');
-                }
-            } catch (error) {
-                alert('Errore di rete. Riprova.');
-            } finally {
-                submitButton.disabled = false;
-                submitButton.textContent = originalText;
-            }
-        });
-
-        const suggestionsModule = window.LogbookCatalogSuggestions;
-        if (!suggestionsModule) {
-            console.error("Modulo suggerimenti non trovato!");
-            return;
-        }
 
         const suggestionInstance = suggestionsModule.initField({
             input: addExerciseForm.querySelector('.exercise-search-input'),
@@ -245,8 +211,45 @@
         }
     }
 
-    // Esegui l'inizializzazione solo dopo che tutto è caricato.
-    // L'evento 'load' è più sicuro di 'DOMContentLoaded' per gli script caricati con 'defer'.
+    function initializePage() {
+        const saveButton = document.getElementById('save-exercise-btn');
+        const addExerciseForm = document.getElementById('add-exercise-modal-form');
+
+        saveButton.addEventListener('click', async function() {
+            const originalText = this.textContent;
+            this.disabled = true;
+            this.textContent = 'Salvataggio...';
+
+            try {
+                const response = await fetch("{{ url_for('gym.aggiungi_esercizio_ajax') }}", {
+                    method: 'POST',
+                    body: new FormData(addExerciseForm)
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    onAddExerciseSuccess(data);
+                } else {
+                    alert(data.error || 'Si è verificato un errore.');
+                }
+            } catch (error) {
+                alert('Errore di rete. Riprova.');
+            } finally {
+                this.disabled = false;
+                this.textContent = originalText;
+            }
+        });
+
+        // Avvia i suggerimenti solo quando la libreria è pronta
+        const suggestionsModule = window.LogbookCatalogSuggestions;
+        if (suggestionsModule) {
+            initializeSuggestions(suggestionsModule);
+        } else {
+            window.addEventListener('logbook:suggestions:ready', (e) => initializeSuggestions(e.detail), { once: true });
+        }
+    }
+
+    // Esegui tutto quando la pagina è completamente caricata
     window.addEventListener('load', initializePage);
 </script>
 {% endblock %}
