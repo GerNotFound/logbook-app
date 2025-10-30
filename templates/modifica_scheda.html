@@ -1,0 +1,111 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Aggiungi Esercizio</h5>
+    <form id="add-exercise-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_exercise_to_template">
+        <input type="hidden" name="exercise_id" id="exercise_id_input">
+        <div class="row g-2 align-items-end">
+            <div class="col">
+                <label for="exercise_name_input" class="form-label mb-1 label-sm">Esercizio (clicca dall'archivio)</label>
+                <input type="text" id="exercise_name_input" name="exercise_name" class="form-control mb-0" readonly placeholder="Seleziona un esercizio sotto">
+            </div>
+            <div class="col-auto w-80">
+                <label for="sets_input" class="form-label mb-1 label-sm">Serie</label>
+                <input type="text" id="sets_input" name="sets" class="form-control mb-0" required>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Esercizi Attuali</h5>
+    <table class="table table-sm table-bordered">
+        <tbody>
+            {% for exercise in current_exercises %}
+            <tr>
+                <td>{{ exercise.name }}</td>
+                <td>{{ exercise.sets }} serie</td>
+                <td class="text-center">
+                    <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_template_exercise">
+                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete">X</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mb-4">
+    <h5>Archivio Esercizi</h5>
+    <input type="text" id="search-exercise-input" class="form-control" placeholder="Cerca esercizio per nome...">
+    <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
+        <table class="table table-bordered table-hover table-sm">
+            <tbody id="all-exercises-tbody">
+                {% for exercise in all_exercises %}
+                <tr class="exercise-row" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" style="cursor: pointer;">
+                    <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom full-width-btn">TORNA ALLE SCHEDE</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('search-exercise-input');
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+        const exerciseNameInput = document.getElementById('exercise_name_input');
+        const exerciseIdInput = document.getElementById('exercise_id_input');
+        const setsInput = document.getElementById('sets_input');
+
+        // Funzione per filtrare la tabella
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            exerciseRows.forEach(row => {
+                const exerciseName = row.dataset.name.toLowerCase();
+                if (exerciseName.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // Funzione per popolare il form quando si clicca una riga
+        exerciseRows.forEach(row => {
+            row.addEventListener('click', function() {
+                exerciseNameInput.value = this.dataset.name;
+                exerciseIdInput.value = this.dataset.id;
+                setsInput.focus(); // Mette il focus sul campo "Serie"
+            });
+        });
+    });
+</script>
+{% endblock %}

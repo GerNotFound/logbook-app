@@ -257,31 +257,24 @@ def esercizi():
         elif action == 'rename_exercise':
             exercise_id = request.form.get('exercise_id')
             new_name = (request.form.get('new_exercise_name') or '').strip()
-
             if not exercise_id or not new_name:
                 flash('Completa tutti i campi per rinominare l\'esercizio.', 'danger')
                 return redirect(url_for('gym.esercizi'))
-
             if len(new_name) > 120:
                 flash('Il nome è troppo lungo (massimo 120 caratteri).', 'danger')
                 return redirect(url_for('gym.esercizi'))
-
             try:
                 exercise_id_int = int(exercise_id)
             except (TypeError, ValueError):
                 flash('Identificativo esercizio non valido.', 'danger')
                 return redirect(url_for('gym.esercizi'))
-
             exercise = execute_query('SELECT id, user_id FROM exercises WHERE id = :id', {'id': exercise_id_int}, fetchone=True)
-
             if not exercise or (exercise['user_id'] != user_id and exercise['user_id'] is not None):
                 flash('Esercizio non trovato o non autorizzato.', 'danger')
                 return redirect(url_for('gym.esercizi'))
-
             if exercise['user_id'] is None and not is_superuser:
                 flash('Non sei autorizzato a modificare questo esercizio.', 'danger')
                 return redirect(url_for('gym.esercizi'))
-
             try:
                 params = {'name': new_name, 'id': exercise_id_int}
                 if exercise['user_id'] is None:
@@ -333,10 +326,8 @@ def esercizi():
 @login_required
 def scheda():
     user_id = session['user_id']
-    is_superuser = bool(session.get('is_superuser'))
     if request.method == 'POST':
         action = request.form.get('action')
-        template_id = request.form.get('template_id')
         if action == 'add_template':
             name = request.form.get('template_name')
             if name:
@@ -347,79 +338,12 @@ def scheda():
                     db.session.rollback()
                     flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
         elif action == 'rename_template':
+             # Questa logica ora è gestita via AJAX, ma la teniamo per fallback
             template_id = request.form.get('template_id')
             new_name = (request.form.get('new_template_name') or '').strip()
-
-            if not template_id or not new_name:
-                flash('Completa tutti i campi per rinominare la scheda.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            if len(new_name) > 120:
-                flash('Il nome è troppo lungo (massimo 120 caratteri).', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            try:
-                template_id_int = int(template_id)
-            except (TypeError, ValueError):
-                flash('Identificativo scheda non valido.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            template = execute_query(
-                'SELECT id FROM workout_templates WHERE id = :id AND user_id = :user_id',
-                {'id': template_id_int, 'user_id': user_id},
-                fetchone=True,
-            )
-
-            if not template:
-                flash('Scheda non trovata o non autorizzata.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            try:
-                execute_query(
-                    'UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :user_id',
-                    {'name': new_name, 'id': template_id_int, 'user_id': user_id},
-                    commit=True,
-                )
-                flash('Scheda rinominata con successo.', 'success')
-            except IntegrityError:
-                db.session.rollback()
-                flash(f"Errore: esiste già una scheda chiamata '{new_name}'.", 'danger')
-            except Exception as exc:
-                db.session.rollback()
-                current_app.logger.exception('Errore durante la rinomina scheda %s', template_id_int)
-                flash('Si è verificato un errore durante il salvataggio.', 'danger')
-        elif action == 'add_exercise':
-            exercise_id = request.form.get('exercise_id')
-            exercise_name = (request.form.get('exercise_name') or '').strip()
-            sets = (request.form.get('sets') or '').strip()
-            if not template_id or not sets:
-                flash('Compila tutti i campi per aggiungere un esercizio.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            try:
-                template_id_int = int(template_id)
-            except (TypeError, ValueError):
-                flash('Dati esercizio non validi.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            template = execute_query('SELECT id FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id_int, 'uid': user_id}, fetchone=True)
-            if not template:
-                flash('Scheda non trovata.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            exercise_row = resolve_catalog_item(
-                'exercises',
-                user_id,
-                entry_id=exercise_id,
-                name=exercise_name,
-            )
-            if not exercise_row or exercise_row.get('user_id') not in (None, user_id):
-                flash('Seleziona un esercizio valido dall\'archivio.', 'danger')
-                return redirect(url_for('gym.scheda'))
-
-            execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                          {'tid': template_id_int, 'eid': exercise_row['id'], 'sets': sets}, commit=True)
-            flash('Esercizio aggiunto alla scheda.', 'success')
+            if template_id and new_name:
+                execute_query('UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid', {'name': new_name, 'id': template_id, 'uid': user_id}, commit=True)
+                flash('Scheda rinominata.', 'success')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query(
@@ -429,6 +353,7 @@ def scheda():
             )
             flash('Esercizio rimosso dalla scheda.', 'success')
         elif action == 'delete_template':
+            template_id = request.form.get('template_id')
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
             flash('Scheda eliminata con successo.', 'success')
         return redirect(url_for('gym.scheda'))
@@ -438,18 +363,52 @@ def scheda():
     for t in templates_raw:
         template_dict = dict(t)
         exercises = execute_query(
-            'SELECT te.id, te.exercise_id, e.name, e.user_id, te.sets '
-            'FROM template_exercises te '
-            'JOIN exercises e ON te.exercise_id = e.id '
-            'WHERE te.template_id = :tid '
-            'ORDER BY te.id',
+            'SELECT te.id, te.exercise_id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id',
             {'tid': t['id']},
             fetchall=True,
         )
         template_dict['exercises'] = [dict(row) for row in exercises]
         templates.append(template_dict)
     
-    return render_template('scheda.html', title='Scheda Allenamento', templates=templates, is_superuser=is_superuser)
+    return render_template('scheda.html', title='Scheda Allenamento', templates=templates)
+
+# NUOVA ROTTA PER LA PAGINA DI MODIFICA
+@gym_bp.route('/scheda/<int:template_id>/modifica', methods=['GET', 'POST'])
+@login_required
+def modifica_scheda_dettaglio(template_id):
+    user_id = session['user_id']
+    
+    template = execute_query('SELECT * FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, fetchone=True)
+    if not template:
+        flash('Scheda non trovata o non autorizzata.', 'danger')
+        return redirect(url_for('gym.scheda'))
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add_exercise_to_template':
+            exercise_id = request.form.get('exercise_id')
+            sets = (request.form.get('sets') or '').strip()
+            if exercise_id and sets:
+                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
+                              {'tid': template_id, 'eid': exercise_id, 'sets': sets}, commit=True)
+                flash('Esercizio aggiunto con successo.', 'success')
+            else:
+                flash('Seleziona un esercizio e inserisci il numero di serie.', 'danger')
+        elif action == 'delete_template_exercise':
+            template_exercise_id = request.form.get('template_exercise_id')
+            execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
+            flash('Esercizio rimosso dalla scheda.', 'success')
+        return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
+
+    current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)
+    all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
+
+    return render_template('modifica_scheda.html', 
+                           title=f'Modifica {template["name"]}', 
+                           template=template, 
+                           current_exercises=current_exercises, 
+                           all_exercises=all_exercises)
+
 
 @gym_bp.route('/esercizio/<int:exercise_id>')
 @login_required
