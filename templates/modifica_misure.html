@@ -44,39 +44,52 @@
     
     <div class="mb-3">
         <label class="form-label">Calcolo BFP</label>
-        <select id="bfp-mode-selector" name="bfp-mode-selector" class="form-select form-control">
-            <option value="manual" {% if bfp_mode == 'manual' %}selected{% endif %}>Inserisci Manualmente</option>
-            <option value="formula" {% if bfp_mode != 'manual' %}selected{% endif %}>Calcola con Formula</option>
-        </select>
-    </div>
-
-    <div id="bfp-manual-group">
-        <label for="bfp_manual" class="form-label">BFP (%)</label>
-        <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
-    </div>
-
-    <div id="bfp-formula-group">
-        <div class="row">
-            <div class="col-4">
-                <label for="neck" class="form-label label-tall">Collo (cm)</label>
-                <input type="number" step="0.1" min="0" name="neck" id="neck" class="form-control" value="{{ misure.neck or '' }}">
-            </div>
-            <div class="col-4">
-                <label for="waist" class="form-label label-tall">Vita (cm)</label>
-                <input type="number" step="0.1" min="0" name="waist" id="waist" class="form-control" value="{{ misure.waist or '' }}">
-            </div>
-            {% if gender == 'F' %}
-            <div class="col-4" id="hip-container">
-                <label for="hip" class="form-label label-tall">Fianchi (cm)</label>
-                <input type="number" step="0.1" min="0" name="hip" id="hip" class="form-control" value="{{ misure.hip or '' }}">
-            </div>
-            {% endif %}
-        </div>
-        <div class="mb-3">
-            <label for="measure_time" class="form-label label-tall">Orario Misure</label>
-            <input type="text" name="measure_time" id="measure_time" class="form-control" value="{{ misure.measure_time or '' }}">
+        <div class="btn-group w-100" role="group">
+            <button type="button" class="btn btn-outline-light {% if bfp_mode == 'manual' %}active{% endif %}" data-bs-toggle="collapse" data-bs-target="#bfp-manual-group" aria-expanded="{% if bfp_mode == 'manual' %}true{% else %}false{% endif %}" aria-controls="bfp-manual-group">
+                Inserisci Manualmente
+            </button>
+            <button type="button" class="btn btn-outline-light {% if bfp_mode != 'manual' %}active{% endif %}" data-bs-toggle="collapse" data-bs-target="#bfp-formula-group" aria-expanded="{% if bfp_mode != 'manual' %}true{% else %}false{% endif %}" aria-controls="bfp-formula-group">
+                Calcola con Formula
+            </button>
         </div>
     </div>
+
+    <div id="bfpAccordion">
+        <div id="bfp-manual-group" class="collapse {% if bfp_mode == 'manual' %}show{% endif %}" data-bs-parent="#bfpAccordion">
+            <div class="p-3 border rounded mb-3">
+                <label for="bfp_manual" class="form-label">BFP (%)</label>
+                <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
+            </div>
+        </div>
+
+        <div id="bfp-formula-group" class="collapse {% if bfp_mode != 'manual' %}show{% endif %}" data-bs-parent="#bfpAccordion">
+            <div class="p-3 border rounded mb-3">
+                <div class="row">
+                    <div class="col-4">
+                        <label for="neck" class="form-label label-tall">Collo (cm)</label>
+                        <input type="number" step="0.1" min="0" name="neck" id="neck" class="form-control" value="{{ misure.neck or '' }}">
+                    </div>
+                    <div class="col-4">
+                        <label for="waist" class="form-label label-tall">Vita (cm)</label>
+                        <input type="number" step="0.1" min="0" name="waist" id="waist" class="form-control" value="{{ misure.waist or '' }}">
+                    </div>
+                    {% if gender == 'F' %}
+                    <div class="col-4" id="hip-container">
+                        <label for="hip" class="form-label label-tall">Fianchi (cm)</label>
+                        <input type="number" step="0.1" min="0" name="hip" id="hip" class="form-control" value="{{ misure.hip or '' }}">
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label for="measure_time" class="form-label label-tall">Orario Misure</label>
+                    <input type="text" name="measure_time" id="measure_time" class="form-control" value="{{ misure.measure_time or '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+        
+    <!-- Input nascosto per inviare la modalità scelta -->
+    <input type="hidden" name="bfp-mode-selector" id="bfp-mode-selector-hidden" value="{{ bfp_mode }}">
 </form>
 
 <div class="sticky-bottom-nav">
@@ -88,30 +101,35 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
-        const bfpModeSelector = document.getElementById('bfp-mode-selector');
         const manualGroup = document.getElementById('bfp-manual-group');
         const formulaGroup = document.getElementById('bfp-formula-group');
+        const hiddenInput = document.getElementById('bfp-mode-selector-hidden');
+        const buttons = document.querySelectorAll('[data-bs-toggle="collapse"]');
 
-        function applyBfpMode() {
-            if (!bfpModeSelector || !manualGroup || !formulaGroup) return;
-
-            const isManual = bfpModeSelector.value === 'manual';
-
-            if (isManual) {
-                manualGroup.classList.remove('d-none');
-                formulaGroup.classList.add('d-none');
-            } else {
-                manualGroup.classList.add('d-none');
-                formulaGroup.classList.remove('d-none');
-            }
-
-            manualGroup.querySelectorAll('input').forEach(input => input.disabled = !isManual);
-            formulaGroup.querySelectorAll('input').forEach(input => input.disabled = isManual);
+        function setInputsDisabled(group, isDisabled) {
+            group.querySelectorAll('input').forEach(input => input.disabled = isDisabled);
         }
-        
-        bfpModeSelector.addEventListener('change', applyBfpMode);
-        
-        applyBfpMode(); // Esegui subito per impostare lo stato iniziale corretto
+
+        // Imposta lo stato iniziale corretto
+        const isInitiallyManual = manualGroup.classList.contains('show');
+        setInputsDisabled(manualGroup, !isInitiallyManual);
+        setInputsDisabled(formulaGroup, isInitiallyManual);
+
+        manualGroup.addEventListener('show.bs.collapse', function () {
+            setInputsDisabled(manualGroup, false);
+            setInputsDisabled(formulaGroup, true);
+            hiddenInput.value = 'manual';
+            buttons.forEach(btn => btn.classList.remove('active'));
+            document.querySelector('[data-bs-target="#bfp-manual-group"]').classList.add('active');
+        });
+
+        formulaGroup.addEventListener('show.bs.collapse', function () {
+            setInputsDisabled(formulaGroup, false);
+            setInputsDisabled(manualGroup, true);
+            hiddenInput.value = 'formula';
+            buttons.forEach(btn => btn.classList.remove('active'));
+            document.querySelector('[data-bs-target="#bfp-formula-group"]').classList.add('active');
+        });
     });
 </script>
 {% endblock %}
