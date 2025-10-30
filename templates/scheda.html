@@ -162,8 +162,7 @@
         form.querySelector('input[name="exercise_name"]').focus();
     }
 
-
-    document.addEventListener('DOMContentLoaded', () => {
+    function initializePage() {
         const addExerciseForm = document.getElementById('add-exercise-modal-form');
         const addExerciseModal = document.getElementById('addExerciseModal');
 
@@ -195,8 +194,6 @@
             }
         });
 
-        // La libreria catalog_suggestions.js viene caricata con 'defer',
-        // quindi sarà disponibile quando questo script viene eseguito.
         const suggestionsModule = window.LogbookCatalogSuggestions;
         if (!suggestionsModule) {
             console.error("Modulo suggerimenti non trovato!");
@@ -246,6 +243,10 @@
 
             addExerciseModal.addEventListener('hidden.bs.modal', resetModalForm);
         }
-    });
+    }
+
+    // Esegui l'inizializzazione solo dopo che tutto è caricato.
+    // L'evento 'load' è più sicuro di 'DOMContentLoaded' per gli script caricati con 'defer'.
+    window.addEventListener('load', initializePage);
 </script>
 {% endblock %}
