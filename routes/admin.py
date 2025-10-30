@@ -353,6 +353,24 @@ def admin_esercizi():
     exercises = execute_query('SELECT * FROM exercises WHERE user_id IS NULL ORDER BY name', fetchall=True)
     return render_template('admin_esercizi.html', title='Admin Esercizi', exercises=exercises)
 
+@admin_bp.route('/esercizio/<int:exercise_id>/consigli', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_esercizio_consigli(exercise_id):
+    exercise = execute_query('SELECT id, name, consigli FROM exercises WHERE id = :id AND user_id IS NULL', {'id': exercise_id}, fetchone=True)
+    if not exercise:
+        flash("Esercizio non trovato.", "danger")
+        return redirect(url_for('admin.admin_esercizi'))
+
+    if request.method == 'POST':
+        consigli = request.form.get('consigli', '')
+        execute_query('UPDATE exercises SET consigli = :consigli WHERE id = :id', {'consigli': consigli, 'id': exercise_id}, commit=True)
+        flash('Consigli per l\'esercizio aggiornati con successo.', 'success')
+        return redirect(url_for('admin.admin_esercizio_consigli', exercise_id=exercise_id))
+
+    return render_template('admin_esercizio_consigli.html', title='Gestisci Consigli', exercise=exercise)
+
+
 @admin_bp.route('/alimenti', methods=['GET', 'POST'])
 @login_required
 @admin_required

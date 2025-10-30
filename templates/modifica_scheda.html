@@ -60,10 +60,20 @@
     <input type="text" id="search-exercise-input" class="form-control" placeholder="Cerca esercizio per nome...">
     <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
         <table class="table table-bordered table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>Esercizio</th>
+                    <th class="text-center">Azioni</th>
+                </tr>
+            </thead>
             <tbody id="all-exercises-tbody">
                 {% for exercise in all_exercises %}
-                <tr class="exercise-row" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" style="cursor: pointer;">
+                <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
                     <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-light aggiungi-btn" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}">Aggiungi</button>
+                        <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -80,7 +90,8 @@
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput = document.getElementById('search-exercise-input');
-        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+        const exerciseTbody = document.getElementById('all-exercises-tbody');
+        const exerciseRows = exerciseTbody.querySelectorAll('.exercise-row');
         const exerciseNameInput = document.getElementById('exercise_name_input');
         const exerciseIdInput = document.getElementById('exercise_id_input');
         const setsInput = document.getElementById('sets_input');
@@ -89,8 +100,7 @@
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase();
             exerciseRows.forEach(row => {
-                const exerciseName = row.dataset.name.toLowerCase();
-                if (exerciseName.includes(searchTerm)) {
+                if (row.dataset.name.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
@@ -98,13 +108,15 @@
             });
         });
 
-        // Funzione per popolare il form quando si clicca una riga
-        exerciseRows.forEach(row => {
-            row.addEventListener('click', function() {
-                exerciseNameInput.value = this.dataset.name;
-                exerciseIdInput.value = this.dataset.id;
-                setsInput.focus(); // Mette il focus sul campo "Serie"
-            });
+        // Funzione per gestire i click sui pulsanti "Aggiungi"
+        exerciseTbody.addEventListener('click', function(event) {
+            if (event.target.classList.contains('aggiungi-btn')) {
+                const button = event.target;
+                exerciseNameInput.value = button.dataset.name;
+                exerciseIdInput.value = button.dataset.id;
+                setsInput.focus();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         });
     });
 </script>
