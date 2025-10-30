@@ -34,10 +34,9 @@
                 </form>
             </div>
         </div>
-        <!-- MODIFICA QUI: Ripristinata classe semplice 'table-bordered' -->
         <table class="table table-bordered table-sm">
             <thead><tr><th>Esercizio</th><th>Serie</th><th></th></tr></thead>
-            <tbody>
+            <tbody id="tbody-template-{{ template.id }}">
             {% for exercise in template.exercises %}
                 <tr id="tex-{{ exercise.id }}">
                     <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td><td>{{ exercise.sets }}</td>
@@ -52,7 +51,7 @@
                     </td>
                 </tr>
             {% else %}
-                <tr class="no-exercise-row"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
+                <tr class="no-exercise-row-{{ template.id }}"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
             {% endfor %}
             </tbody>
         </table>
@@ -95,10 +94,9 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header"><h5 class="modal-title" id="addExerciseModalLabel">Aggiungi esercizio</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button></div>
-            <form method="POST" action="{{ url_for('gym.scheda') }}" id="add-exercise-modal-form">
+            <form id="add-exercise-modal-form">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="add_exercise">
                     <input type="hidden" name="template_id" value="">
                     <input type="hidden" name="exercise_id" class="exercise-id-input">
                     <div class="mb-3">
@@ -113,9 +111,8 @@
                         <input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control" required>
                     </div>
                 </div>
-                <div class="modal-footer justify-content-between">
-                    <button type="submit" class="btn btn-custom btn-custom-tight m-0">SALVA</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">INDIETRO</button>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-custom w-100 m-0">SALVA</button>
                 </div>
             </form>
         </div>
@@ -126,109 +123,139 @@
 {% block scripts %}
 <script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
 <script nonce="{{ csp_nonce() }}">
-    const initializeSchedaSuggestions = (suggestionsModule) => {
-        if (!suggestionsModule) {
-            console.error('Modulo suggerimenti non disponibile.');
-            return;
+    function onAddExerciseSuccess(payload) {
+        const { exercise, csrf_token } = payload;
+        const form = document.getElementById('add-exercise-modal-form');
+        const templateId = form.querySelector('input[name="template_id"]').value;
+        const tableBody = document.getElementById(`tbody-template-${templateId}`);
+        if (!tableBody) return;
+
+        // Rimuovi la riga "Nessun esercizio" se presente
+        const noExerciseRow = tableBody.querySelector(`.no-exercise-row-${templateId}`);
+        if (noExerciseRow) {
+            noExerciseRow.remove();
         }
 
-        const exerciseOptions = {{ exercise_options|tojson|safe }};
+        // Crea la nuova riga della tabella
+        const newRow = document.createElement('tr');
+        newRow.id = `tex-${exercise.id}`;
+        
+        const globeIcon = exercise.is_global ? '<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>' : '';
 
-        const instances = suggestionsModule.initCollection({
-            rootSelector: '#add-exercise-modal-form',
-            inputSelector: '.exercise-search-input',
-            hiddenSelector: '.exercise-id-input',
-            suggestionsSelector: '.suggestions-list',
-            items: exerciseOptions,
-            globalIconLabel: 'Esercizio globale',
-        });
+        newRow.innerHTML = `
+            <td>${exercise.name}${globeIcon}</td>
+            <td>${exercise.sets}</td>
+            <td class="text-center">
+                <form method="POST" action="{{ url_for('gym.scheda') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete_template_exercise">
+                    <input type="hidden" name="template_id" value="${templateId}">
+                    <input type="hidden" name="template_exercise_id" value="${exercise.id}">
+                    <button type="submit" class="btn btn-sm btn-delete">X</button>
+                </form>
+            </td>
+        `;
+        tableBody.appendChild(newRow);
 
-        const modalElement = document.getElementById('addExerciseModal');
-        if (!modalElement) {
-            return;
-        }
+        // Resetta i campi del form nel modale
+        form.querySelector('input[name="exercise_name"]').value = '';
+        form.querySelector('input[name="exercise_id"]').value = '';
+        form.querySelector('input[name="sets"]').value = '';
+        form.querySelector('input[name="csrf_token"]').value = csrf_token; // Aggiorna il token CSRF
+        
+        // Rimetti il focus sul primo campo per un inserimento rapido
+        form.querySelector('input[name="exercise_name"]').focus();
+    }
 
-        const templateIdInput = modalElement.querySelector('input[name="template_id"]');
-        const hiddenInput = modalElement.querySelector('.exercise-id-input');
-        const searchInput = modalElement.querySelector('.exercise-search-input');
-        const setsInput = modalElement.querySelector('input[name="sets"]');
-        const suggestionInstance = Array.isArray(instances) && instances.length ? instances[0] : null;
-
-        const resetModal = () => {
-            if (hiddenInput) {
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.normalized;
-            }
-
-            if (searchInput) {
-                searchInput.value = '';
-                searchInput.classList.remove('is-invalid');
-                searchInput.removeAttribute('aria-invalid');
-            }
-
-            if (setsInput) {
-                setsInput.value = '';
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.hideSuggestions === 'function') {
-                suggestionInstance.hideSuggestions();
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
-                suggestionInstance.setPreferredIds([]);
-            }
-        };
-
-        modalElement.addEventListener('show.bs.modal', (event) => {
-            resetModal();
-            const trigger = event.relatedTarget;
-            if (templateIdInput) {
-                templateIdInput.value = trigger ? (trigger.getAttribute('data-template-id') || '') : '';
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
-                const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : null;
-                let parsedIds = [];
-
-                if (idsRaw) {
-                    try {
-                        const candidate = JSON.parse(idsRaw);
-                        if (Array.isArray(candidate)) {
-                            parsedIds = candidate;
-                        }
-                    } catch (error) {
-                        parsedIds = [];
-                    }
-                }
-
-                suggestionInstance.setPreferredIds(parsedIds);
-            }
-        });
-
-        modalElement.addEventListener('shown.bs.modal', () => {
-            if (searchInput) {
-                searchInput.focus({preventScroll: true});
-            }
-        });
-
-        modalElement.addEventListener('hidden.bs.modal', () => {
-            resetModal();
-        });
-    };
 
     document.addEventListener('DOMContentLoaded', () => {
-        const moduleRef = window.LogbookCatalogSuggestions;
-        if (moduleRef) {
-            initializeSchedaSuggestions(moduleRef);
-            return;
-        }
+        const addExerciseForm = document.getElementById('add-exercise-modal-form');
+        const addExerciseModal = document.getElementById('addExerciseModal');
 
-        const readyHandler = (event) => {
-            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
-            initializeSchedaSuggestions(moduleFromEvent);
+        addExerciseForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            submitButton.disabled = true;
+            submitButton.textContent = 'Salvataggio...';
+
+            try {
+                const response = await fetch("{{ url_for('gym.aggiungi_esercizio_ajax') }}", {
+                    method: 'POST',
+                    body: new FormData(this)
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    onAddExerciseSuccess(data);
+                } else {
+                    alert(data.error || 'Si è verificato un errore.');
+                }
+            } catch (error) {
+                alert('Errore di rete. Riprova.');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = originalText;
+            }
+        });
+
+        const initializeSuggestions = (suggestionsModule) => {
+            if (!suggestionsModule) return;
+            
+            const exerciseOptions = {{ exercise_options|tojson|safe }};
+
+            const suggestionInstance = suggestionsModule.initField({
+                input: addExerciseForm.querySelector('.exercise-search-input'),
+                hiddenInput: addExerciseForm.querySelector('.exercise-id-input'),
+                container: addExerciseForm.querySelector('.suggestions-list'),
+                form: addExerciseForm,
+                items: exerciseOptions,
+                globalIconLabel: 'Esercizio globale'
+            });
+
+            if (addExerciseModal && suggestionInstance) {
+                const templateIdInput = addExerciseModal.querySelector('input[name="template_id"]');
+                const searchInput = addExerciseModal.querySelector('.exercise-search-input');
+                const setsInput = addExerciseModal.querySelector('input[name="sets"]');
+                const hiddenInput = addExerciseModal.querySelector('.exercise-id-input');
+
+                const resetModalForm = () => {
+                    if (hiddenInput) { hiddenInput.value = ''; delete hiddenInput.dataset.normalized; }
+                    if (searchInput) { searchInput.value = ''; }
+                    if (setsInput) { setsInput.value = ''; }
+                    suggestionInstance.hideSuggestions();
+                    suggestionInstance.setPreferredIds([]);
+                };
+
+                addExerciseModal.addEventListener('show.bs.modal', (event) => {
+                    resetModalForm();
+                    const trigger = event.relatedTarget;
+                    templateIdInput.value = trigger ? trigger.getAttribute('data-template-id') : '';
+
+                    const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : '[]';
+                    try {
+                        const parsedIds = JSON.parse(idsRaw);
+                        if (Array.isArray(parsedIds)) {
+                            suggestionInstance.setPreferredIds(parsedIds);
+                        }
+                    } catch(e) { /* ignore */ }
+                });
+
+                addExerciseModal.addEventListener('shown.bs.modal', () => {
+                    searchInput.focus({ preventScroll: true });
+                });
+
+                addExerciseModal.addEventListener('hidden.bs.modal', resetModalForm);
+            }
         };
 
-        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
+        const moduleRef = window.LogbookCatalogSuggestions;
+        if (moduleRef) {
+            initializeSuggestions(moduleRef);
+        } else {
+            window.addEventListener('logbook:suggestions:ready', (e) => initializeSuggestions(e.detail), { once: true });
+        }
     });
 </script>
 {% endblock %}

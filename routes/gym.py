@@ -95,7 +95,7 @@ def aggiungi_esercizio_ajax():
         return jsonify({'success': False, 'error': 'Scheda non trovata o non autorizzata.'}), 404
 
     exercise = execute_query(
-        'SELECT id, name FROM exercises WHERE id = :id AND (user_id IS NULL OR user_id = :user_id)',
+        'SELECT id, name, user_id IS NULL as is_global FROM exercises WHERE id = :id AND (user_id IS NULL OR user_id = :user_id)',
         {'id': exercise_id_int, 'user_id': user_id},
         fetchone=True,
     )
@@ -113,7 +113,12 @@ def aggiungi_esercizio_ajax():
         new_id = result['id'] if result else None
         return jsonify({
             'success': True,
-            'exercise': {'id': new_id, 'name': exercise['name'], 'sets': sets},
+            'exercise': {
+                'id': new_id, 
+                'name': exercise['name'], 
+                'sets': sets,
+                'is_global': exercise['is_global']
+            },
             'csrf_token': csrf_token
         })
     except Exception:
