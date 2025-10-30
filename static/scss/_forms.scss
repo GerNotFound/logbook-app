@@ -1,0 +1,42 @@
+/* --- STILI PER FORM E INPUT --- */
+.form-control { 
+    background-color: black;
+    border: 2px solid #555;
+    color: white;
+    margin-bottom: 15px;
+    padding: 12px;
+    font-size: 16px;
+}
+.form-control:focus {
+    background-color: black;
+    color: white;
+    border-color: #888;
+    box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25);
+}
+.form-control::placeholder {
+    color: #6c757d;
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+.password-toggle-icon {
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #ccc;
+    z-index: 100;
+}
+.password-wrapper .form-control {
+    padding-right: 40px;
+}
+
+.label-sm { font-size: 0.8rem; }
+.label-tall { min-height: 40px; }
+
+.duration-manual__input {
+    width: 6.5rem;
+}

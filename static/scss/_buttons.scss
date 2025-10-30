@@ -1,0 +1,120 @@
+/* --- STILI PER I PULSANTI --- */
+:where(.btn) {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: var(--btn-custom-padding-y) var(--btn-custom-padding-x);
+    min-height: var(--btn-custom-min-height);
+    border-radius: var(--btn-custom-radius);
+    font-size: var(--btn-custom-font-size);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-align: center;
+    text-decoration: none;
+    line-height: 1.2;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+    box-shadow: var(--btn-elevation);
+    z-index: 0;
+}
+
+:where(.btn) > svg,
+:where(.btn) > i {
+    flex-shrink: 0;
+}
+
+:where(.btn) span,
+:where(.btn) strong {
+    line-height: 1.2;
+}
+
+@media (hover: hover) {
+    :where(.btn):not(:disabled):not(.disabled):hover {
+        transform: translateY(-2px);
+        box-shadow: var(--btn-elevation-hover);
+    }
+}
+
+:where(.btn):not(:disabled):not(.disabled):active {
+    transform: scale(0.97);
+    filter: brightness(0.94);
+    box-shadow: var(--btn-elevation-active);
+}
+
+:where(.btn):not(:disabled):not(.disabled):focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24), var(--btn-elevation-hover);
+}
+
+:where(.btn.btn-sm) {
+    font-size: clamp(0.82rem, 2.2vw, 0.95rem);
+    padding: 0.35rem 0.75rem;
+    min-height: 2.4rem;
+    border-radius: calc(var(--btn-custom-radius) - 6px);
+    --btn-elevation: 0 6px 16px rgba(0, 0, 0, 0.4);
+    --btn-elevation-hover: 0 8px 20px rgba(0, 0, 0, 0.48);
+    --btn-elevation-active: 0 4px 12px rgba(0, 0, 0, 0.42);
+}
+
+.btn-custom {
+    background-color: white;
+    border-color: white;
+    color: black;
+    margin: 8px 0;
+    width: 100%;
+}
+
+.btn-custom.full-width-btn,
+.sticky-bottom-nav .btn-custom {
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .btn-custom:not(.full-width-btn) {
+        width: auto;
+    }
+}
+
+.btn-delete {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: white;
+}
+.btn-delete:hover,
+.btn-delete:focus-visible {
+    background-color: #212529;
+    border-color: #212529;
+    color: white;
+}
+
+.btn-custom-tight {
+    padding: calc(var(--btn-custom-padding-y) - 0.2rem) var(--btn-custom-padding-x);
+    min-height: var(--btn-custom-min-height);
+}
+
+.btn-custom-short {
+    padding: calc(var(--btn-custom-padding-y) - 0.35rem) var(--btn-custom-padding-x);
+    min-height: var(--btn-custom-min-height);
+}
+
+.btn-compact { font-size: 0.7rem; padding: 2px 6px; }
+
+.btn-circle, .btn-circle-outline {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    line-height: 1;
+    --btn-elevation: 0 6px 16px rgba(0, 0, 0, 0.4);
+    --btn-elevation-hover: 0 8px 20px rgba(0, 0, 0, 0.48);
+    --btn-elevation-active: 0 4px 12px rgba(0, 0, 0, 0.42);
+}
+
+.btn-circle { background-color: white; color: black; }
+.btn-circle-outline { background-color: transparent; }
+.btn-circle .bi, .btn-circle-outline .bi { font-size: 1.1rem; line-height: 1; }

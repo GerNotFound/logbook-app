@@ -1,0 +1,44 @@
+/* --- TEMA SCURO E STILI DI BASE --- */
+:root {
+    --btn-custom-font-size: clamp(1rem, 2.6vw, 1.15rem);
+    --btn-custom-padding-y: clamp(0.8rem, 2.2vw, 1rem);
+    --btn-custom-padding-x: clamp(1rem, 4vw, 1.35rem);
+    --btn-custom-min-height: 3.4rem;
+    --btn-custom-radius: 14px;
+    --btn-elevation: 0 10px 26px rgba(0, 0, 0, 0.45);
+    --btn-elevation-hover: 0 14px 32px rgba(0, 0, 0, 0.55);
+    --btn-elevation-active: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+body {
+    background-color: black;
+    color: white; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: 90px;
+}
+
+body .text-muted,
+body .text-secondary,
+body .text-body-secondary {
+    color: #fff !important;
+}
+
+h1 {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    margin-top: 0.5rem;
+}
+
+hr {
+    background-color: #444;
+    opacity: 1;
+    border-top: 1px solid #444;
+}
+
+.text-sm { font-size: 0.9rem; }
+.text-prewrap { white-space: pre-wrap; }
+.text-xl { font-size: 1.5rem; }
+.min-vh-80 { min-height: 80vh; }
+.w-80 { width: 80px; }
+.w-120 { width: 120px; }
