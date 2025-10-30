@@ -27,10 +27,13 @@ def suggest_exercises():
 def aggiorna_serie():
     user_id = session['user_id']
     template_exercise_id = request.form.get('template_exercise_id')
-    sets = request.form.get('sets', '')
+    sets = (request.form.get('sets') or '').strip()
 
     if not template_exercise_id:
         return jsonify({'success': False, 'error': 'ID mancante.'}), 400
+
+    if not sets:
+        return jsonify({'success': False, 'error': 'Valore delle serie mancante.'}), 400
 
     query = """
         UPDATE template_exercises SET sets = :sets 
