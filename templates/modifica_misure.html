@@ -50,12 +50,12 @@
         </select>
     </div>
 
-    <div id="bfp-manual-group" class="{% if bfp_mode != 'manual' %}d-none{% endif %}">
+    <div id="bfp-manual-group" class="d-none">
         <label for="bfp_manual" class="form-label">BFP (%)</label>
         <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
     </div>
 
-    <div id="bfp-formula-group" class="{% if bfp_mode == 'manual' %}d-none{% endif %}">
+    <div id="bfp-formula-group" class="d-none">
         <div class="row">
             <div class="col-4">
                 <label for="neck" class="form-label label-tall">Collo (cm)</label>
