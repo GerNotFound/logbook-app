@@ -24,12 +24,13 @@
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td>
-                    <form class="update-sets-form">
+                    <form class="update-sets-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                         <div class="input-group">
                             <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light">Salva</button>
+                            <button type="submit" class="btn btn-sm btn-outline-light btn-slim">Salva</button>
                         </div>
                     </form>
                 </td>
@@ -90,17 +91,19 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Logica per il filtro live della tabella
         const searchInput = document.getElementById('search-exercise-input');
-        const exerciseRows = document.querySelectorAll('#all-exercises-tbody tr.exercise-row');
+        const exercisesTbody = document.getElementById('all-exercises-tbody');
+        const exerciseRows = Array.from(document.querySelectorAll('#all-exercises-tbody tr.exercise-row'));
+        const sortedRows = exerciseRows.slice().sort((a, b) => a.dataset.name.localeCompare(b.dataset.name));
+
+        // Ensure alphabetical order is preserved after any DOM operations
+        sortedRows.forEach(row => exercisesTbody.appendChild(row));
 
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
-            exerciseRows.forEach(row => {
+            sortedRows.forEach(row => {
                 const exerciseName = row.dataset.name;
-                if (exerciseName.includes(searchTerm)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                const matches = !searchTerm || exerciseName.startsWith(searchTerm);
+                row.style.display = matches ? '' : 'none';
             });
         });
 
@@ -109,6 +112,10 @@
             form.addEventListener('submit', async function(event) {
                 event.preventDefault();
                 const submitButton = this.querySelector('button[type="submit"]');
+                const setsInput = this.querySelector('input[name="sets"]');
+                const formData = new FormData(this);
+                const trimmedSets = (setsInput.value || '').trim();
+                formData.set('sets', trimmedSets);
                 const originalText = submitButton.textContent;
                 submitButton.disabled = true;
                 submitButton.textContent = '...';
@@ -116,11 +123,21 @@
                 try {
                     const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
                         method: 'POST',
-                        body: new FormData(this)
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRFToken': formData.get('csrf_token') || '',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
                         submitButton.textContent = 'OK!';
+                        if (typeof data.sets === 'string') {
+                            setsInput.value = data.sets;
+                        } else {
+                            setsInput.value = trimmedSets;
+                        }
                     } else {
                         alert(data.error || 'Errore');
                         submitButton.textContent = 'Errore';
