@@ -9,15 +9,31 @@
     </div>
 </div>
 
-<div class="mb-4 p-3 border rounded">
+<div class="mb-4">
     <h5>Esercizi Attuali</h5>
     <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Esercizio</th>
+                <th>Serie</th>
+                <th class="text-center">Rimuovi</th>
+            </tr>
+        </thead>
         <tbody>
             {% for exercise in current_exercises %}
             <tr>
-                <td>{{ exercise.name }}</td>
-                <td>{{ exercise.sets }} serie</td>
-                <td class="text-center">
+                <td class="align-middle">{{ exercise.name }}</td>
+                <td>
+                    <form class="update-sets-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                        <div class="input-group">
+                            <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
+                            <button type="submit" class="btn btn-sm btn-outline-light">Salva</button>
+                        </div>
+                    </form>
+                </td>
+                <td class="text-center align-middle">
                     <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_template_exercise">
@@ -72,10 +88,10 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
+        // Logica per il filtro live della tabella
         const searchInput = document.getElementById('search-exercise-input');
         const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
 
-        // Funzione per filtrare la tabella in tempo reale
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
             exerciseRows.forEach(row => {
@@ -84,6 +100,39 @@
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
+                }
+            });
+        });
+
+        // Logica per l'aggiornamento AJAX delle serie
+        document.querySelectorAll('.update-sets-form').forEach(form => {
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const submitButton = this.querySelector('button[type="submit"]');
+                const originalText = submitButton.textContent;
+                submitButton.disabled = true;
+                submitButton.textContent = '...';
+
+                try {
+                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                        method: 'POST',
+                        body: new FormData(this)
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        submitButton.textContent = 'OK!';
+                    } else {
+                        alert(data.error || 'Errore');
+                        submitButton.textContent = 'Errore';
+                    }
+                } catch (error) {
+                    alert('Errore di rete.');
+                    submitButton.textContent = 'Errore';
+                } finally {
+                    setTimeout(() => {
+                        submitButton.disabled = false;
+                        submitButton.textContent = originalText;
+                    }, 1500);
                 }
             });
         });

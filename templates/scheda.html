@@ -35,33 +35,15 @@
             </div>
         </div>
         <table class="table table-bordered table-sm">
-            <thead><tr><th>Esercizio</th><th>Serie</th><th></th></tr></thead>
+            <thead><tr><th>Esercizio</th><th>Serie</th></tr></thead>
             <tbody id="tbody-template-{{ template.id }}">
             {% for exercise in template.exercises %}
                 <tr id="tex-{{ exercise.id }}">
                     <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td>
-                    <td>
-                        <form class="update-sets-form">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <div class="input-group">
-                                <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                                <button type="submit" class="btn btn-sm btn-outline-light">Salva</button>
-                            </div>
-                        </form>
-                    </td>
-                    <td class="text-center">
-                        <form method="POST" action="{{ url_for('gym.scheda') }}" onsubmit="return confirm('Sei sicuro?');">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_template_exercise">
-                            <input type="hidden" name="template_id" value="{{ template.id }}">
-                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete">X</button>
-                        </form>
-                    </td>
+                    <td>{{ exercise.sets }}</td>
                 </tr>
             {% else %}
-                <tr class="no-exercise-row-{{ template.id }}"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
+                <tr class="no-exercise-row-{{ template.id }}"><td colspan="2" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
             {% endfor %}
             </tbody>
         </table>
@@ -96,41 +78,4 @@
 {% endif %}
 
 <div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
-{% endblock %}
-{% block scripts %}
-<script nonce="{{ csp_nonce() }}">
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.update-sets-form').forEach(form => {
-        form.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            submitButton.disabled = true;
-            submitButton.textContent = '...';
-
-            try {
-                const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                    method: 'POST',
-                    body: new FormData(this)
-                });
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    submitButton.textContent = 'OK!';
-                } else {
-                    alert(data.error || 'Errore');
-                    submitButton.textContent = 'Errore';
-                }
-            } catch (error) {
-                alert('Errore di rete.');
-                submitButton.textContent = 'Errore';
-            } finally {
-                setTimeout(() => {
-                    submitButton.disabled = false;
-                    submitButton.textContent = originalText;
-                }, 1500);
-            }
-        });
-    });
-});
-</script>
 {% endblock %}

@@ -14,7 +14,7 @@ gym_bp = Blueprint('gym', __name__)
 
 # --- ENDPOINT API PER AJAX ---
 
-@gym_bp.get('/api/suggest/exercises')
+@gym_bp.route('/api/suggest/exercises')
 @login_required
 def suggest_exercises():
     user_id = session['user_id']
@@ -112,11 +112,6 @@ def scheda():
             template_id = request.form.get('template_id')
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
             flash('Scheda eliminata con successo.', 'success')
-        elif action == 'delete_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
-            flash('Esercizio rimosso con successo.', 'success')
-
         return redirect(url_for('gym.scheda'))
 
     templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
@@ -150,8 +145,8 @@ def modifica_scheda_dettaglio(template_id):
             if exercise_id:
                 # Aggiunge con un valore di default per le serie
                 execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': '3x10'}, commit=True)
-                flash('Esercizio aggiunto. Ora puoi modificare le serie.', 'success')
+                              {'tid': template_id, 'eid': exercise_id, 'sets': '1'}, commit=True)
+                flash('Esercizio aggiunto.', 'success')
             else:
                 flash('Nessun esercizio selezionato.', 'danger')
         elif action == 'delete_template_exercise':
@@ -210,6 +205,7 @@ def esercizio_dettaglio(exercise_id):
 @gym_bp.route('/sessione_palestra/<date_param>/<session_ts>', methods=['GET', 'POST'])
 @login_required
 def sessione_palestra(date_param, session_ts=None):
+    # ... (Il resto del file rimane invariato)
     user_id = session['user_id']
     if date_param:
         try: current_date = datetime.strptime(date_param, '%Y-%m-%d').date()
@@ -223,18 +219,15 @@ def sessione_palestra(date_param, session_ts=None):
     if request.method == 'POST':
         session_timestamp = session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S')
         template_name = request.form.get('template_name', 'Allenamento Libero')
-
         start_timestamp_ms = request.form.get('start_timestamp')
         manual_duration_value = (request.form.get('duration_minutes_manual') or '').strip()
         duration_minutes = None
-
         if manual_duration_value:
             try:
                 manual_duration = int(manual_duration_value)
                 if manual_duration >= 0: duration_minutes = manual_duration
             except (ValueError, TypeError):
                 manual_duration = None
-
         if duration_minutes is None:
             duration_minutes = 0
             if start_timestamp_ms:
@@ -253,14 +246,11 @@ def sessione_palestra(date_param, session_ts=None):
                 parsed_rating = None
         session_query = "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes, session_note, session_rating) VALUES (:uid, :ts, :rd, :tn, :dur, :note, :rating) ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes, session_note = EXCLUDED.session_note, session_rating = EXCLUDED.session_rating"
         execute_query(session_query, {'uid': user_id, 'ts': session_timestamp, 'rd': record_date, 'tn': template_name, 'dur': duration_minutes, 'note': session_note or None, 'rating': session_rating}, commit=True)
-
         if session_ts:
             execute_query('DELETE FROM workout_log WHERE user_id = :user_id AND session_timestamp = :ts', {'user_id': user_id, 'ts': session_ts}, commit=True)
             execute_query('DELETE FROM workout_session_comments WHERE user_id = :user_id AND session_timestamp = :ts', {'user_id': user_id, 'ts': session_ts}, commit=True)
-        
         latest_weight_data = execute_query('SELECT weight FROM daily_data WHERE user_id = :user_id AND weight IS NOT NULL ORDER BY record_date DESC LIMIT 1', {'user_id': user_id}, fetchone=True)
         latest_weight = latest_weight_data['weight'] if latest_weight_data else 0
-        
         has_data = False
         for key, reps_str in request.form.items():
             if key.startswith('reps_'):
