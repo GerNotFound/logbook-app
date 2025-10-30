@@ -19,107 +19,34 @@ gym_bp = Blueprint('gym', __name__)
 def suggest_exercises():
     user_id = session['user_id']
     search_term = (request.args.get('q') or '').strip()
-
     suggestions = get_catalog_suggestions('exercises', user_id, search_term)
     return jsonify({'results': suggestions})
 
-
-@gym_bp.route('/scheda/rinomina', methods=['POST'])
+@gym_bp.route('/scheda/aggiorna-serie', methods=['POST'])
 @login_required
-def rinomina_scheda_ajax():
+def aggiorna_serie():
     user_id = session['user_id']
-    template_id = request.form.get('template_id')
-    new_name = (request.form.get('new_template_name') or '').strip()
+    template_exercise_id = request.form.get('template_exercise_id')
+    sets = request.form.get('sets', '')
 
-    if not new_name or not template_id:
-        return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
+    if not template_exercise_id:
+        return jsonify({'success': False, 'error': 'ID mancante.'}), 400
 
-    try:
-        template_id_int = int(template_id)
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'Identificativo scheda non valido.'}), 400
-
-    if len(new_name) > 120:
-        return jsonify({'success': False, 'error': 'Il nome è troppo lungo (max 120 caratteri).'}), 400
-
-    template = execute_query(
-        'SELECT id, name FROM workout_templates WHERE id = :id AND user_id = :user_id',
-        {'id': template_id_int, 'user_id': user_id},
-        fetchone=True,
-    )
-
-    if not template:
-        return jsonify({'success': False, 'error': 'Scheda non trovata o non autorizzata.'}), 404
-
-    if template['name'] == new_name:
-        return jsonify({'success': True, 'newName': new_name, 'templateId': template_id_int})
-
-    try:
-        execute_query(
-            'UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :user_id',
-            {'name': new_name, 'id': template_id_int, 'user_id': user_id},
-            commit=True,
+    query = """
+        UPDATE template_exercises SET sets = :sets 
+        WHERE id = :teid AND EXISTS (
+            SELECT 1 FROM workout_templates wt 
+            WHERE wt.id = template_exercises.template_id AND wt.user_id = :uid
         )
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': f"Esiste già una scheda con il nome '{new_name}'."}), 409
-    except Exception:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': 'Si è verificato un errore interno.'}), 500
-
-    return jsonify({'success': True, 'newName': new_name, 'templateId': template_id_int})
-
-@gym_bp.route('/esercizi/rinomina', methods=['POST'])
-@login_required
-def rinomina_esercizio_ajax():
-    user_id = session['user_id']
-    exercise_id = request.form.get('exercise_id')
-    new_name = (request.form.get('new_exercise_name') or '').strip()
-
-    if not new_name or not exercise_id:
-        return jsonify({'success': False, 'error': 'Dati mancanti.'}), 400
-
+    """
     try:
-        exercise_id_int = int(exercise_id)
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'Identificativo esercizio non valido.'}), 400
-
-    exercise = execute_query(
-        'SELECT id, name FROM exercises WHERE id = :id AND user_id = :user_id',
-        {'id': exercise_id_int, 'user_id': user_id},
-        fetchone=True,
-    )
-
-    if not exercise:
-        return jsonify({'success': False, 'error': 'Esercizio non trovato o non autorizzato.'}), 404
-
-    try:
-        execute_query(
-            'UPDATE exercises SET name = :name WHERE id = :id AND user_id = :user_id',
-            {'name': new_name, 'id': exercise_id_int, 'user_id': user_id},
-            commit=True,
-        )
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': f"Esiste già un esercizio con il nome '{new_name}'."}), 409
-    
-    return jsonify({'success': True, 'newName': new_name, 'exerciseId': exercise_id_int})
-
-@gym_bp.route('/esercizi/aggiorna-note', methods=['POST'])
-@login_required
-def aggiorna_note_ajax():
-    user_id = session['user_id']
-    exercise_id = request.form.get('exercise_id')
-    notes = request.form.get('notes')
-    if exercise_id is None:
-        return jsonify({'success': False, 'error': 'ID Esercizio mancante.'}), 400
-    try:
-        query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:user_id, :eid, :notes) ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes"
-        execute_query(query, {'user_id': user_id, 'eid': exercise_id, 'notes': notes}, commit=True)
+        execute_query(query, {'sets': sets, 'teid': template_exercise_id, 'uid': user_id}, commit=True)
         return jsonify({'success': True})
-    except Exception:
+    except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Errore durante l'aggiornamento delle serie: {e}")
         return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
 
 # --- ROTTE TRADIZIONALI ---
 
@@ -181,20 +108,15 @@ def scheda():
                 except IntegrityError:
                     db.session.rollback()
                     flash(f"Errore: Una scheda con il nome '{name}' esiste già.", 'danger')
-        elif action == 'delete_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            template_id = request.form.get('template_id')
-            execute_query(
-                'DELETE FROM template_exercises te WHERE te.id = :id AND EXISTS (SELECT 1 FROM workout_templates wt WHERE wt.id = te.template_id AND wt.user_id = :uid)',
-                {'id': template_exercise_id, 'uid': user_id},
-                commit=True
-            )
-            flash('Esercizio rimosso dalla scheda.', 'success')
-            return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
         elif action == 'delete_template':
             template_id = request.form.get('template_id')
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
             flash('Scheda eliminata con successo.', 'success')
+        elif action == 'delete_template_exercise':
+            template_exercise_id = request.form.get('template_exercise_id')
+            execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
+            flash('Esercizio rimosso con successo.', 'success')
+
         return redirect(url_for('gym.scheda'))
 
     templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
@@ -225,13 +147,13 @@ def modifica_scheda_dettaglio(template_id):
         action = request.form.get('action')
         if action == 'add_exercise_to_template':
             exercise_id = request.form.get('exercise_id')
-            sets = (request.form.get('sets') or '').strip()
-            if exercise_id and sets:
+            if exercise_id:
+                # Aggiunge con un valore di default per le serie
                 execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': sets}, commit=True)
-                flash('Esercizio aggiunto con successo.', 'success')
+                              {'tid': template_id, 'eid': exercise_id, 'sets': '3x10'}, commit=True)
+                flash('Esercizio aggiunto. Ora puoi modificare le serie.', 'success')
             else:
-                flash('Seleziona un esercizio e inserisci il numero di serie.', 'danger')
+                flash('Nessun esercizio selezionato.', 'danger')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
@@ -309,106 +231,67 @@ def sessione_palestra(date_param, session_ts=None):
         if manual_duration_value:
             try:
                 manual_duration = int(manual_duration_value)
+                if manual_duration >= 0: duration_minutes = manual_duration
             except (ValueError, TypeError):
                 manual_duration = None
-            else:
-                if manual_duration >= 0:
-                    duration_minutes = manual_duration
 
         if duration_minutes is None:
             duration_minutes = 0
             if start_timestamp_ms:
                 try:
                     start_time = datetime.fromtimestamp(int(start_timestamp_ms) / 1000)
-                    duration = datetime.now() - start_time
-                    duration_minutes = max(0, int(duration.total_seconds() / 60))
-                except (ValueError, TypeError):
-                    pass
-
+                    duration_minutes = max(0, int((datetime.now() - start_time).total_seconds() / 60))
+                except (ValueError, TypeError): pass
         session_note = (request.form.get('session_note') or '').strip()
         session_rating_value = (request.form.get('session_rating') or '').strip()
         session_rating = None
         if session_rating_value:
             try:
                 parsed_rating = int(session_rating_value)
+                if 1 <= parsed_rating <= 10: session_rating = parsed_rating
             except (ValueError, TypeError):
                 parsed_rating = None
-            else:
-                if 1 <= parsed_rating <= 10:
-                    session_rating = parsed_rating
-
-        session_query = (
-            "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes, session_note, session_rating) "
-            "VALUES (:uid, :ts, :rd, :tn, :dur, :note, :rating) "
-            "ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes, "
-            "session_note = EXCLUDED.session_note, session_rating = EXCLUDED.session_rating"
-        )
-        execute_query(
-            session_query,
-            {
-                'uid': user_id,
-                'ts': session_timestamp,
-                'rd': record_date,
-                'tn': template_name,
-                'dur': duration_minutes,
-                'note': session_note or None,
-                'rating': session_rating,
-            },
-            commit=True,
-        )
+        session_query = "INSERT INTO workout_sessions (user_id, session_timestamp, record_date, template_name, duration_minutes, session_note, session_rating) VALUES (:uid, :ts, :rd, :tn, :dur, :note, :rating) ON CONFLICT(session_timestamp) DO UPDATE SET template_name = EXCLUDED.template_name, duration_minutes = EXCLUDED.duration_minutes, session_note = EXCLUDED.session_note, session_rating = EXCLUDED.session_rating"
+        execute_query(session_query, {'uid': user_id, 'ts': session_timestamp, 'rd': record_date, 'tn': template_name, 'dur': duration_minutes, 'note': session_note or None, 'rating': session_rating}, commit=True)
 
         if session_ts:
             execute_query('DELETE FROM workout_log WHERE user_id = :user_id AND session_timestamp = :ts', {'user_id': user_id, 'ts': session_ts}, commit=True)
             execute_query('DELETE FROM workout_session_comments WHERE user_id = :user_id AND session_timestamp = :ts', {'user_id': user_id, 'ts': session_ts}, commit=True)
-
+        
         latest_weight_data = execute_query('SELECT weight FROM daily_data WHERE user_id = :user_id AND weight IS NOT NULL ORDER BY record_date DESC LIMIT 1', {'user_id': user_id}, fetchone=True)
         latest_weight = latest_weight_data['weight'] if latest_weight_data else 0
-
+        
         has_data = False
         for key, reps_str in request.form.items():
             if key.startswith('reps_'):
                 if not reps_str: continue
-
                 parts = key.split('_'); exercise_id = int(parts[1]); set_number = int(parts[2])
                 weight_str = request.form.get(f'weight_{exercise_id}_{set_number}', '').lower()
-
                 final_weight = latest_weight if weight_str in ['io', 'me'] and latest_weight > 0 else 0
                 if weight_str not in ['io', 'me']:
                     try: final_weight = float(weight_str)
                     except (ValueError, TypeError): final_weight = 0
-
                 try: final_reps = int(reps_str)
                 except (ValueError, TypeError): final_reps = 0
-
                 if final_reps > 0 and final_weight >= 0:
                     has_data = True
-                    execute_query('INSERT INTO workout_log (user_id, exercise_id, record_date, session_timestamp, set_number, reps, weight) VALUES (:uid, :eid, :rd, :ts, :set, :reps, :w)',
-                                  {'uid': user_id, 'eid': exercise_id, 'rd': record_date, 'ts': session_timestamp, 'set': set_number, 'reps': final_reps, 'w': final_weight}, commit=True)
-
+                    execute_query('INSERT INTO workout_log (user_id, exercise_id, record_date, session_timestamp, set_number, reps, weight) VALUES (:uid, :eid, :rd, :ts, :set, :reps, :w)', {'uid': user_id, 'eid': exercise_id, 'rd': record_date, 'ts': session_timestamp, 'set': set_number, 'reps': final_reps, 'w': final_weight}, commit=True)
         if not has_data:
             flash('Nessun dato valido inserito. Allenamento non salvato.', 'warning')
             execute_query('DELETE FROM workout_sessions WHERE session_timestamp = :ts', {'ts': session_timestamp}, commit=True)
             return redirect(url_for('gym.sessione_palestra', date_param=record_date))
-
         for key, comment in request.form.items():
             if key.startswith('comment_'):
                 exercise_id = int(key.split('_')[1])
                 if comment:
                     comment_query = "INSERT INTO workout_session_comments (user_id, session_timestamp, exercise_id, comment) VALUES (:uid, :ts, :eid, :comm) ON CONFLICT(user_id, session_timestamp, exercise_id) DO UPDATE SET comment=EXCLUDED.comment"
                     execute_query(comment_query, {'uid': user_id, 'ts': session_timestamp, 'eid': exercise_id, 'comm': comment}, commit=True)
-
         flash('Allenamento salvato con successo!', 'success')
         return redirect(url_for('gym.diario_palestra'))
 
-    stored_session = execute_query(
-        'SELECT template_name, duration_minutes FROM workout_sessions WHERE user_id = :uid AND session_timestamp = :ts',
-        {'uid': user_id, 'ts': session_ts},
-        fetchone=True,
-    ) if session_ts else None
-
+    stored_session = execute_query('SELECT template_name, duration_minutes FROM workout_sessions WHERE user_id = :uid AND session_timestamp = :ts', {'uid': user_id, 'ts': session_ts}, fetchone=True) if session_ts else None
     selected_template_name = stored_session['template_name'] if stored_session else None
     stored_duration_minutes = stored_session['duration_minutes'] if stored_session else None
-
     templates = get_templates_with_history(user_id, current_date)
     selected_template_id = None
     if session_ts and selected_template_name:
@@ -416,34 +299,15 @@ def sessione_palestra(date_param, session_ts=None):
             if template['name'] == selected_template_name:
                 selected_template_id = template['id']
                 break
-
     requested_template_id = request.args.get('template_id', type=int)
     if not session_ts and requested_template_id is not None:
         selected_template_id = requested_template_id
     elif selected_template_id is None and requested_template_id is not None:
         selected_template_id = requested_template_id
-
     log_data = get_session_log_data(user_id, session_ts) if session_ts else {}
-
     cancel_url = url_for('gym.diario_palestra') if session_ts else url_for('gym.palestra')
 
-    return render_template(
-        'sessione_palestra.html',
-        title='Sessione Palestra',
-        templates=templates,
-        log_data=log_data,
-        record_date=record_date,
-        date_formatted=date_formatted,
-        prev_day=prev_day,
-        next_day=next_day,
-        is_today=is_today,
-        is_editing=(session_ts is not None),
-        session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'),
-        selected_template_id=selected_template_id,
-        selected_template_name=selected_template_name,
-        session_duration_minutes=stored_duration_minutes,
-        cancel_url=cancel_url,
-    )
+    return render_template('sessione_palestra.html', title='Sessione Palestra', templates=templates, log_data=log_data, record_date=record_date, date_formatted=date_formatted, prev_day=prev_day, next_day=next_day, is_today=is_today, is_editing=(session_ts is not None), session_timestamp=session_ts if session_ts else datetime.now().strftime('%Y%m%d%H%M%S'), selected_template_id=selected_template_id, selected_template_name=selected_template_name, session_duration_minutes=stored_duration_minutes, cancel_url=cancel_url)
 
 @gym_bp.route('/diario_palestra', methods=['GET', 'POST'])
 @login_required
@@ -459,22 +323,7 @@ def diario_palestra():
     sessions_raw = execute_query('SELECT session_timestamp, duration_minutes, template_name, session_note, session_rating FROM workout_sessions WHERE user_id = :uid', {'uid': user_id}, fetchall=True)
     sessions_info = {s['session_timestamp']: dict(s) for s in sessions_raw}
 
-    workouts_by_day = defaultdict(
-        lambda: {
-            'date_formatted': '',
-            'template_names': [],
-            'sessions': defaultdict(
-                lambda: {
-                    'time_formatted': '',
-                    'duration': None,
-                    'template_name': 'Allenamento Libero',
-                    'session_note': None,
-                    'session_rating': None,
-                    'exercises': defaultdict(list),
-                }
-            ),
-        }
-    )
+    workouts_by_day = defaultdict(lambda: {'date_formatted': '', 'template_names': [], 'sessions': defaultdict(lambda: {'time_formatted': '', 'duration': None, 'template_name': 'Allenamento Libero', 'session_note': None, 'session_rating': None, 'exercises': defaultdict(list)})})
     for row in logs_raw:
         day, ts, ex_name = row['record_date'], row['session_timestamp'], row['exercise_name']
         workouts_by_day[day]['date_formatted'] = day.strftime('%d %b %y')
@@ -489,6 +338,7 @@ def diario_palestra():
         if template_name not in workouts_by_day[day]['template_names']:
             workouts_by_day[day]['template_names'].append(template_name)
         s_data['exercises'][ex_name].append({'set': row['set_number'], 'reps': row['reps'], 'weight': row['weight']})
+    
     final_workouts = {}
     for day, data in workouts_by_day.items():
         sessions_payload = {}
@@ -496,9 +346,6 @@ def diario_palestra():
             session_dict = dict(s_data)
             session_dict['exercises'] = {name: sets for name, sets in s_data['exercises'].items()}
             sessions_payload[ts] = session_dict
-        final_workouts[day] = {
-            'date_formatted': data['date_formatted'],
-            'template_names': data['template_names'],
-            'sessions': sessions_payload,
-        }
+        final_workouts[day] = {'date_formatted': data['date_formatted'], 'template_names': data['template_names'], 'sessions': sessions_payload}
+        
     return render_template('diario_palestra.html', title='Diario Palestra', workouts_by_day=final_workouts)

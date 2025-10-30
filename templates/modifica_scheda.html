@@ -10,28 +10,6 @@
 </div>
 
 <div class="mb-4 p-3 border rounded">
-    <h5>Aggiungi Esercizio</h5>
-    <form id="add-exercise-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="add_exercise_to_template">
-        <input type="hidden" name="exercise_id" id="exercise_id_input">
-        <div class="row g-2 align-items-end">
-            <div class="col">
-                <label for="exercise_name_input" class="form-label mb-1 label-sm">Esercizio (clicca dall'archivio)</label>
-                <input type="text" id="exercise_name_input" name="exercise_name" class="form-control mb-0" readonly placeholder="Seleziona un esercizio sotto">
-            </div>
-            <div class="col-auto w-80">
-                <label for="sets_input" class="form-label mb-1 label-sm">Serie</label>
-                <input type="text" id="sets_input" name="sets" class="form-control mb-0" required>
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-custom btn-custom-short">Aggiungi</button>
-            </div>
-        </div>
-    </form>
-</div>
-
-<div class="mb-4 p-3 border rounded">
     <h5>Esercizi Attuali</h5>
     <table class="table table-sm table-bordered">
         <tbody>
@@ -56,8 +34,8 @@
 </div>
 
 <div class="mb-4">
-    <h5>Archivio Esercizi</h5>
-    <input type="text" id="search-exercise-input" class="form-control" placeholder="Cerca esercizio per nome...">
+    <h5>Cerca Esercizio</h5>
+    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
     <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
         <table class="table table-bordered table-hover table-sm">
             <thead>
@@ -71,7 +49,12 @@
                 <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
                     <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-light aggiungi-btn" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}">Aggiungi</button>
+                        <form method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="add_exercise_to_template">
+                            <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-light">Aggiungi</button>
+                        </form>
                         <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
                     </td>
                 </tr>
@@ -90,33 +73,19 @@
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput = document.getElementById('search-exercise-input');
-        const exerciseTbody = document.getElementById('all-exercises-tbody');
-        const exerciseRows = exerciseTbody.querySelectorAll('.exercise-row');
-        const exerciseNameInput = document.getElementById('exercise_name_input');
-        const exerciseIdInput = document.getElementById('exercise_id_input');
-        const setsInput = document.getElementById('sets_input');
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
 
-        // Funzione per filtrare la tabella
+        // Funzione per filtrare la tabella in tempo reale
         searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
+            const searchTerm = this.value.toLowerCase().trim();
             exerciseRows.forEach(row => {
-                if (row.dataset.name.includes(searchTerm)) {
+                const exerciseName = row.dataset.name;
+                if (exerciseName.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
                 }
             });
-        });
-
-        // Funzione per gestire i click sui pulsanti "Aggiungi"
-        exerciseTbody.addEventListener('click', function(event) {
-            if (event.target.classList.contains('aggiungi-btn')) {
-                const button = event.target;
-                exerciseNameInput.value = button.dataset.name;
-                exerciseIdInput.value = button.dataset.id;
-                setsInput.focus();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
         });
     });
 </script>

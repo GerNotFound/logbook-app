@@ -27,20 +27,23 @@
         <thead class="table-dark">
             <tr>
                 <th>Esercizio</th>
-                <th>Azioni</th>
+                <th class="text-center">Azioni</th>
             </tr>
         </thead>
         <tbody>
             {% for ex in exercises %}
             <tr>
-                <td>{{ ex.name }}</td>
+                <td class="align-middle">{{ ex.name }}</td>
                 <td class="text-center align-middle">
-                    <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete_exercise">
-                        <input type="hidden" name="exercise_id" value="{{ ex.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete">X</button>
-                    </form>
+                    <div class="btn-group">
+                        <a href="{{ url_for('admin.admin_esercizio_consigli', exercise_id=ex.id) }}" class="btn btn-sm btn-outline-light">Consigli</a>
+                        <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_exercise">
+                            <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete">X</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -53,31 +56,4 @@
 <div class="sticky-bottom-nav">
     <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script nonce="{{ csp_nonce() }}">
-    const DRAFT_KEY_ADD_EXERCISE = `admin_add_exercise_draft`;
-    const addExerciseForm = document.getElementById('add-exercise-form');
-    const exerciseInput = addExerciseForm.querySelector('input[name="name"]');
-
-    function saveDraft() {
-        if (exerciseInput.value) {
-            localStorage.setItem(DRAFT_KEY_ADD_EXERCISE, exerciseInput.value);
-        } else {
-            localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE);
-        }
-    }
-
-    function loadDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_ADD_EXERCISE);
-        if (draft) {
-            exerciseInput.value = draft;
-        }
-    }
-
-    exerciseInput.addEventListener('input', saveDraft);
-    addExerciseForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE));
-    document.addEventListener('DOMContentLoaded', loadDraft);
-</script>
 {% endblock %}
