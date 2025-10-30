@@ -90,7 +90,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Logica per il filtro live della tabella
         const searchInput = document.getElementById('search-exercise-input');
-        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody tr.exercise-row');
 
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
