@@ -130,13 +130,11 @@
         const tableBody = document.getElementById(`tbody-template-${templateId}`);
         if (!tableBody) return;
 
-        // Rimuovi la riga "Nessun esercizio" se presente
         const noExerciseRow = tableBody.querySelector(`.no-exercise-row-${templateId}`);
         if (noExerciseRow) {
             noExerciseRow.remove();
         }
 
-        // Crea la nuova riga della tabella
         const newRow = document.createElement('tr');
         newRow.id = `tex-${exercise.id}`;
         
@@ -157,13 +155,10 @@
         `;
         tableBody.appendChild(newRow);
 
-        // Resetta i campi del form nel modale
         form.querySelector('input[name="exercise_name"]').value = '';
         form.querySelector('input[name="exercise_id"]').value = '';
         form.querySelector('input[name="sets"]').value = '';
-        form.querySelector('input[name="csrf_token"]').value = csrf_token; // Aggiorna il token CSRF
-        
-        // Rimetti il focus sul primo campo per un inserimento rapido
+        form.querySelector('input[name="csrf_token"]').value = csrf_token;
         form.querySelector('input[name="exercise_name"]').focus();
     }
 
@@ -200,59 +195,56 @@
             }
         });
 
-        const initializeSuggestions = (suggestionsModule) => {
-            if (!suggestionsModule) return;
-            
-            const suggestionInstance = suggestionsModule.initField({
-                input: addExerciseForm.querySelector('.exercise-search-input'),
-                hiddenInput: addExerciseForm.querySelector('.exercise-id-input'),
-                container: addExerciseForm.querySelector('.suggestions-list'),
-                form: addExerciseForm,
-                endpoint: "{{ url_for('gym.suggest_exercises') }}",
-                globalIconLabel: 'Esercizio globale'
+        // La libreria catalog_suggestions.js viene caricata con 'defer',
+        // quindi sarà disponibile quando questo script viene eseguito.
+        const suggestionsModule = window.LogbookCatalogSuggestions;
+        if (!suggestionsModule) {
+            console.error("Modulo suggerimenti non trovato!");
+            return;
+        }
+
+        const suggestionInstance = suggestionsModule.initField({
+            input: addExerciseForm.querySelector('.exercise-search-input'),
+            hiddenInput: addExerciseForm.querySelector('.exercise-id-input'),
+            container: addExerciseForm.querySelector('.suggestions-list'),
+            form: addExerciseForm,
+            endpoint: "{{ url_for('gym.suggest_exercises') }}",
+            globalIconLabel: 'Esercizio globale'
+        });
+
+        if (addExerciseModal && suggestionInstance) {
+            const templateIdInput = addExerciseModal.querySelector('input[name="template_id"]');
+            const searchInput = addExerciseModal.querySelector('.exercise-search-input');
+            const setsInput = addExerciseModal.querySelector('input[name="sets"]');
+            const hiddenInput = addExerciseModal.querySelector('.exercise-id-input');
+
+            const resetModalForm = () => {
+                if (hiddenInput) { hiddenInput.value = ''; delete hiddenInput.dataset.normalized; }
+                if (searchInput) { searchInput.value = ''; }
+                if (setsInput) { setsInput.value = ''; }
+                suggestionInstance.hideSuggestions();
+                suggestionInstance.setPreferredIds([]);
+            };
+
+            addExerciseModal.addEventListener('show.bs.modal', (event) => {
+                resetModalForm();
+                const trigger = event.relatedTarget;
+                templateIdInput.value = trigger ? trigger.getAttribute('data-template-id') : '';
+
+                const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : '[]';
+                try {
+                    const parsedIds = JSON.parse(idsRaw);
+                    if (Array.isArray(parsedIds)) {
+                        suggestionInstance.setPreferredIds(parsedIds);
+                    }
+                } catch(e) { /* ignore */ }
             });
 
-            if (addExerciseModal && suggestionInstance) {
-                const templateIdInput = addExerciseModal.querySelector('input[name="template_id"]');
-                const searchInput = addExerciseModal.querySelector('.exercise-search-input');
-                const setsInput = addExerciseModal.querySelector('input[name="sets"]');
-                const hiddenInput = addExerciseModal.querySelector('.exercise-id-input');
+            addExerciseModal.addEventListener('shown.bs.modal', () => {
+                searchInput.focus({ preventScroll: true });
+            });
 
-                const resetModalForm = () => {
-                    if (hiddenInput) { hiddenInput.value = ''; delete hiddenInput.dataset.normalized; }
-                    if (searchInput) { searchInput.value = ''; }
-                    if (setsInput) { setsInput.value = ''; }
-                    suggestionInstance.hideSuggestions();
-                    suggestionInstance.setPreferredIds([]);
-                };
-
-                addExerciseModal.addEventListener('show.bs.modal', (event) => {
-                    resetModalForm();
-                    const trigger = event.relatedTarget;
-                    templateIdInput.value = trigger ? trigger.getAttribute('data-template-id') : '';
-
-                    const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : '[]';
-                    try {
-                        const parsedIds = JSON.parse(idsRaw);
-                        if (Array.isArray(parsedIds)) {
-                            suggestionInstance.setPreferredIds(parsedIds);
-                        }
-                    } catch(e) { /* ignore */ }
-                });
-
-                addExerciseModal.addEventListener('shown.bs.modal', () => {
-                    searchInput.focus({ preventScroll: true });
-                });
-
-                addExerciseModal.addEventListener('hidden.bs.modal', resetModalForm);
-            }
-        };
-
-        const moduleRef = window.LogbookCatalogSuggestions;
-        if (moduleRef) {
-            initializeSuggestions(moduleRef);
-        } else {
-            window.addEventListener('logbook:suggestions:ready', (e) => initializeSuggestions(e.detail), { once: true });
+            addExerciseModal.addEventListener('hidden.bs.modal', resetModalForm);
         }
     });
 </script>
