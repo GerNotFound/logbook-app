@@ -451,7 +451,8 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                            template=template,
                            template_slug=canonical_slug,
                            current_exercises=current_exercises,
-                           all_exercises=all_exercises)
+                           all_exercises=all_exercises,
+                           cancel_url=url_for('gym.scheda'))
 
 @gym_bp.route('/esercizio/<int:exercise_id>/info')
 @login_required
