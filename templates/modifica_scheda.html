@@ -4,7 +4,12 @@
     <div class="col-12">
         <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
     </div>
 </div>
 
@@ -23,7 +28,7 @@
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
-                    <form class="update-sets-form d-flex align-items-center">
+                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                         <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
@@ -41,7 +46,6 @@
                     </div>
                 </td>
             </tr>
-            <form id="update-sets-form-{{ exercise.id }}" class="d-none"></form>
             {% else %}
             <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
             {% endfor %}
