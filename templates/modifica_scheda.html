@@ -58,12 +58,10 @@
     <div class="row g-3 align-items-end">
         <div class="col-md-8 col-lg-6">
             <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
-            <form id="search-exercise-form">
-                <div class="input-group">
-                    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
-                    <button type="submit" class="btn btn-outline-light" id="search-exercise-button">CERCA</button>
-                </div>
-            </form>
+            <div class="input-group" id="search-exercise-controls">
+                <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
+                <button type="button" class="btn btn-outline-light" id="search-exercise-button">CERCA</button>
+            </div>
         </div>
         <div class="col-auto">
             <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
@@ -107,7 +105,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Logica per il filtro della tabella con priorità ai prefissi
         const searchInput = document.getElementById('search-exercise-input');
-        const searchForm = document.getElementById('search-exercise-form');
+        const searchButton = document.getElementById('search-exercise-button');
         const exercisesTbody = document.getElementById('all-exercises-tbody');
         const exerciseRows = Array.from(exercisesTbody.querySelectorAll('.exercise-row'));
 
@@ -137,47 +135,80 @@
         };
 
         searchInput.addEventListener('input', applyExerciseFilter);
-        if (searchForm) {
-            searchForm.addEventListener('submit', function(event) {
+        if (searchInput) {
+            searchInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyExerciseFilter();
+                }
+            });
+        }
+        if (searchButton) {
+            searchButton.addEventListener('click', function(event) {
                 event.preventDefault();
                 applyExerciseFilter();
             });
         }
 
         // Logica per l'aggiornamento AJAX delle serie
+        const updateForms = document.querySelectorAll('.update-sets-form');
+        const handleUpdateSets = async (form, triggerButton = null) => {
+            if (!form) {
+                return;
+            }
+
+            const button = triggerButton || document.querySelector(`button[form="${form.id}"]`);
+            const originalIconHTML = button ? button.innerHTML : null;
+
+            if (button) {
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            }
+
+            try {
+                const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                    method: 'POST',
+                    body: new FormData(form)
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    if (button) {
+                        button.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    }
+                } else {
+                    alert(data.error || 'Errore');
+                    if (button) {
+                        button.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    }
+                }
+            } catch (error) {
+                alert('Errore di rete.');
+                if (button) {
+                    button.innerHTML = '<i class="bi bi-x-lg"></i>';
+                }
+            } finally {
+                if (button) {
+                    setTimeout(() => {
+                        button.disabled = false;
+                        button.innerHTML = originalIconHTML;
+                    }, 2000);
+                }
+            }
+        };
+
+        updateForms.forEach(form => {
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                handleUpdateSets(form);
+            });
+        });
+
         document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
-            button.addEventListener('click', async function(event) {
+            button.addEventListener('click', function(event) {
                 event.preventDefault();
                 const formId = this.getAttribute('form');
                 const form = document.getElementById(formId);
-                if (!form) return;
-
-                const originalIconHTML = this.innerHTML;
-                this.disabled = true;
-                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-
-                try {
-                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                        method: 'POST',
-                        body: new FormData(form)
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                        this.innerHTML = '<i class="bi bi-check-lg"></i>'; // Icona di successo
-                    } else {
-                        alert(data.error || 'Errore');
-                        this.innerHTML = '<i class="bi bi-x-lg"></i>'; // Icona di errore
-                    }
-                } catch (error) {
-                    alert('Errore di rete.');
-                    this.innerHTML = '<i class="bi bi-x-lg"></i>';
-                } finally {
-                    // Ripristina l'icona originale dopo 2 secondi
-                    setTimeout(() => {
-                        this.disabled = false;
-                        this.innerHTML = originalIconHTML;
-                    }, 2000);
-                }
+                handleUpdateSets(form, this);
             });
         });
     });
