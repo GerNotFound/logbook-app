@@ -62,6 +62,44 @@ def _ensure_template_exercise_order(template_id: int) -> None:
     if dirty:
         db.session.commit()
 
+
+def _prune_orphan_template_exercises(template_id: int) -> set[int]:
+    """Rimuove eventuali esercizi orfani associati alla scheda specificata.
+
+    Può capitare che un esercizio venga eliminato dal catalogo ma continui ad
+    essere referenziato all'interno di ``template_exercises``. In questo caso
+    l'esercizio non viene più mostrato nella UI (la JOIN fallisce) e qualsiasi
+    tentativo di salvataggio genera un errore perché l'ID rimane comunque tra
+    quelli considerati "esistenti". Questa funzione pulisce tali record in
+    anticipo così da permettere all'utente di continuare a modificare la
+    scheda senza ostacoli.
+    """
+
+    if not template_id:
+        return set()
+
+    orphan_rows = execute_query(
+        'SELECT te.id '
+        'FROM template_exercises te '
+        'LEFT JOIN exercises e ON te.exercise_id = e.id '
+        'WHERE te.template_id = :tid AND e.id IS NULL',
+        {'tid': template_id},
+        fetchall=True,
+    ) or []
+
+    if not orphan_rows:
+        return set()
+
+    orphan_ids = {row['id'] for row in orphan_rows}
+    for orphan_id in orphan_ids:
+        execute_query(
+            'DELETE FROM template_exercises WHERE id = :id',
+            {'id': orphan_id},
+        )
+
+    db.session.commit()
+    return orphan_ids
+
 @gym_bp.route('/api/suggest/exercises')
 @login_required
 def suggest_exercises():
@@ -269,6 +307,10 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
     if request.method == 'GET' and template_slug != canonical_slug:
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
+    pruned_orphans = _prune_orphan_template_exercises(template_id)
+    if pruned_orphans:
+        flash('Alcuni esercizi non erano più disponibili e sono stati rimossi dalla scheda.', 'warning')
+
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_exercise_to_template':
@@ -304,7 +346,10 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                 return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
             existing_records = execute_query(
-                'SELECT id FROM template_exercises WHERE template_id = :tid',
+                'SELECT te.id '
+                'FROM template_exercises te '
+                'JOIN exercises e ON te.exercise_id = e.id '
+                'WHERE te.template_id = :tid',
                 {'tid': template_id},
                 fetchall=True,
             ) or []
