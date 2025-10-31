@@ -19,35 +19,32 @@
         <thead>
             <tr>
                 <th style="width: 50%;">Esercizio</th>
-                <th style="width: 25%;">Serie</th>
-                <th class="text-center" style="width: 25%;">Azioni</th>
+                <th style="width: 50%;">Serie</th>
             </tr>
         </thead>
         <tbody>
             {% for exercise in current_exercises %}
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
-                <td class="align-middle">
-                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}">
+                <td>
+                    <form class="update-sets-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
+                        <div class="input-group">
+                            <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
+                            <button type="submit" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
+                            <button type="submit" form="delete-form-{{ exercise.id }}" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
+                        </div>
                     </form>
-                </td>
-                <td class="text-center align-middle">
-                    <div class="btn-group">
-                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
-                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_template_exercise">
-                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
-                        </form>
-                    </div>
+                    <form method="POST" id="delete-form-{{ exercise.id }}" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-none">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete_template_exercise">
+                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                    </form>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
+            <tr><td colspan="2" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -113,9 +110,7 @@
             form.addEventListener('submit', async function(event) {
                 event.preventDefault(); // Impedisce l'invio tradizionale
                 
-                const submitButton = document.querySelector(`button[form='${form.id}']`);
-                if (!submitButton) return;
-
+                const submitButton = this.querySelector('button[type="submit"]');
                 const originalIconHTML = submitButton.innerHTML;
                 submitButton.disabled = true;
                 submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
