@@ -12,15 +12,41 @@ from services.suggestion_service import get_catalog_suggestions, resolve_catalog
 
 gym_bp = Blueprint('gym', __name__)
 
-# --- ENDPOINT API PER AJAX (NON USATO NELLA PAGINA MODIFICA_SCHEDA) ---
+# --- ENDPOINT API PER AJAX ---
 
-@gym_bp.get('/api/suggest/exercises')
+@gym_bp.route('/api/suggest/exercises')
 @login_required
 def suggest_exercises():
     user_id = session['user_id']
     search_term = (request.args.get('q') or '').strip()
     suggestions = get_catalog_suggestions('exercises', user_id, search_term)
     return jsonify({'results': suggestions})
+
+@gym_bp.route('/scheda/aggiorna-serie', methods=['POST'])
+@login_required
+def aggiorna_serie():
+    user_id = session['user_id']
+    template_exercise_id = request.form.get('template_exercise_id')
+    sets = request.form.get('sets', '')
+
+    if not template_exercise_id:
+        return jsonify({'success': False, 'error': 'ID mancante.'}), 400
+
+    query = """
+        UPDATE template_exercises SET sets = :sets 
+        WHERE id = :teid AND EXISTS (
+            SELECT 1 FROM workout_templates wt 
+            WHERE wt.id = template_exercises.template_id AND wt.user_id = :uid
+        )
+    """
+    try:
+        execute_query(query, {'sets': sets, 'teid': template_exercise_id, 'uid': user_id}, commit=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Errore durante l'aggiornamento delle serie: {e}")
+        return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
 
 # --- ROTTE TRADIZIONALI ---
 
@@ -126,22 +152,6 @@ def modifica_scheda_dettaglio(template_id):
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
             flash('Esercizio rimosso dalla scheda.', 'success')
-        elif action == 'update_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            sets = (request.form.get('sets') or '').strip()
-            if template_exercise_id and sets:
-                query = """
-                    UPDATE template_exercises SET sets = :sets 
-                    WHERE id = :teid AND EXISTS (
-                        SELECT 1 FROM workout_templates wt 
-                        WHERE wt.id = template_exercises.template_id AND wt.user_id = :uid
-                    )
-                """
-                execute_query(query, {'sets': sets, 'teid': template_exercise_id, 'uid': user_id}, commit=True)
-                flash('Serie aggiornate.', 'success')
-            else:
-                flash('Dati per l\'aggiornamento mancanti.', 'danger')
-
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
 
     current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)
