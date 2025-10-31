@@ -23,9 +23,9 @@
                 <th class="text-center">Azioni</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="current-exercises-tbody">
             {% for exercise in current_exercises %}
-            <tr>
+            <tr id="template-exercise-row-{{ exercise.id }}" data-template-exercise-id="{{ exercise.id }}">
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
                     <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}">
@@ -37,6 +37,14 @@
                 </td>
                 <td class="text-center align-middle">
                     <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+                        <div class="btn-group" role="group" aria-label="Riordina esercizio">
+                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="up" data-template-exercise-id="{{ exercise.id }}" title="Sposta su" {% if loop.first %}disabled{% endif %}>
+                                <i class="bi bi-arrow-up"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="down" data-template-exercise-id="{{ exercise.id }}" title="Sposta giù" {% if loop.last %}disabled{% endif %}>
+                                <i class="bi bi-arrow-down"></i>
+                            </button>
+                        </div>
                         <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
                         <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" onsubmit="return confirm('Confermi di voler eliminare questo esercizio dalla scheda?');" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -103,39 +111,54 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
-        // Logica per il filtro della tabella con priorità ai prefissi
-        const searchInput = document.getElementById('search-exercise-input');
-        const searchButton = document.getElementById('search-exercise-button');
-        const exercisesTbody = document.getElementById('all-exercises-tbody');
-        const exerciseRows = Array.from(exercisesTbody.querySelectorAll('.exercise-row'));
+        var searchInput = document.getElementById('search-exercise-input');
+        var searchButton = document.getElementById('search-exercise-button');
+        var exercisesTbody = document.getElementById('all-exercises-tbody');
+        var exerciseRows = exercisesTbody ? Array.prototype.slice.call(exercisesTbody.querySelectorAll('.exercise-row')) : [];
 
-        const applyExerciseFilter = () => {
-            const searchTerm = (searchInput.value || '').toLowerCase().trim();
-
-            if (!searchTerm) {
-                exerciseRows.forEach(row => {
-                    row.style.display = '';
-                    exercisesTbody.appendChild(row);
-                });
+        function applyExerciseFilter() {
+            if (!exercisesTbody) {
                 return;
             }
 
-            const prefixMatches = exerciseRows.filter(row => row.dataset.name.startsWith(searchTerm));
-            const containsMatches = exerciseRows.filter(row => !row.dataset.name.startsWith(searchTerm) && row.dataset.name.includes(searchTerm));
-            const orderedMatches = prefixMatches.concat(containsMatches);
+            var rawValue = searchInput && typeof searchInput.value === 'string' ? searchInput.value : '';
+            var searchTerm = rawValue.toLowerCase().trim();
 
-            exerciseRows.forEach(row => {
-                row.style.display = 'none';
-            });
+            if (!searchTerm) {
+                for (var i = 0; i < exerciseRows.length; i++) {
+                    var row = exerciseRows[i];
+                    row.style.display = '';
+                    exercisesTbody.appendChild(row);
+                }
+                return;
+            }
 
-            orderedMatches.forEach(row => {
-                row.style.display = '';
-                exercisesTbody.appendChild(row);
-            });
-        };
+            var prefixMatches = [];
+            var containsMatches = [];
 
-        searchInput.addEventListener('input', applyExerciseFilter);
+            for (var j = 0; j < exerciseRows.length; j++) {
+                var exerciseRow = exerciseRows[j];
+                var datasetName = exerciseRow.getAttribute('data-name') || '';
+                if (datasetName.indexOf(searchTerm) === 0) {
+                    prefixMatches.push(exerciseRow);
+                } else if (datasetName.indexOf(searchTerm) > -1) {
+                    containsMatches.push(exerciseRow);
+                }
+                exerciseRow.style.display = 'none';
+            }
+
+            var orderedMatches = prefixMatches.concat(containsMatches);
+            for (var k = 0; k < orderedMatches.length; k++) {
+                var matchedRow = orderedMatches[k];
+                matchedRow.style.display = '';
+                exercisesTbody.appendChild(matchedRow);
+            }
+        }
+
         if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                applyExerciseFilter();
+            });
             searchInput.addEventListener('keydown', function(event) {
                 if (event.key === 'Enter') {
                     event.preventDefault();
@@ -150,15 +173,15 @@
             });
         }
 
-        // Logica per l'aggiornamento AJAX delle serie
-        const updateForms = document.querySelectorAll('.update-sets-form');
-        const handleUpdateSets = async (form, triggerButton = null) => {
+        var updateForms = document.querySelectorAll('.update-sets-form');
+
+        async function handleUpdateSets(form, triggerButton) {
             if (!form) {
                 return;
             }
 
-            const button = triggerButton || document.querySelector(`button[form="${form.id}"]`);
-            const originalIconHTML = button ? button.innerHTML : null;
+            var button = triggerButton || document.querySelector('button[form="' + form.id + '"]');
+            var originalIconHTML = button ? button.innerHTML : null;
 
             if (button) {
                 button.disabled = true;
@@ -166,51 +189,163 @@
             }
 
             try {
-                const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                var response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
                     method: 'POST',
                     body: new FormData(form)
                 });
-                const data = await response.json();
+                var data = await response.json();
                 if (response.ok && data.success) {
                     if (button) {
                         button.innerHTML = '<i class="bi bi-check-lg"></i>';
                     }
                 } else {
-                    alert(data.error || 'Errore');
                     if (button) {
                         button.innerHTML = '<i class="bi bi-x-lg"></i>';
                     }
+                    alert(data.error || 'Errore');
                 }
             } catch (error) {
-                alert('Errore di rete.');
                 if (button) {
                     button.innerHTML = '<i class="bi bi-x-lg"></i>';
                 }
+                alert('Errore di rete.');
             } finally {
                 if (button) {
-                    setTimeout(() => {
+                    setTimeout(function() {
                         button.disabled = false;
                         button.innerHTML = originalIconHTML;
                     }, 2000);
                 }
             }
-        };
+        }
 
-        updateForms.forEach(form => {
-            form.addEventListener('submit', function(event) {
-                event.preventDefault();
-                handleUpdateSets(form);
-            });
-        });
+        for (var f = 0; f < updateForms.length; f++) {
+            (function(form) {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    handleUpdateSets(form);
+                });
+            })(updateForms[f]);
+        }
 
-        document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
-            button.addEventListener('click', function(event) {
-                event.preventDefault();
-                const formId = this.getAttribute('form');
-                const form = document.getElementById(formId);
-                handleUpdateSets(form, this);
-            });
-        });
+        var saveButtons = document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]');
+        for (var b = 0; b < saveButtons.length; b++) {
+            (function(button) {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    var formId = button.getAttribute('form');
+                    var form = document.getElementById(formId);
+                    handleUpdateSets(form, button);
+                });
+            })(saveButtons[b]);
+        }
+
+        var currentExercisesTbody = document.getElementById('current-exercises-tbody');
+
+        function getCsrfToken() {
+            var tokenInput = document.querySelector('.update-sets-form input[name="csrf_token"]');
+            if (tokenInput) {
+                return tokenInput.value;
+            }
+            var fallbackToken = document.querySelector('input[name="csrf_token"]');
+            return fallbackToken ? fallbackToken.value : '';
+        }
+
+        function refreshReorderButtons() {
+            if (!currentExercisesTbody) {
+                return;
+            }
+            var rows = currentExercisesTbody.querySelectorAll('tr[data-template-exercise-id]');
+            var total = rows.length;
+            for (var idx = 0; idx < total; idx++) {
+                var row = rows[idx];
+                var upButton = row.querySelector('.move-exercise-button[data-direction="up"]');
+                var downButton = row.querySelector('.move-exercise-button[data-direction="down"]');
+                if (upButton) {
+                    upButton.disabled = idx === 0;
+                }
+                if (downButton) {
+                    downButton.disabled = idx === total - 1;
+                }
+            }
+        }
+
+        function handleReorderClick(event) {
+            event.preventDefault();
+            var button = event.currentTarget;
+            if (!button || button.disabled) {
+                return;
+            }
+
+            var templateExerciseId = button.getAttribute('data-template-exercise-id');
+            var direction = button.getAttribute('data-direction');
+            if (!templateExerciseId || !direction) {
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('csrf_token', getCsrfToken());
+            formData.append('template_exercise_id', templateExerciseId);
+            formData.append('direction', direction);
+
+            button.disabled = true;
+
+            fetch("{{ url_for('gym.riordina_esercizio') }}", {
+                method: 'POST',
+                body: formData
+            })
+                .then(function(response) {
+                    return response
+                        .json()
+                        .then(function(payload) {
+                            return { ok: response.ok, payload: payload };
+                        })
+                        .catch(function() {
+                            return { ok: response.ok, payload: { success: false, error: 'Risposta non valida.' } };
+                        });
+                })
+                .then(function(result) {
+                    if (!result.ok || !result.payload || !result.payload.success) {
+                        var message = result.payload && result.payload.error ? result.payload.error : 'Impossibile riordinare l\'esercizio.';
+                        throw new Error(message);
+                    }
+
+                    if (!currentExercisesTbody) {
+                        return;
+                    }
+
+                    var row = document.getElementById('template-exercise-row-' + templateExerciseId);
+                    if (!row) {
+                        return;
+                    }
+
+                    if (direction === 'up') {
+                        var previousRow = row.previousElementSibling;
+                        if (previousRow) {
+                            currentExercisesTbody.insertBefore(row, previousRow);
+                        }
+                    } else if (direction === 'down') {
+                        var nextRow = row.nextElementSibling;
+                        if (nextRow) {
+                            currentExercisesTbody.insertBefore(nextRow, row);
+                        }
+                    }
+                })
+                .catch(function(error) {
+                    alert(error.message || 'Impossibile riordinare l\'esercizio.');
+                })
+                .finally(function() {
+                    button.disabled = false;
+                    refreshReorderButtons();
+                });
+        }
+
+        var reorderButtons = document.querySelectorAll('.move-exercise-button');
+        for (var r = 0; r < reorderButtons.length; r++) {
+            reorderButtons[r].addEventListener('click', handleReorderClick);
+        }
+
+        refreshReorderButtons();
     });
 </script>
 {% endblock %}

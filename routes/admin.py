@@ -200,8 +200,13 @@ def admin_utente_scheda_modifica(user_id, template_id):
             exercise_id = request.form.get('exercise_id')
             sets = request.form.get('sets')
             if exercise_id and sets:
-                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': sets}, commit=True)
+                execute_query(
+                    'INSERT INTO template_exercises (template_id, exercise_id, sets, sort_order) '
+                    'VALUES (:tid, :eid, :sets, '
+                    '        (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM template_exercises WHERE template_id = :tid))',
+                    {'tid': template_id, 'eid': exercise_id, 'sets': sets},
+                    commit=True,
+                )
                 flash('Esercizio aggiunto alla scheda.', 'success')
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
@@ -209,7 +214,15 @@ def admin_utente_scheda_modifica(user_id, template_id):
             flash('Esercizio rimosso dalla scheda.', 'success')
         return redirect(url_for('admin.admin_utente_scheda_modifica', user_id=user_id, template_id=template_id))
 
-    template_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)
+    template_exercises = execute_query(
+        'SELECT te.id, e.name, te.sets '
+        'FROM template_exercises te '
+        'JOIN exercises e ON te.exercise_id = e.id '
+        'WHERE te.template_id = :tid '
+        'ORDER BY COALESCE(te.sort_order, te.id), te.id',
+        {'tid': template_id},
+        fetchall=True,
+    )
     all_exercises = execute_query('SELECT * FROM exercises WHERE user_id IS NULL OR user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True)
     
     return render_template('admin_utente_scheda_modifica.html', title=f'Modifica {template["name"]}', user=user, template=template, template_exercises=template_exercises, all_exercises=all_exercises)

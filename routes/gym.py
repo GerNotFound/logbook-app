@@ -31,6 +31,35 @@ def _get_template_by_slug(user_id: int, template_slug: str):
             return tpl
     return None
 
+
+def _ensure_template_exercise_order(template_id: int) -> None:
+    """Normalizza l'ordinamento degli esercizi di una scheda."""
+
+    if not template_id:
+        return
+
+    rows = execute_query(
+        'SELECT id, sort_order '
+        'FROM template_exercises '
+        'WHERE template_id = :tid '
+        'ORDER BY COALESCE(sort_order, id), id',
+        {'tid': template_id},
+        fetchall=True,
+    ) or []
+
+    dirty = False
+    for index, row in enumerate(rows, start=1):
+        current_order = row.get('sort_order')
+        if current_order != index:
+            execute_query(
+                'UPDATE template_exercises SET sort_order = :order WHERE id = :id',
+                {'order': index, 'id': row['id']},
+            )
+            dirty = True
+
+    if dirty:
+        db.session.commit()
+
 @gym_bp.route('/api/suggest/exercises')
 @login_required
 def suggest_exercises():
@@ -63,6 +92,70 @@ def aggiorna_serie():
         db.session.rollback()
         current_app.logger.error(f"Errore durante l'aggiornamento delle serie: {e}")
         return jsonify({'success': False, 'error': 'Errore del server.'}), 500
+
+
+@gym_bp.route('/scheda/riordina-esercizio', methods=['POST'])
+@login_required
+def riordina_esercizio():
+    user_id = session['user_id']
+    template_exercise_id = request.form.get('template_exercise_id')
+    direction = request.form.get('direction')
+
+    if not template_exercise_id or direction not in {'up', 'down'}:
+        return jsonify({'success': False, 'error': 'Parametri non validi.'}), 400
+
+    try:
+        te_id = int(template_exercise_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'ID non valido.'}), 400
+
+    record = execute_query(
+        'SELECT te.template_id '
+        'FROM template_exercises te '
+        'JOIN workout_templates wt ON wt.id = te.template_id '
+        'WHERE te.id = :teid AND wt.user_id = :uid',
+        {'teid': te_id, 'uid': user_id},
+        fetchone=True,
+    )
+
+    if not record:
+        return jsonify({'success': False, 'error': 'Esercizio non trovato.'}), 404
+
+    template_id = record['template_id']
+    _ensure_template_exercise_order(template_id)
+
+    exercises = execute_query(
+        'SELECT id, sort_order '
+        'FROM template_exercises '
+        'WHERE template_id = :tid '
+        'ORDER BY sort_order, id',
+        {'tid': template_id},
+        fetchall=True,
+    ) or []
+
+    index = next((idx for idx, row in enumerate(exercises) if row['id'] == te_id), None)
+    if index is None:
+        return jsonify({'success': False, 'error': 'Esercizio non trovato.'}), 404
+
+    swap_index = index - 1 if direction == 'up' else index + 1
+    if swap_index < 0 or swap_index >= len(exercises):
+        return jsonify({'success': False, 'error': 'Nessun elemento da scambiare.'}), 400
+
+    current_order = exercises[index]['sort_order']
+    swap_order = exercises[swap_index]['sort_order']
+    swap_id = exercises[swap_index]['id']
+
+    execute_query(
+        'UPDATE template_exercises SET sort_order = :order WHERE id = :id',
+        {'order': swap_order, 'id': te_id},
+    )
+    execute_query(
+        'UPDATE template_exercises SET sort_order = :order WHERE id = :id',
+        {'order': current_order, 'id': swap_id},
+        commit=True,
+    )
+
+    return jsonify({'success': True})
 
 
 # --- ROTTE TRADIZIONALI ---
@@ -136,8 +229,13 @@ def scheda():
     for t in templates_raw:
         template_dict = dict(t)
         template_dict['slug'] = slugify(template_dict['name'])
+        _ensure_template_exercise_order(t['id'])
         exercises = execute_query(
-            'SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id',
+            'SELECT te.id, e.name, e.user_id, te.sets '
+            'FROM template_exercises te '
+            'JOIN exercises e ON te.exercise_id = e.id '
+            'WHERE te.template_id = :tid '
+            'ORDER BY te.sort_order, te.id',
             {'tid': t['id']},
             fetchall=True,
         )
@@ -174,8 +272,13 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
         if action == 'add_exercise_to_template':
             exercise_id = request.form.get('exercise_id')
             if exercise_id:
-                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': '1'}, commit=True)
+                execute_query(
+                    'INSERT INTO template_exercises (template_id, exercise_id, sets, sort_order) '
+                    'VALUES (:tid, :eid, :sets, '
+                    '        (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM template_exercises WHERE template_id = :tid))',
+                    {'tid': template_id, 'eid': exercise_id, 'sets': '1'},
+                    commit=True,
+                )
                 flash('Esercizio aggiunto.', 'success')
             else:
                 flash('Nessun esercizio selezionato.', 'danger')
@@ -200,7 +303,16 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                 flash('Errore aggiornamento serie. Inserisci un numero valido.', 'danger')
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
-    current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)
+    _ensure_template_exercise_order(template_id)
+    current_exercises = execute_query(
+        'SELECT te.id, e.name, te.sets '
+        'FROM template_exercises te '
+        'JOIN exercises e ON te.exercise_id = e.id '
+        'WHERE te.template_id = :tid '
+        'ORDER BY te.sort_order, te.id',
+        {'tid': template_id},
+        fetchall=True,
+    )
     all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
 
     return render_template('modifica_scheda.html',

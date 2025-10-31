@@ -156,6 +156,7 @@ CREATE TABLE template_exercises (
     template_id INTEGER NOT NULL,
     exercise_id INTEGER NOT NULL,
     sets TEXT NOT NULL,
+    sort_order INTEGER,
     FOREIGN KEY (template_id) REFERENCES workout_templates (id) ON DELETE CASCADE,
     FOREIGN KEY (exercise_id) REFERENCES exercises (id) ON DELETE CASCADE
 );

@@ -49,7 +49,13 @@ def build_user_export_archive(user_id: int, *, spool_threshold: int = 5 * 1024 *
         'workout_session_comments.csv': execute_query('SELECT * FROM workout_session_comments WHERE user_id = :user_id ORDER BY id', {'user_id': user_id}, fetchall=True),
         'foods.csv': execute_query('SELECT * FROM foods WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True),
         'workout_templates.csv': execute_query('SELECT * FROM workout_templates WHERE user_id = :user_id ORDER BY name', {'user_id': user_id}, fetchall=True),
-        'template_exercises.csv': execute_query('SELECT * FROM template_exercises WHERE template_id IN (SELECT id FROM workout_templates WHERE user_id = :user_id) ORDER BY template_id, id', {'user_id': user_id}, fetchall=True),
+        'template_exercises.csv': execute_query(
+            'SELECT * FROM template_exercises '
+            'WHERE template_id IN (SELECT id FROM workout_templates WHERE user_id = :user_id) '
+            'ORDER BY template_id, COALESCE(sort_order, id), id',
+            {'user_id': user_id},
+            fetchall=True,
+        ),
     }
 
     spool = tempfile.SpooledTemporaryFile(max_size=spool_threshold)
