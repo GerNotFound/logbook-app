@@ -152,6 +152,21 @@ def modifica_scheda_dettaglio(template_id):
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
             flash('Esercizio rimosso dalla scheda.', 'success')
+        elif action == 'update_sets':
+            template_exercise_id = request.form.get('template_exercise_id')
+            sets_raw = (request.form.get('sets') or '').strip()
+            try:
+                sets_val = int(sets_raw)
+                if sets_val < 0:
+                    raise ValueError('sets negativo')
+                execute_query(
+                    'UPDATE template_exercises SET sets = :sets WHERE id = :id',
+                    {'sets': sets_val, 'id': template_exercise_id},
+                    commit=True
+                )
+                flash('Serie aggiornate.', 'success')
+            except Exception:
+                flash('Errore aggiornamento serie. Inserisci un numero valido.', 'danger')
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
 
     current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)

@@ -1,155 +1,150 @@
 {% extends 'layout.html' %}
 {% block content %}
-
 <div class="row">
-  <div class="col-12">
-    <h1 class="mb-4 brand-heading">
-      <span class="brand-heading__section">LOGBOOK</span>
-      <span class="brand-heading__section">/ Schede</span>
-      <span class="brand-heading__section">/ Modifica</span>
-      <span class="brand-heading__section">/ {{ template.name }}</span>
-    </h1>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-  </div>
-</div>
-
-<!-- ESERCIZI ATTUALI NELLA SCHEDA -->
-<div class="mb-4">
-  <h5>Esercizi nella scheda</h5>
-  <div class="table-responsive">
-    <table class="table table-bordered table-hover table-sm align-middle">
-      <thead>
-        <tr>
-          <th style="width: 50%">Esercizio</th>
-          <th style="width: 35%">Serie</th>
-          <th class="text-center" style="width: 15%">Azioni</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for exercise in current_exercises %}
-        <tr>
-          <td class="align-middle">{{ exercise.name }}</td>
-
-          <td class="align-middle">
-            <!-- Form AGGIORNA SERIE: submit alla stessa pagina -->
-            <form method="POST"
-                  action=""
-                  class="d-flex align-items-center gap-2 update-sets-form"
-                  id="update-sets-form-{{ exercise.id }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="action" value="update_sets">
-              <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-              <input type="number"
-                     class="form-control form-control-sm"
-                     name="sets"
-                     value="{{ exercise.sets }}"
-                     min="0" step="1" required
-                     inputmode="numeric" pattern="[0-9]*" />
-            </form>
-          </td>
-
-          <td class="text-center align-middle">
-            <div class="btn-group">
-              <!-- Bottone SALVA: dentro il form corrispondente -->
-              <button type="submit"
-                      form="update-sets-form-{{ exercise.id }}"
-                      class="btn btn-sm btn-outline-light me-2"
-                      title="Salva serie">
-                <i class="bi bi-floppy"></i>
-              </button>
-
-              <!-- Bottone ELIMINA -->
-              <form method="POST"
-                    action="{{ url_for('gym.delete_template_exercise', template_id=template.id, template_exercise_id=exercise.id) }}"
-                    onsubmit="return confirm('Sei sicuro?');"
-                    class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger" title="Elimina Esercizio">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- RICERCA E AGGIUNTA ESERCIZI -->
-<div class="mb-4">
-  <h5>Cerca Esercizio</h5>
-  <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
-
-  <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
-    <table class="table table-bordered table-hover table-sm">
-      <thead>
-        <tr>
-          <th>Esercizio</th>
-          <th class="text-center">Azioni</th>
-        </tr>
-      </thead>
-      <tbody id="all-exercises-tbody">
-        {% for exercise in all_exercises %}
-        <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
-          <td>
-            {{ exercise.name }}
-            {% if exercise.user_id is none %}
-              <i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
+                {% endfor %}
             {% endif %}
-          </td>
-          <td class="text-center">
-            <form method="POST" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="action" value="add_exercise_to_template">
-              <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
-              <button type="submit" class="btn btn-sm btn-outline-light">Aggiungi</button>
-            </form>
-            <a href="{{ url_for('gym.esercizio_info', esercizio_id=exercise.id) }}"
-               class="btn btn-sm btn-outline-secondary">Info</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
+        {% endwith %}
+    </div>
+</div>
+
+<div class="mb-4">
+    <h5>Esercizi Attuali</h5>
+    <table class="table table-sm table-bordered">
+        <thead>
+            <tr>
+                <th>Esercizio</th>
+                <th class="serie-column">Serie</th>
+                <th class="text-center">Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exercise in current_exercises %}
+            <tr>
+                <td class="align-middle">{{ exercise.name }}</td>
+                <td class="align-middle">
+                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}">
+              <input type="hidden" name="action" value="update_sets">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                        <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
+                    </form>
+                </td>
+                <td class="text-center align-middle">
+                    <div class="btn-group">
+                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
+                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_template_exercise">
+                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
+            {% endfor %}
+        </tbody>
     </table>
-  </div>
+</div>
+
+<div class="mb-4">
+    <h5>Cerca Esercizio</h5>
+    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
+    <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
+        <table class="table table-bordered table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>Esercizio</th>
+                    <th class="text-center">Azioni</th>
+                </tr>
+            </thead>
+            <tbody id="all-exercises-tbody">
+                {% for exercise in all_exercises %}
+                <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
+                    <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                    <td class="text-center">
+                        <form method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="add_exercise_to_template">
+                            <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-light">Aggiungi</button>
+                        </form>
+                        <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div class="sticky-bottom-nav">
-  <a href="{{ url_for('gym.scheda') }}" class="btn btn-secondary w-100">Torna alle schede</a>
+    <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom full-width-btn">TORNA ALLE SCHEDE</a>
 </div>
+{% endblock %}
 
-<!-- SCRIPT: filtro live -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const input = document.getElementById('search-exercise-input');
-  const tbody = document.getElementById('all-exercises-tbody');
-  if (!input || !tbody) return;
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        // Logica per il filtro live della tabella
+        const searchInput = document.getElementById('search-exercise-input');
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
 
-  const rows = Array.from(tbody.querySelectorAll('tr.exercise-row'));
-  input.addEventListener('input', function () {
-    const q = this.value.trim().toLowerCase();
-    rows.forEach(row => {
-      const name = row.getAttribute('data-name') || row.textContent.toLowerCase();
-      row.style.display = name.includes(q) ? '' : 'none';
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            exerciseRows.forEach(row => {
+                const exerciseName = row.dataset.name;
+                if (exerciseName.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // Logica per l'aggiornamento AJAX delle serie
+        document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
+            button.addEventListener('click', async function(event) {
+                event.preventDefault();
+                const formId = this.getAttribute('form');
+                const form = document.getElementById(formId);
+                if (!form) return;
+
+                const originalIconHTML = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+                try {
+                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                        method: 'POST',
+                        body: new FormData(form)
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        this.innerHTML = '<i class="bi bi-check-lg"></i>'; // Icona di successo
+                    } else {
+                        alert(data.error || 'Errore');
+                        this.innerHTML = '<i class="bi bi-x-lg"></i>'; // Icona di errore
+                    }
+                } catch (error) {
+                    alert('Errore di rete.');
+                    this.innerHTML = '<i class="bi bi-x-lg"></i>';
+                } finally {
+                    // Ripristina l'icona originale dopo 2 secondi
+                    setTimeout(() => {
+                        this.disabled = false;
+                        this.innerHTML = originalIconHTML;
+                    }, 2000);
+                }
+            });
+        });
     });
-  });
-});
 </script>
-
 {% endblock %}

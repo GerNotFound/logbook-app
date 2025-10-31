@@ -1,10 +1,10 @@
-.git
-__pycache__/
+.venv
+__pycache__
 *.pyc
 *.pyo
 *.pyd
-.venv/
-venv/
-*.log
-node_modules/
-tests/
+.env
+logbook.db
+logbook.db-journal
+.git
+.gitignore
