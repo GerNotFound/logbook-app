@@ -36,7 +36,7 @@
                 </td>
                 <td class="text-center align-middle">
                     <div class="btn-group">
-                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
+                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light me-2" title="Salva Serie"><i class="bi bi-floppy"></i></button>
                         <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="delete_template_exercise">
@@ -145,5 +145,22 @@
             });
         });
     });
+
+
+// Live filter for "Cerca Esercizio"
+(function() {
+    const input = document.getElementById('search-exercise-input');
+    const tbody = document.getElementById('all-exercises-tbody');
+    if (!input || !tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr.exercise-row'));
+    input.addEventListener('input', function() {
+        const q = this.value.trim().toLowerCase();
+        rows.forEach(row => {
+            const name = row.getAttribute('data-name') || row.textContent.toLowerCase();
+            row.style.display = name.includes(q) ? '' : 'none';
+        });
+    });
+})();
+
 </script>
 {% endblock %}
