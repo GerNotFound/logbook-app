@@ -23,6 +23,7 @@
         <table class="table table-sm table-bordered">
         <thead>
             <tr>
+                <th class="text-center position-column">#</th>
                 <th>Esercizio</th>
                 <th class="serie-column">Serie</th>
                 <th class="text-center">Azioni</th>
@@ -31,6 +32,7 @@
         <tbody id="current-exercises-tbody">
             {% for exercise in current_exercises %}
             <tr class="template-exercise-row" data-template-exercise-id="{{ exercise.id }}">
+                <td class="text-center align-middle position-cell"><span class="exercise-position"></span></td>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
                     <input type="text" class="form-control form-control-sm sets-input" value="{{ exercise.sets }}">
@@ -53,7 +55,7 @@
             </tr>
             {% endfor %}
             <tr id="no-exercises-row" class="{% if current_exercises %}d-none{% endif %}">
-                <td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
+                <td colspan="4" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
             </tr>
         </tbody>
         </table>
@@ -166,6 +168,16 @@
             }
         }
 
+        function updateExercisePositions() {
+            var rows = getExerciseRows();
+            for (var idx = 0; idx < rows.length; idx++) {
+                var cell = rows[idx].querySelector('.exercise-position');
+                if (cell) {
+                    cell.textContent = String(idx + 1);
+                }
+            }
+        }
+
         function moveRow(row, direction) {
             if (!row || !currentExercisesTbody) {
                 return;
@@ -190,6 +202,7 @@
                 }
             }
             refreshReorderButtons();
+            updateExercisePositions();
         }
 
         function handleRemoveRow(row) {
@@ -207,6 +220,7 @@
             row.remove();
             updateEmptyState();
             refreshReorderButtons();
+            updateExercisePositions();
         }
 
         function attachRowEvents(row) {
@@ -243,6 +257,13 @@
             } else if (options && options.exerciseId) {
                 row.setAttribute('data-new-exercise-id', String(options.exerciseId));
             }
+
+            var positionCell = document.createElement('td');
+            positionCell.className = 'text-center align-middle position-cell';
+            var positionSpan = document.createElement('span');
+            positionSpan.className = 'exercise-position';
+            positionCell.appendChild(positionSpan);
+            row.appendChild(positionCell);
 
             var nameCell = document.createElement('td');
             nameCell.className = 'align-middle';
@@ -317,6 +338,7 @@
             attachRowEvents(row);
             updateEmptyState();
             refreshReorderButtons();
+            updateExercisePositions();
             return row;
         }
 
@@ -371,6 +393,50 @@
             return payload;
         }
 
+        function renderHighlightedLabel(cell, label, term, isGlobal) {
+            if (!cell) {
+                return;
+            }
+
+            var normalizedTerm = term ? String(term).toLowerCase() : '';
+            var normalizedLabel = String(label || '');
+            var lowerLabel = normalizedLabel.toLowerCase();
+            var startIndex = normalizedTerm ? lowerLabel.indexOf(normalizedTerm) : -1;
+
+            while (cell.firstChild) {
+                cell.removeChild(cell.firstChild);
+            }
+
+            if (!normalizedTerm || startIndex === -1) {
+                cell.appendChild(document.createTextNode(normalizedLabel));
+            } else {
+                var beforeText = normalizedLabel.slice(0, startIndex);
+                var matchText = normalizedLabel.slice(startIndex, startIndex + normalizedTerm.length);
+                var afterText = normalizedLabel.slice(startIndex + normalizedTerm.length);
+
+                if (beforeText) {
+                    cell.appendChild(document.createTextNode(beforeText));
+                }
+
+                var mark = document.createElement('mark');
+                mark.textContent = matchText;
+                cell.appendChild(mark);
+
+                if (afterText) {
+                    cell.appendChild(document.createTextNode(afterText));
+                }
+            }
+
+            if (isGlobal) {
+                var spaceNode = document.createTextNode(' ');
+                var icon = document.createElement('i');
+                icon.className = 'bi bi-globe2 global-icon';
+                icon.title = 'Esercizio globale';
+                cell.appendChild(spaceNode);
+                cell.appendChild(icon);
+            }
+        }
+
         if (exercisesTbody) {
             var initialExerciseRows = exercisesTbody.querySelectorAll('.exercise-row');
             for (var idx = 0; idx < initialExerciseRows.length; idx++) {
@@ -396,7 +462,7 @@
             return noExerciseResultsRow;
         }
 
-        function renderExerciseRows(rowsToRender) {
+        function renderExerciseRows(rowsToRender, searchTerm) {
             if (!exercisesTbody) {
                 return;
             }
@@ -421,6 +487,13 @@
                     continue;
                 }
                 rowData.element.classList.remove('d-none');
+
+                var exerciseName = rowData.element.getAttribute('data-exercise-name') || '';
+                var displayCell = rowData.element.querySelector('td');
+                if (displayCell) {
+                    var isGlobal = rowData.element.getAttribute('data-is-global') === '1';
+                    renderHighlightedLabel(displayCell, exerciseName, searchTerm || '', isGlobal);
+                }
                 fragment.appendChild(rowData.element);
             }
             exercisesTbody.appendChild(fragment);
@@ -437,7 +510,7 @@
             if (!searchTerm) {
                 renderExerciseRows(allExerciseRows.slice().sort(function(a, b) {
                     return a.originalIndex - b.originalIndex;
-                }));
+                }), '');
                 return;
             }
 
@@ -457,7 +530,7 @@
                 }
             }
 
-            renderExerciseRows(prefixMatches.concat(containsMatches));
+            renderExerciseRows(prefixMatches.concat(containsMatches), searchTerm);
         }
 
         if (searchInput) {
@@ -508,6 +581,9 @@
 
         updateEmptyState();
         refreshReorderButtons();
+        updateExercisePositions();
+
+        applyExerciseFilter();
 
         if (cancelButton) {
             cancelButton.addEventListener('click', function(event) {

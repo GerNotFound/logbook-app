@@ -433,9 +433,10 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                     return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
             missing_existing = valid_existing_ids - seen_existing - normalized_deleted_ids
+            auto_removed_missing = set()
             if missing_existing:
-                flash('Impossibile salvare le modifiche. Alcuni esercizi non sono stati inclusi.', 'danger')
-                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+                auto_removed_missing = missing_existing
+                normalized_deleted_ids.update(missing_existing)
 
             try:
                 for delete_id in normalized_deleted_ids:
@@ -471,6 +472,8 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                     sort_order += 1
 
                 db.session.commit()
+                if auto_removed_missing:
+                    flash('Alcuni esercizi non erano più inclusi e sono stati rimossi automaticamente.', 'warning')
                 flash('Scheda aggiornata con successo.', 'success')
             except Exception:
                 db.session.rollback()
