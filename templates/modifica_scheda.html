@@ -28,17 +28,17 @@
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
-                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}">
-              <input type="hidden" name="action" value="update_sets">
+                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_sets">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                         <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
                     </form>
                 </td>
                 <td class="text-center align-middle">
-                    <div class="btn-group">
+                    <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
                         <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
-                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
+                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" onsubmit="return confirm('Confermi di voler eliminare questo esercizio dalla scheda?');" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="delete_template_exercise">
                             <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
@@ -55,9 +55,21 @@
 </div>
 
 <div class="mb-4">
-    <h5>Cerca Esercizio</h5>
-    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
-    <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-8 col-lg-6">
+            <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
+            <form id="search-exercise-form">
+                <div class="input-group">
+                    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
+                    <button type="submit" class="btn btn-outline-light" id="search-exercise-button">CERCA</button>
+                </div>
+            </form>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
+        </div>
+    </div>
+    <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
         <table class="table table-bordered table-hover table-sm">
             <thead>
                 <tr>
@@ -70,7 +82,7 @@
                 <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
                     <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
                     <td class="text-center">
-                        <form method="POST" class="d-inline">
+                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="add_exercise_to_template">
                             <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
@@ -93,21 +105,44 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
-        // Logica per il filtro live della tabella
+        // Logica per il filtro della tabella con priorità ai prefissi
         const searchInput = document.getElementById('search-exercise-input');
-        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+        const searchForm = document.getElementById('search-exercise-form');
+        const exercisesTbody = document.getElementById('all-exercises-tbody');
+        const exerciseRows = Array.from(exercisesTbody.querySelectorAll('.exercise-row'));
 
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            exerciseRows.forEach(row => {
-                const exerciseName = row.dataset.name;
-                if (exerciseName.includes(searchTerm)) {
+        const applyExerciseFilter = () => {
+            const searchTerm = (searchInput.value || '').toLowerCase().trim();
+
+            if (!searchTerm) {
+                exerciseRows.forEach(row => {
                     row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                    exercisesTbody.appendChild(row);
+                });
+                return;
+            }
+
+            const prefixMatches = exerciseRows.filter(row => row.dataset.name.startsWith(searchTerm));
+            const containsMatches = exerciseRows.filter(row => !row.dataset.name.startsWith(searchTerm) && row.dataset.name.includes(searchTerm));
+            const orderedMatches = prefixMatches.concat(containsMatches);
+
+            exerciseRows.forEach(row => {
+                row.style.display = 'none';
             });
-        });
+
+            orderedMatches.forEach(row => {
+                row.style.display = '';
+                exercisesTbody.appendChild(row);
+            });
+        };
+
+        searchInput.addEventListener('input', applyExerciseFilter);
+        if (searchForm) {
+            searchForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                applyExerciseFilter();
+            });
+        }
 
         // Logica per l'aggiornamento AJAX delle serie
         document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
