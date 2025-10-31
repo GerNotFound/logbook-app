@@ -101,10 +101,8 @@
 </form>
 
 <div class="sticky-bottom-nav">
-    <div class="d-grid gap-3">
-        <button type="submit" class="btn btn-custom full-width-btn" form="template-edit-form" id="save-template-button">SALVA</button>
-        <button type="button" class="btn btn-outline-light full-width-btn" id="cancel-changes-button">ANNULLA</button>
-    </div>
+    <button type="submit" class="btn btn-custom action-btn" form="template-edit-form" id="save-template-button">SALVA</button>
+    <a id="cancel-changes-button" class="btn btn-custom action-btn" href="{{ cancel_url or url_for('gym.scheda') }}">ANNULLA</a>
 </div>
 {% endblock %}
 
@@ -515,7 +513,12 @@
             cancelButton.addEventListener('click', function(event) {
                 event.preventDefault();
                 if (window.confirm('Vuoi annullare le modifiche apportate alla scheda?')) {
-                    window.location.reload();
+                    var cancelUrl = cancelButton.getAttribute('href');
+                    if (cancelUrl) {
+                        window.location.href = cancelUrl;
+                    } else {
+                        window.history.back();
+                    }
                 }
             });
         }
