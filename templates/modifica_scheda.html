@@ -24,8 +24,9 @@
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td>
-                    <form class="update-sets-form">
+                    <form class="update-sets-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                         <div class="input-group">
                             <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
@@ -125,13 +126,18 @@
                         body: formData,
                         credentials: 'same-origin',
                         headers: {
-                            'X-CSRFToken': formData.get('csrf_token') || ''
+                            'X-CSRFToken': formData.get('csrf_token') || '',
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
                         submitButton.textContent = 'OK!';
-                        setsInput.value = trimmedSets;
+                        if (typeof data.sets === 'string') {
+                            setsInput.value = data.sets;
+                        } else {
+                            setsInput.value = trimmedSets;
+                        }
                     } else {
                         alert(data.error || 'Errore');
                         submitButton.textContent = 'Errore';
