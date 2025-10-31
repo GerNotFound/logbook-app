@@ -4,7 +4,11 @@
     <div class="col-12">
         <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
+                {% endfor %}
+            {% endif %}
         {% endwith %}
     </div>
 </div>
@@ -14,9 +18,9 @@
     <table class="table table-sm table-bordered">
         <thead>
             <tr>
-                <th class="w-50">Esercizio</th>
-                <th class="w-25">Serie</th>
-                <th class="text-center w-25">Azioni</th>
+                <th style="width: 50%;">Esercizio</th>
+                <th style="width: 25%;">Serie</th>
+                <th class="text-center" style="width: 25%;">Azioni</th>
             </tr>
         </thead>
         <tbody>
@@ -105,14 +109,16 @@
         });
 
         // Logica per l'aggiornamento AJAX delle serie
+        // Seleziona i pulsanti di salvataggio invece dei form
         document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
             button.addEventListener('click', async function(event) {
-                event.preventDefault();
+                event.preventDefault(); // Impedisce l'invio tradizionale
+                
                 const formId = this.getAttribute('form');
                 const form = document.getElementById(formId);
                 if (!form) return;
 
-                const originalIcon = this.innerHTML;
+                const originalIconHTML = this.innerHTML;
                 this.disabled = true;
                 this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
@@ -123,18 +129,19 @@
                     });
                     const data = await response.json();
                     if (response.ok && data.success) {
-                        this.innerHTML = '<i class="bi bi-check-lg"></i>';
+                        this.innerHTML = '<i class="bi bi-check-lg"></i>'; // Icona di successo
                     } else {
                         alert(data.error || 'Errore');
-                        this.innerHTML = '<i class="bi bi-x-lg"></i>';
+                        this.innerHTML = '<i class="bi bi-x-lg"></i>'; // Icona di errore
                     }
                 } catch (error) {
                     alert('Errore di rete.');
                     this.innerHTML = '<i class="bi bi-x-lg"></i>';
                 } finally {
+                    // Ripristina l'icona originale dopo 2 secondi
                     setTimeout(() => {
                         this.disabled = false;
-                        this.innerHTML = originalIcon;
+                        this.innerHTML = originalIconHTML;
                     }, 2000);
                 }
             });
