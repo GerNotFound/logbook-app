@@ -37,7 +37,7 @@
                 </td>
                 <td class="text-center align-middle">
                     <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
-                        <div class="btn-group" role="group" aria-label="Riordina esercizio">
+                        <div class="reorder-controls d-flex flex-column align-items-stretch gap-1" aria-label="Riordina esercizio">
                             <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="up" data-template-exercise-id="{{ exercise.id }}" title="Sposta su" {% if loop.first %}disabled{% endif %}>
                                 <i class="bi bi-arrow-up"></i>
                             </button>
@@ -114,7 +114,63 @@
         var searchInput = document.getElementById('search-exercise-input');
         var searchButton = document.getElementById('search-exercise-button');
         var exercisesTbody = document.getElementById('all-exercises-tbody');
-        var exerciseRows = exercisesTbody ? Array.prototype.slice.call(exercisesTbody.querySelectorAll('.exercise-row')) : [];
+        var allExerciseRows = [];
+        var noExerciseResultsRow = null;
+
+        if (exercisesTbody) {
+            var initialExerciseRows = exercisesTbody.querySelectorAll('.exercise-row');
+            for (var idx = 0; idx < initialExerciseRows.length; idx++) {
+                var rowElement = initialExerciseRows[idx];
+                allExerciseRows.push({
+                    element: rowElement,
+                    normalizedName: (rowElement.getAttribute('data-name') || '').toLowerCase(),
+                    originalIndex: idx
+                });
+            }
+        }
+
+        function ensureNoExerciseResultsRow() {
+            if (!noExerciseResultsRow) {
+                noExerciseResultsRow = document.createElement('tr');
+                noExerciseResultsRow.className = 'no-exercise-results';
+                var cell = document.createElement('td');
+                cell.colSpan = 2;
+                cell.className = 'text-center text-muted py-3';
+                cell.textContent = 'Nessun esercizio trovato.';
+                noExerciseResultsRow.appendChild(cell);
+            }
+            return noExerciseResultsRow;
+        }
+
+        function renderExerciseRows(rowsToRender) {
+            if (!exercisesTbody) {
+                return;
+            }
+
+            while (exercisesTbody.firstChild) {
+                exercisesTbody.removeChild(exercisesTbody.firstChild);
+            }
+
+            if (!rowsToRender || rowsToRender.length === 0) {
+                exercisesTbody.appendChild(ensureNoExerciseResultsRow());
+                return;
+            }
+
+            if (noExerciseResultsRow && noExerciseResultsRow.parentNode === exercisesTbody) {
+                exercisesTbody.removeChild(noExerciseResultsRow);
+            }
+
+            var fragment = document.createDocumentFragment();
+            for (var i = 0; i < rowsToRender.length; i++) {
+                var rowData = rowsToRender[i];
+                if (!rowData || !rowData.element) {
+                    continue;
+                }
+                rowData.element.classList.remove('d-none');
+                fragment.appendChild(rowData.element);
+            }
+            exercisesTbody.appendChild(fragment);
+        }
 
         function applyExerciseFilter() {
             if (!exercisesTbody) {
@@ -125,34 +181,29 @@
             var searchTerm = rawValue.toLowerCase().trim();
 
             if (!searchTerm) {
-                for (var i = 0; i < exerciseRows.length; i++) {
-                    var row = exerciseRows[i];
-                    row.style.display = '';
-                    exercisesTbody.appendChild(row);
-                }
+                renderExerciseRows(allExerciseRows.slice().sort(function(a, b) {
+                    return a.originalIndex - b.originalIndex;
+                }));
                 return;
             }
 
             var prefixMatches = [];
             var containsMatches = [];
 
-            for (var j = 0; j < exerciseRows.length; j++) {
-                var exerciseRow = exerciseRows[j];
-                var datasetName = exerciseRow.getAttribute('data-name') || '';
-                if (datasetName.indexOf(searchTerm) === 0) {
-                    prefixMatches.push(exerciseRow);
-                } else if (datasetName.indexOf(searchTerm) > -1) {
-                    containsMatches.push(exerciseRow);
+            for (var j = 0; j < allExerciseRows.length; j++) {
+                var rowData = allExerciseRows[j];
+                if (!rowData || !rowData.normalizedName) {
+                    continue;
                 }
-                exerciseRow.style.display = 'none';
+
+                if (rowData.normalizedName.indexOf(searchTerm) === 0) {
+                    prefixMatches.push(rowData);
+                } else if (rowData.normalizedName.indexOf(searchTerm) > -1) {
+                    containsMatches.push(rowData);
+                }
             }
 
-            var orderedMatches = prefixMatches.concat(containsMatches);
-            for (var k = 0; k < orderedMatches.length; k++) {
-                var matchedRow = orderedMatches[k];
-                matchedRow.style.display = '';
-                exercisesTbody.appendChild(matchedRow);
-            }
+            renderExerciseRows(prefixMatches.concat(containsMatches));
         }
 
         if (searchInput) {
@@ -283,16 +334,29 @@
                 return;
             }
 
+            var csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                alert('Impossibile riordinare: token CSRF mancante.');
+                return;
+            }
+
             var formData = new FormData();
-            formData.append('csrf_token', getCsrfToken());
+            formData.append('csrf_token', csrfToken);
             formData.append('template_exercise_id', templateExerciseId);
             formData.append('direction', direction);
 
+            var originalButtonContent = button.innerHTML;
             button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
             fetch("{{ url_for('gym.riordina_esercizio') }}", {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin'
             })
                 .then(function(response) {
                     return response
@@ -330,12 +394,14 @@
                             currentExercisesTbody.insertBefore(nextRow, row);
                         }
                     }
+                    refreshReorderButtons();
                 })
                 .catch(function(error) {
                     alert(error.message || 'Impossibile riordinare l\'esercizio.');
                 })
                 .finally(function() {
                     button.disabled = false;
+                    button.innerHTML = originalButtonContent;
                     refreshReorderButtons();
                 });
         }
