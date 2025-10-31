@@ -19,32 +19,36 @@
         <thead>
             <tr>
                 <th style="width: 50%;">Esercizio</th>
-                <th style="width: 50%;">Serie</th>
+                <th style="width: 30%;">Serie</th>
+                <th class="text-center" style="width: 20%;">Azioni</th>
             </tr>
         </thead>
         <tbody>
             {% for exercise in current_exercises %}
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
-                <td>
-                    <form class="update-sets-form">
+                <td class="align-middle">
+                    <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" class="update-sets-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="update_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
                         <div class="input-group">
                             <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
-                            <button type="submit" form="delete-form-{{ exercise.id }}" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-outline-light"><i class="bi bi-floppy"></i></button>
                         </div>
                     </form>
-                    <form method="POST" id="delete-form-{{ exercise.id }}" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-none">
+                </td>
+                <td class="text-center align-middle">
+                    <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="delete_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
                     </form>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="2" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
+            <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -89,7 +93,6 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
-        // Logica per il filtro live della tabella
         const searchInput = document.getElementById('search-exercise-input');
         const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
 
@@ -101,41 +104,6 @@
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
-                }
-            });
-        });
-
-        // Logica per l'aggiornamento AJAX delle serie
-        document.querySelectorAll('.update-sets-form').forEach(form => {
-            form.addEventListener('submit', async function(event) {
-                event.preventDefault(); // Impedisce l'invio tradizionale
-                
-                const submitButton = this.querySelector('button[type="submit"]');
-                const originalIconHTML = submitButton.innerHTML;
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-
-                try {
-                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                        method: 'POST',
-                        body: new FormData(this)
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                        submitButton.innerHTML = '<i class="bi bi-check-lg"></i>'; // Icona di successo
-                    } else {
-                        alert(data.error || 'Errore');
-                        submitButton.innerHTML = '<i class="bi bi-x-lg"></i>'; // Icona di errore
-                    }
-                } catch (error) {
-                    alert('Errore di rete.');
-                    submitButton.innerHTML = '<i class="bi bi-x-lg"></i>';
-                } finally {
-                    // Ripristina l'icona originale dopo 2 secondi
-                    setTimeout(() => {
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = originalIconHTML;
-                    }, 2000);
                 }
             });
         });
