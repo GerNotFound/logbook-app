@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 from .auth import login_required
-from utils import execute_query
+from utils import execute_query, slugify
 from sqlalchemy.exc import IntegrityError
 from extensions import db
 from services.workout_service import get_templates_with_history, get_session_log_data
@@ -13,6 +13,23 @@ from services.suggestion_service import get_catalog_suggestions, resolve_catalog
 gym_bp = Blueprint('gym', __name__)
 
 # --- ENDPOINT API PER AJAX ---
+
+
+def _get_template_by_slug(user_id: int, template_slug: str):
+    """Recupera una scheda utilizzando lo slug del suo nome."""
+
+    if not template_slug:
+        return None
+
+    templates = execute_query(
+        'SELECT * FROM workout_templates WHERE user_id = :uid',
+        {'uid': user_id},
+        fetchall=True,
+    )
+    for tpl in templates:
+        if slugify(tpl['name']) == template_slug:
+            return tpl
+    return None
 
 @gym_bp.route('/api/suggest/exercises')
 @login_required
@@ -118,6 +135,7 @@ def scheda():
     templates = []
     for t in templates_raw:
         template_dict = dict(t)
+        template_dict['slug'] = slugify(template_dict['name'])
         exercises = execute_query(
             'SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id',
             {'tid': t['id']},
@@ -129,14 +147,27 @@ def scheda():
     return render_template('scheda.html', title='Scheda Allenamento', templates=templates)
 
 @gym_bp.route('/scheda/<int:template_id>/modifica_scheda', methods=['GET', 'POST'])
+@gym_bp.route('/scheda/modifica_scheda/<template_slug>', methods=['GET', 'POST'], defaults={'template_id': None})
 @login_required
-def modifica_scheda_dettaglio(template_id):
+def modifica_scheda_dettaglio(template_id=None, template_slug=None):
     user_id = session['user_id']
-    
-    template = execute_query('SELECT * FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, fetchone=True)
+
+    template = None
+    if template_slug:
+        template = _get_template_by_slug(user_id, template_slug)
+        if template:
+            template_id = template['id']
+
+    if template is None and template_id is not None:
+        template = execute_query('SELECT * FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, fetchone=True)
+
     if not template:
         flash('Scheda non trovata o non autorizzata.', 'danger')
         return redirect(url_for('gym.scheda'))
+
+    canonical_slug = slugify(template['name'])
+    if request.method == 'GET' and template_slug != canonical_slug:
+        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -167,15 +198,16 @@ def modifica_scheda_dettaglio(template_id):
                 flash('Serie aggiornate.', 'success')
             except Exception:
                 flash('Errore aggiornamento serie. Inserisci un numero valido.', 'danger')
-        return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
+        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
     current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)
     all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
 
-    return render_template('modifica_scheda.html', 
-                           title=f'Modifica {template["name"]}', 
-                           template=template, 
-                           current_exercises=current_exercises, 
+    return render_template('modifica_scheda.html',
+                           title=f'Modifica {template["name"]}',
+                           template=template,
+                           template_slug=canonical_slug,
+                           current_exercises=current_exercises,
                            all_exercises=all_exercises)
 
 @gym_bp.route('/esercizio/<int:exercise_id>/info')
