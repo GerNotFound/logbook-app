@@ -4,11 +4,7 @@
     <div class="col-12">
         <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
-                {% endfor %}
-            {% endif %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
         {% endwith %}
     </div>
 </div>
@@ -18,9 +14,9 @@
     <table class="table table-sm table-bordered">
         <thead>
             <tr>
-                <th>Esercizio</th>
-                <th>Serie</th>
-                <th class="text-center">Azioni</th>
+                <th class="w-50">Esercizio</th>
+                <th class="w-25">Serie</th>
+                <th class="text-center w-25">Azioni</th>
             </tr>
         </thead>
         <tbody>
@@ -36,12 +32,12 @@
                 </td>
                 <td class="text-center align-middle">
                     <div class="btn-group">
-                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light"><i class="bi bi-floppy"></i></button>
+                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
                         <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="delete_template_exercise">
                             <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete"><i class="bi bi-trash"></i></button>
+                            <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
                         </form>
                     </div>
                 </td>
@@ -109,38 +105,39 @@
         });
 
         // Logica per l'aggiornamento AJAX delle serie
-        document.querySelectorAll('.update-sets-form').forEach(form => {
-            const submitButton = document.querySelector(`button[form='${form.id}']`);
-            if (submitButton) {
-                 submitButton.addEventListener('click', async function(event) {
-                    event.preventDefault();
-                    const originalIcon = this.innerHTML;
-                    this.disabled = true;
-                    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
+            button.addEventListener('click', async function(event) {
+                event.preventDefault();
+                const formId = this.getAttribute('form');
+                const form = document.getElementById(formId);
+                if (!form) return;
 
-                    try {
-                        const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                            method: 'POST',
-                            body: new FormData(form)
-                        });
-                        const data = await response.json();
-                        if (response.ok && data.success) {
-                            this.innerHTML = '<i class="bi bi-check-lg"></i>';
-                        } else {
-                            alert(data.error || 'Errore');
-                            this.innerHTML = '<i class="bi bi-x-lg"></i>';
-                        }
-                    } catch (error) {
-                        alert('Errore di rete.');
+                const originalIcon = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+                try {
+                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                        method: 'POST',
+                        body: new FormData(form)
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        this.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    } else {
+                        alert(data.error || 'Errore');
                         this.innerHTML = '<i class="bi bi-x-lg"></i>';
-                    } finally {
-                        setTimeout(() => {
-                            this.disabled = false;
-                            this.innerHTML = originalIcon;
-                        }, 2000);
                     }
-                });
-            }
+                } catch (error) {
+                    alert('Errore di rete.');
+                    this.innerHTML = '<i class="bi bi-x-lg"></i>';
+                } finally {
+                    setTimeout(() => {
+                        this.disabled = false;
+                        this.innerHTML = originalIcon;
+                    }, 2000);
+                }
+            });
         });
     });
 </script>
