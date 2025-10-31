@@ -23,4 +23,4 @@ USER appuser
 EXPOSE 8000
 ENV LOG_LEVEL=INFO
 
-CMD ["bash", "-lc", "gunicorn --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-1} --timeout ${GUNICORN_TIMEOUT:-30} --bind 0.0.0.0:${PORT:-8000} app:create_app()"]
+CMD ["bash", "-lc", "exec gunicorn --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-1} --timeout ${GUNICORN_TIMEOUT:-30} --bind 0.0.0.0:${PORT:-8000} 'app:create_app()'"]
