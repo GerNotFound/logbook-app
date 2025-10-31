@@ -25,7 +25,7 @@ def _fetch_templates(user_id: int) -> List[Dict]:
         'JOIN exercises e ON te.exercise_id = e.id '
         'LEFT JOIN user_exercise_notes uen ON uen.exercise_id = e.id AND uen.user_id = :user_id '
         'WHERE te.template_id = ANY(:template_ids) '
-        'ORDER BY te.id',
+        'ORDER BY COALESCE(te.sort_order, te.id), te.id',
         {'user_id': user_id, 'template_ids': template_ids},
         fetchall=True,
     )
