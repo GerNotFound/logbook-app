@@ -1,5 +1,7 @@
 # routes/gym.py
 
+import json
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from datetime import date, datetime, timedelta
 from collections import defaultdict
@@ -286,21 +288,150 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
             flash('Esercizio rimosso dalla scheda.', 'success')
-        elif action == 'update_sets':
-            template_exercise_id = request.form.get('template_exercise_id')
-            sets_raw = (request.form.get('sets') or '').strip()
+        elif action == 'save_template_changes':
+            payload_raw = request.form.get('state_payload', '').strip()
             try:
-                sets_val = int(sets_raw)
-                if sets_val < 0:
-                    raise ValueError('sets negativo')
-                execute_query(
-                    'UPDATE template_exercises SET sets = :sets WHERE id = :id',
-                    {'sets': sets_val, 'id': template_exercise_id},
-                    commit=True
-                )
-                flash('Serie aggiornate.', 'success')
+                state_payload = json.loads(payload_raw) if payload_raw else {'items': [], 'deleted': []}
+            except json.JSONDecodeError:
+                flash('Formato dati non valido. Riprova.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            items = state_payload.get('items', [])
+            deleted_ids = state_payload.get('deleted', [])
+
+            if not isinstance(items, list) or not isinstance(deleted_ids, list):
+                flash('Formato dati non valido. Riprova.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            existing_records = execute_query(
+                'SELECT id FROM template_exercises WHERE template_id = :tid',
+                {'tid': template_id},
+                fetchall=True,
+            ) or []
+            valid_existing_ids = {row['id'] for row in existing_records}
+
+            normalized_deleted_ids = set()
+            for raw_id in deleted_ids:
+                try:
+                    parsed_id = int(raw_id)
+                except (TypeError, ValueError):
+                    flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+                if parsed_id not in valid_existing_ids:
+                    flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+                normalized_deleted_ids.add(parsed_id)
+
+            normalized_items = []
+            seen_existing = set()
+            for entry in items:
+                if not isinstance(entry, dict):
+                    flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                entry_type = entry.get('type')
+                sets_value = entry.get('sets')
+                try:
+                    parsed_sets = int(sets_value)
+                except (TypeError, ValueError):
+                    flash('Inserisci un numero di serie valido per ogni esercizio.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                if parsed_sets < 0:
+                    flash('Inserisci un numero di serie valido per ogni esercizio.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                if entry_type == 'existing':
+                    try:
+                        template_exercise_id = int(entry.get('template_exercise_id'))
+                    except (TypeError, ValueError):
+                        flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                    if template_exercise_id not in valid_existing_ids or template_exercise_id in normalized_deleted_ids:
+                        flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                    if template_exercise_id in seen_existing:
+                        flash('Impossibile salvare le modifiche. Dati duplicati.', 'danger')
+                        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                    seen_existing.add(template_exercise_id)
+                    normalized_items.append({
+                        'type': 'existing',
+                        'template_exercise_id': template_exercise_id,
+                        'sets': parsed_sets,
+                    })
+                elif entry_type == 'new':
+                    try:
+                        exercise_id = int(entry.get('exercise_id'))
+                    except (TypeError, ValueError):
+                        flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                    exercise_record = execute_query(
+                        'SELECT id FROM exercises WHERE id = :eid AND (user_id IS NULL OR user_id = :uid)',
+                        {'eid': exercise_id, 'uid': user_id},
+                        fetchone=True,
+                    )
+                    if not exercise_record:
+                        flash('Impossibile salvare le modifiche. Esercizio non valido.', 'danger')
+                        return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+                    normalized_items.append({
+                        'type': 'new',
+                        'exercise_id': exercise_id,
+                        'sets': parsed_sets,
+                    })
+                else:
+                    flash('Impossibile salvare le modifiche. Dati non validi.', 'danger')
+                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            missing_existing = valid_existing_ids - seen_existing - normalized_deleted_ids
+            if missing_existing:
+                flash('Impossibile salvare le modifiche. Alcuni esercizi non sono stati inclusi.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            try:
+                for delete_id in normalized_deleted_ids:
+                    execute_query(
+                        'DELETE FROM template_exercises WHERE id = :id AND template_id = :tid',
+                        {'id': delete_id, 'tid': template_id},
+                    )
+
+                sort_order = 1
+                for entry in normalized_items:
+                    if entry['type'] == 'existing':
+                        execute_query(
+                            'UPDATE template_exercises SET sets = :sets, sort_order = :sort_order '
+                            'WHERE id = :id AND template_id = :tid',
+                            {
+                                'sets': entry['sets'],
+                                'sort_order': sort_order,
+                                'id': entry['template_exercise_id'],
+                                'tid': template_id,
+                            },
+                        )
+                    else:
+                        execute_query(
+                            'INSERT INTO template_exercises (template_id, exercise_id, sets, sort_order) '
+                            'VALUES (:tid, :eid, :sets, :sort_order)',
+                            {
+                                'tid': template_id,
+                                'eid': entry['exercise_id'],
+                                'sets': entry['sets'],
+                                'sort_order': sort_order,
+                            },
+                        )
+                    sort_order += 1
+
+                db.session.commit()
+                flash('Scheda aggiornata con successo.', 'success')
             except Exception:
-                flash('Errore aggiornamento serie. Inserisci un numero valido.', 'danger')
+                db.session.rollback()
+                flash('Errore durante il salvataggio delle modifiche.', 'danger')
+
+            return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
     _ensure_template_exercise_order(template_id)

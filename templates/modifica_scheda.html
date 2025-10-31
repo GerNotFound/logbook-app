@@ -13,9 +13,14 @@
     </div>
 </div>
 
-<div class="mb-4">
-    <h5>Esercizi Attuali</h5>
-    <table class="table table-sm table-bordered">
+<form id="template-edit-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save_template_changes">
+    <input type="hidden" name="state_payload" id="state-payload">
+
+    <div class="mb-4">
+        <h5>Esercizi Attuali</h5>
+        <table class="table table-sm table-bordered">
         <thead>
             <tr>
                 <th>Esercizio</th>
@@ -25,86 +30,81 @@
         </thead>
         <tbody id="current-exercises-tbody">
             {% for exercise in current_exercises %}
-            <tr id="template-exercise-row-{{ exercise.id }}" data-template-exercise-id="{{ exercise.id }}">
+            <tr class="template-exercise-row" data-template-exercise-id="{{ exercise.id }}">
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
-                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="update_sets">
-                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                    </form>
+                    <input type="text" class="form-control form-control-sm sets-input" value="{{ exercise.sets }}">
                 </td>
                 <td class="text-center align-middle">
                     <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
                         <div class="reorder-controls d-flex flex-column align-items-stretch gap-1" aria-label="Riordina esercizio">
-                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="up" data-template-exercise-id="{{ exercise.id }}" title="Sposta su" {% if loop.first %}disabled{% endif %}>
+                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="up" title="Sposta su">
                                 <i class="bi bi-arrow-up"></i>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="down" data-template-exercise-id="{{ exercise.id }}" title="Sposta giù" {% if loop.last %}disabled{% endif %}>
+                            <button type="button" class="btn btn-sm btn-outline-secondary move-exercise-button" data-direction="down" title="Sposta giù">
                                 <i class="bi bi-arrow-down"></i>
                             </button>
                         </div>
-                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
-                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" onsubmit="return confirm('Confermi di voler eliminare questo esercizio dalla scheda?');" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_template_exercise">
-                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
-                        </form>
+                        <button type="button" class="btn btn-sm btn-delete remove-exercise-button" title="Rimuovi esercizio">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
                 </td>
             </tr>
-            {% else %}
-            <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
             {% endfor %}
+            <tr id="no-exercises-row" class="{% if current_exercises %}d-none{% endif %}">
+                <td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
+            </tr>
         </tbody>
-    </table>
-</div>
-
-<div class="mb-4">
-    <div class="row g-3 align-items-end">
-        <div class="col-md-8 col-lg-6">
-            <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
-            <div class="input-group" id="search-exercise-controls">
-                <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
-                <button type="button" class="btn btn-outline-light" id="search-exercise-button">CERCA</button>
-            </div>
-        </div>
-        <div class="col-auto">
-            <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
-        </div>
-    </div>
-    <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
-        <table class="table table-bordered table-hover table-sm">
-            <thead>
-                <tr>
-                    <th>Esercizio</th>
-                    <th class="text-center">Azioni</th>
-                </tr>
-            </thead>
-            <tbody id="all-exercises-tbody">
-                {% for exercise in all_exercises %}
-                <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
-                    <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
-                    <td class="text-center">
-                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="add_exercise_to_template">
-                            <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light">Aggiungi</button>
-                        </form>
-                        <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
         </table>
     </div>
-</div>
+
+    <div class="mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-8 col-lg-6">
+                <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
+                <div class="input-group" id="search-exercise-controls">
+                    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
+                    <button type="button" class="btn btn-outline-light" id="search-exercise-button">CERCA</button>
+                </div>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
+            </div>
+        </div>
+        <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-bordered table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Esercizio</th>
+                        <th class="text-center">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody id="all-exercises-tbody">
+                    {% for exercise in all_exercises %}
+                    <tr class="exercise-row" data-name="{{ exercise.name | lower }}" data-exercise-id="{{ exercise.id }}" data-exercise-name="{{ exercise.name | e }}" data-is-global="{{ 1 if exercise.user_id is none else 0 }}">
+                        <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                        <td class="text-center">
+                            <div class="d-inline-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-light add-exercise-button" title="Aggiungi esercizio">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                                <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</form>
 
 <div class="sticky-bottom-nav">
-    <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom full-width-btn">TORNA ALLE SCHEDE</a>
+    <div class="d-grid gap-3">
+        <button type="submit" class="btn btn-custom full-width-btn" form="template-edit-form" id="save-template-button">SALVA</button>
+        <button type="button" class="btn btn-outline-light full-width-btn" id="cancel-changes-button">ANNULLA</button>
+    </div>
 </div>
 {% endblock %}
 
@@ -116,6 +116,262 @@
         var exercisesTbody = document.getElementById('all-exercises-tbody');
         var allExerciseRows = [];
         var noExerciseResultsRow = null;
+        var currentExercisesTbody = document.getElementById('current-exercises-tbody');
+        var emptyStateRow = document.getElementById('no-exercises-row');
+        var templateForm = document.getElementById('template-edit-form');
+        var stateInput = document.getElementById('state-payload');
+        var cancelButton = document.getElementById('cancel-changes-button');
+        var saveButton = document.getElementById('save-template-button');
+        var deletedExercises = [];
+        var formSubmitting = false;
+
+        function addDeletedExercise(id) {
+            if (!id) {
+                return;
+            }
+            if (deletedExercises.indexOf(id) === -1) {
+                deletedExercises.push(id);
+            }
+        }
+
+        function getExerciseRows() {
+            if (!currentExercisesTbody) {
+                return [];
+            }
+            return Array.prototype.slice.call(currentExercisesTbody.querySelectorAll('tr[data-template-exercise-id], tr[data-new-exercise-id]'));
+        }
+
+        function updateEmptyState() {
+            if (!emptyStateRow) {
+                return;
+            }
+            var rows = getExerciseRows();
+            if (rows.length === 0) {
+                emptyStateRow.classList.remove('d-none');
+            } else {
+                emptyStateRow.classList.add('d-none');
+            }
+        }
+
+        function refreshReorderButtons() {
+            var rows = getExerciseRows();
+            for (var idx = 0; idx < rows.length; idx++) {
+                var row = rows[idx];
+                var upButton = row.querySelector('.move-exercise-button[data-direction="up"]');
+                var downButton = row.querySelector('.move-exercise-button[data-direction="down"]');
+                if (upButton) {
+                    upButton.disabled = idx === 0;
+                }
+                if (downButton) {
+                    downButton.disabled = idx === rows.length - 1;
+                }
+            }
+        }
+
+        function moveRow(row, direction) {
+            if (!row || !currentExercisesTbody) {
+                return;
+            }
+            var rows = getExerciseRows();
+            var index = rows.indexOf(row);
+            if (index === -1) {
+                return;
+            }
+            if (direction === 'up' && index > 0) {
+                var previousRow = rows[index - 1];
+                currentExercisesTbody.insertBefore(row, previousRow);
+            } else if (direction === 'down' && index < rows.length - 1) {
+                var nextRow = rows[index + 1];
+                var referenceNode = nextRow.nextSibling;
+                if (referenceNode) {
+                    currentExercisesTbody.insertBefore(row, referenceNode);
+                } else if (emptyStateRow && emptyStateRow.parentNode === currentExercisesTbody) {
+                    currentExercisesTbody.insertBefore(row, emptyStateRow);
+                } else {
+                    currentExercisesTbody.appendChild(row);
+                }
+            }
+            refreshReorderButtons();
+        }
+
+        function handleRemoveRow(row) {
+            if (!row) {
+                return;
+            }
+            var templateExerciseId = row.getAttribute('data-template-exercise-id');
+            var confirmMessage = templateExerciseId ? 'Confermi di voler rimuovere questo esercizio dalla scheda? Le modifiche saranno applicate solo dopo aver salvato.' : 'Confermi di voler rimuovere questo esercizio appena aggiunto?';
+            if (!window.confirm(confirmMessage)) {
+                return;
+            }
+            if (templateExerciseId) {
+                addDeletedExercise(templateExerciseId);
+            }
+            row.remove();
+            updateEmptyState();
+            refreshReorderButtons();
+        }
+
+        function attachRowEvents(row) {
+            if (!row) {
+                return;
+            }
+            var moveButtons = row.querySelectorAll('.move-exercise-button');
+            for (var i = 0; i < moveButtons.length; i++) {
+                (function(button, currentRow) {
+                    button.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        var direction = button.getAttribute('data-direction');
+                        moveRow(currentRow, direction);
+                    });
+                })(moveButtons[i], row);
+            }
+            var removeButton = row.querySelector('.remove-exercise-button');
+            if (removeButton) {
+                removeButton.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    handleRemoveRow(row);
+                });
+            }
+        }
+
+        function createExerciseRow(options) {
+            if (!currentExercisesTbody) {
+                return null;
+            }
+            var row = document.createElement('tr');
+            row.className = 'template-exercise-row';
+            if (options && options.templateExerciseId) {
+                row.setAttribute('data-template-exercise-id', String(options.templateExerciseId));
+            } else if (options && options.exerciseId) {
+                row.setAttribute('data-new-exercise-id', String(options.exerciseId));
+            }
+
+            var nameCell = document.createElement('td');
+            nameCell.className = 'align-middle';
+            if (options && options.name) {
+                nameCell.textContent = options.name;
+            } else {
+                nameCell.textContent = 'Esercizio';
+            }
+            if (options && options.isGlobal) {
+                var space = document.createTextNode(' ');
+                var icon = document.createElement('i');
+                icon.className = 'bi bi-globe2 global-icon';
+                icon.title = 'Esercizio globale';
+                nameCell.appendChild(space);
+                nameCell.appendChild(icon);
+            }
+            row.appendChild(nameCell);
+
+            var setsCell = document.createElement('td');
+            setsCell.className = 'align-middle';
+            var setsInput = document.createElement('input');
+            setsInput.type = 'text';
+            setsInput.className = 'form-control form-control-sm sets-input';
+            var setsValue = options && typeof options.sets !== 'undefined' ? options.sets : '1';
+            setsInput.value = setsValue;
+            setsCell.appendChild(setsInput);
+            row.appendChild(setsCell);
+
+            var actionsCell = document.createElement('td');
+            actionsCell.className = 'text-center align-middle';
+            var actionsWrapper = document.createElement('div');
+            actionsWrapper.className = 'd-flex justify-content-center align-items-center gap-2 flex-wrap';
+
+            var reorderContainer = document.createElement('div');
+            reorderContainer.className = 'reorder-controls d-flex flex-column align-items-stretch gap-1';
+            reorderContainer.setAttribute('aria-label', 'Riordina esercizio');
+
+            var upButton = document.createElement('button');
+            upButton.type = 'button';
+            upButton.className = 'btn btn-sm btn-outline-secondary move-exercise-button';
+            upButton.setAttribute('data-direction', 'up');
+            upButton.title = 'Sposta su';
+            upButton.innerHTML = '<i class="bi bi-arrow-up"></i>';
+            reorderContainer.appendChild(upButton);
+
+            var downButton = document.createElement('button');
+            downButton.type = 'button';
+            downButton.className = 'btn btn-sm btn-outline-secondary move-exercise-button';
+            downButton.setAttribute('data-direction', 'down');
+            downButton.title = 'Sposta giù';
+            downButton.innerHTML = '<i class="bi bi-arrow-down"></i>';
+            reorderContainer.appendChild(downButton);
+
+            actionsWrapper.appendChild(reorderContainer);
+
+            var removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-sm btn-delete remove-exercise-button';
+            removeButton.title = 'Rimuovi esercizio';
+            removeButton.innerHTML = '<i class="bi bi-trash"></i>';
+            actionsWrapper.appendChild(removeButton);
+
+            actionsCell.appendChild(actionsWrapper);
+            row.appendChild(actionsCell);
+
+            if (emptyStateRow && emptyStateRow.parentNode === currentExercisesTbody) {
+                currentExercisesTbody.insertBefore(row, emptyStateRow);
+            } else {
+                currentExercisesTbody.appendChild(row);
+            }
+
+            attachRowEvents(row);
+            updateEmptyState();
+            refreshReorderButtons();
+            return row;
+        }
+
+        function collectState() {
+            var rows = getExerciseRows();
+            var payload = { items: [], deleted: [] };
+
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                var setsInput = row.querySelector('.sets-input');
+                var rawValue = setsInput ? setsInput.value.trim() : '';
+                if (rawValue === '') {
+                    throw new Error('Inserisci un numero di serie valido per tutti gli esercizi.');
+                }
+                var parsedSets = parseInt(rawValue, 10);
+                if (isNaN(parsedSets) || parsedSets < 0) {
+                    throw new Error('Inserisci un numero di serie valido per tutti gli esercizi.');
+                }
+
+                var templateExerciseId = row.getAttribute('data-template-exercise-id');
+                if (templateExerciseId) {
+                    var existingId = parseInt(templateExerciseId, 10);
+                    if (isNaN(existingId)) {
+                        throw new Error('Dati esercizio non validi.');
+                    }
+                    payload.items.push({
+                        type: 'existing',
+                        template_exercise_id: existingId,
+                        sets: parsedSets
+                    });
+                } else {
+                    var newExerciseId = row.getAttribute('data-new-exercise-id');
+                    var parsedExerciseId = parseInt(newExerciseId, 10);
+                    if (!newExerciseId || isNaN(parsedExerciseId)) {
+                        throw new Error('Dati esercizio non validi.');
+                    }
+                    payload.items.push({
+                        type: 'new',
+                        exercise_id: parsedExerciseId,
+                        sets: parsedSets
+                    });
+                }
+            }
+
+            for (var d = 0; d < deletedExercises.length; d++) {
+                var deletedId = parseInt(deletedExercises[d], 10);
+                if (!isNaN(deletedId)) {
+                    payload.deleted.push(deletedId);
+                }
+            }
+
+            return payload;
+        }
 
         if (exercisesTbody) {
             var initialExerciseRows = exercisesTbody.querySelectorAll('.exercise-row');
@@ -224,194 +480,79 @@
             });
         }
 
-        var updateForms = document.querySelectorAll('.update-sets-form');
-
-        async function handleUpdateSets(form, triggerButton) {
-            if (!form) {
-                return;
-            }
-
-            var button = triggerButton || document.querySelector('button[form="' + form.id + '"]');
-            var originalIconHTML = button ? button.innerHTML : null;
-
-            if (button) {
-                button.disabled = true;
-                button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-            }
-
-            try {
-                var response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                    method: 'POST',
-                    body: new FormData(form)
+        var addButtons = document.querySelectorAll('.add-exercise-button');
+        for (var a = 0; a < addButtons.length; a++) {
+            addButtons[a].addEventListener('click', function(event) {
+                event.preventDefault();
+                var button = event.currentTarget;
+                var exerciseRow = button.closest('.exercise-row');
+                if (!exerciseRow) {
+                    return;
+                }
+                var exerciseId = exerciseRow.getAttribute('data-exercise-id');
+                var exerciseName = exerciseRow.getAttribute('data-exercise-name');
+                var isGlobal = exerciseRow.getAttribute('data-is-global') === '1';
+                createExerciseRow({
+                    exerciseId: parseInt(exerciseId, 10),
+                    name: exerciseName,
+                    sets: '1',
+                    isGlobal: isGlobal
                 });
-                var data = await response.json();
-                if (response.ok && data.success) {
-                    if (button) {
-                        button.innerHTML = '<i class="bi bi-check-lg"></i>';
-                    }
-                } else {
-                    if (button) {
-                        button.innerHTML = '<i class="bi bi-x-lg"></i>';
-                    }
-                    alert(data.error || 'Errore');
-                }
-            } catch (error) {
-                if (button) {
-                    button.innerHTML = '<i class="bi bi-x-lg"></i>';
-                }
-                alert('Errore di rete.');
-            } finally {
-                if (button) {
-                    setTimeout(function() {
-                        button.disabled = false;
-                        button.innerHTML = originalIconHTML;
-                    }, 2000);
-                }
+            });
+        }
+
+        if (currentExercisesTbody) {
+            var initialRows = currentExercisesTbody.querySelectorAll('tr[data-template-exercise-id]');
+            for (var r = 0; r < initialRows.length; r++) {
+                attachRowEvents(initialRows[r]);
             }
         }
 
-        for (var f = 0; f < updateForms.length; f++) {
-            (function(form) {
-                form.addEventListener('submit', function(event) {
-                    event.preventDefault();
-                    handleUpdateSets(form);
-                });
-            })(updateForms[f]);
-        }
-
-        var saveButtons = document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]');
-        for (var b = 0; b < saveButtons.length; b++) {
-            (function(button) {
-                button.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    var formId = button.getAttribute('form');
-                    var form = document.getElementById(formId);
-                    handleUpdateSets(form, button);
-                });
-            })(saveButtons[b]);
-        }
-
-        var currentExercisesTbody = document.getElementById('current-exercises-tbody');
-
-        function getCsrfToken() {
-            var tokenInput = document.querySelector('.update-sets-form input[name="csrf_token"]');
-            if (tokenInput) {
-                return tokenInput.value;
-            }
-            var fallbackToken = document.querySelector('input[name="csrf_token"]');
-            return fallbackToken ? fallbackToken.value : '';
-        }
-
-        function refreshReorderButtons() {
-            if (!currentExercisesTbody) {
-                return;
-            }
-            var rows = currentExercisesTbody.querySelectorAll('tr[data-template-exercise-id]');
-            var total = rows.length;
-            for (var idx = 0; idx < total; idx++) {
-                var row = rows[idx];
-                var upButton = row.querySelector('.move-exercise-button[data-direction="up"]');
-                var downButton = row.querySelector('.move-exercise-button[data-direction="down"]');
-                if (upButton) {
-                    upButton.disabled = idx === 0;
-                }
-                if (downButton) {
-                    downButton.disabled = idx === total - 1;
-                }
-            }
-        }
-
-        function handleReorderClick(event) {
-            event.preventDefault();
-            var button = event.currentTarget;
-            if (!button || button.disabled) {
-                return;
-            }
-
-            var templateExerciseId = button.getAttribute('data-template-exercise-id');
-            var direction = button.getAttribute('data-direction');
-            if (!templateExerciseId || !direction) {
-                return;
-            }
-
-            var csrfToken = getCsrfToken();
-            if (!csrfToken) {
-                alert('Impossibile riordinare: token CSRF mancante.');
-                return;
-            }
-
-            var formData = new FormData();
-            formData.append('csrf_token', csrfToken);
-            formData.append('template_exercise_id', templateExerciseId);
-            formData.append('direction', direction);
-
-            var originalButtonContent = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-
-            fetch("{{ url_for('gym.riordina_esercizio') }}", {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': csrfToken
-                },
-                credentials: 'same-origin'
-            })
-                .then(function(response) {
-                    return response
-                        .json()
-                        .then(function(payload) {
-                            return { ok: response.ok, payload: payload };
-                        })
-                        .catch(function() {
-                            return { ok: response.ok, payload: { success: false, error: 'Risposta non valida.' } };
-                        });
-                })
-                .then(function(result) {
-                    if (!result.ok || !result.payload || !result.payload.success) {
-                        var message = result.payload && result.payload.error ? result.payload.error : 'Impossibile riordinare l\'esercizio.';
-                        throw new Error(message);
-                    }
-
-                    if (!currentExercisesTbody) {
-                        return;
-                    }
-
-                    var row = document.getElementById('template-exercise-row-' + templateExerciseId);
-                    if (!row) {
-                        return;
-                    }
-
-                    if (direction === 'up') {
-                        var previousRow = row.previousElementSibling;
-                        if (previousRow) {
-                            currentExercisesTbody.insertBefore(row, previousRow);
-                        }
-                    } else if (direction === 'down') {
-                        var nextRow = row.nextElementSibling;
-                        if (nextRow) {
-                            currentExercisesTbody.insertBefore(nextRow, row);
-                        }
-                    }
-                    refreshReorderButtons();
-                })
-                .catch(function(error) {
-                    alert(error.message || 'Impossibile riordinare l\'esercizio.');
-                })
-                .finally(function() {
-                    button.disabled = false;
-                    button.innerHTML = originalButtonContent;
-                    refreshReorderButtons();
-                });
-        }
-
-        var reorderButtons = document.querySelectorAll('.move-exercise-button');
-        for (var r = 0; r < reorderButtons.length; r++) {
-            reorderButtons[r].addEventListener('click', handleReorderClick);
-        }
-
+        updateEmptyState();
         refreshReorderButtons();
+
+        if (cancelButton) {
+            cancelButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                if (window.confirm('Vuoi annullare le modifiche apportate alla scheda?')) {
+                    window.location.reload();
+                }
+            });
+        }
+
+        if (templateForm) {
+            templateForm.addEventListener('submit', function(event) {
+                if (formSubmitting) {
+                    return;
+                }
+                event.preventDefault();
+                var payload;
+                try {
+                    payload = collectState();
+                } catch (error) {
+                    var message = (error && error.message) ? error.message : 'Impossibile salvare le modifiche.';
+                    alert(message);
+                    return;
+                }
+
+                if (!window.confirm('Confermi di voler salvare le modifiche apportate alla scheda?')) {
+                    return;
+                }
+
+                if (stateInput) {
+                    stateInput.value = JSON.stringify(payload);
+                }
+
+                formSubmitting = true;
+                templateForm.submit();
+            });
+        }
+
+        if (saveButton) {
+            saveButton.addEventListener('click', function(event) {
+                // L'evento di submit gestisce la conferma, qui evitiamo duplicazioni.
+            });
+        }
     });
 </script>
 {% endblock %}
