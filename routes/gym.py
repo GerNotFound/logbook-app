@@ -12,31 +12,6 @@ from services.suggestion_service import get_catalog_suggestions, resolve_catalog
 
 gym_bp = Blueprint('gym', __name__)
 
-
-def _update_template_exercise_sets(user_id, template_exercise_id, sets):
-    """Aggiorna il numero di serie per un esercizio della scheda.
-
-    Restituisce il record aggiornato se l'operazione ha avuto successo, altrimenti None.
-    """
-
-    query = """
-        UPDATE template_exercises AS te
-        SET sets = :sets
-        FROM workout_templates AS wt
-        WHERE te.id = :teid
-          AND wt.id = te.template_id
-          AND wt.user_id = :uid
-        RETURNING te.id, te.sets
-    """
-
-    return execute_query(
-        query,
-        {'sets': sets, 'teid': template_exercise_id, 'uid': user_id},
-        fetchone=True,
-        commit=True,
-    )
-
-
 # --- ENDPOINT API PER AJAX ---
 
 @gym_bp.route('/api/suggest/exercises')
@@ -47,36 +22,30 @@ def suggest_exercises():
     suggestions = get_catalog_suggestions('exercises', user_id, search_term)
     return jsonify({'results': suggestions})
 
-
 @gym_bp.route('/scheda/aggiorna-serie', methods=['POST'])
 @login_required
 def aggiorna_serie():
     user_id = session['user_id']
     template_exercise_id = request.form.get('template_exercise_id')
-    sets = (request.form.get('sets') or '').strip()
+    sets = request.form.get('sets', '')
 
     if not template_exercise_id:
         return jsonify({'success': False, 'error': 'ID mancante.'}), 400
 
-    if not sets:
-        return jsonify({'success': False, 'error': 'Valore delle serie mancante.'}), 400
-
+    query = """
+        UPDATE template_exercises SET sets = :sets 
+        WHERE id = :teid AND EXISTS (
+            SELECT 1 FROM workout_templates wt 
+            WHERE wt.id = template_exercises.template_id AND wt.user_id = :uid
+        )
+    """
     try:
-        template_exercise_id_int = int(template_exercise_id)
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'ID non valido.'}), 400
-
-    try:
-        updated = _update_template_exercise_sets(user_id, template_exercise_id_int, sets)
-    except Exception as exc:
+        execute_query(query, {'sets': sets, 'teid': template_exercise_id, 'uid': user_id}, commit=True)
+        return jsonify({'success': True})
+    except Exception as e:
         db.session.rollback()
-        current_app.logger.error("Errore durante l'aggiornamento delle serie: %s", exc)
+        current_app.logger.error(f"Errore durante l'aggiornamento delle serie: {e}")
         return jsonify({'success': False, 'error': 'Errore del server.'}), 500
-
-    if not updated:
-        return jsonify({'success': False, 'error': 'Esercizio non trovato.'}), 404
-
-    return jsonify({'success': True, 'sets': updated['sets']})
 
 
 # --- ROTTE TRADIZIONALI ---
@@ -159,7 +128,7 @@ def scheda():
     
     return render_template('scheda.html', title='Scheda Allenamento', templates=templates)
 
-@gym_bp.route('/scheda/<int:template_id>/modifica', methods=['GET', 'POST'])
+@gym_bp.route('/scheda/<int:template_id>/modifica_scheda', methods=['GET', 'POST'])
 @login_required
 def modifica_scheda_dettaglio(template_id):
     user_id = session['user_id']
@@ -184,38 +153,6 @@ def modifica_scheda_dettaglio(template_id):
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
             flash('Esercizio rimosso dalla scheda.', 'success')
-        elif action == 'update_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            sets = (request.form.get('sets') or '').strip()
-
-            error_message = None
-            template_exercise_id_int = None
-
-            if not template_exercise_id:
-                error_message = 'Esercizio non valido.'
-            else:
-                try:
-                    template_exercise_id_int = int(template_exercise_id)
-                except (TypeError, ValueError):
-                    error_message = 'Esercizio non valido.'
-
-            if not error_message and not sets:
-                error_message = 'Inserisci un valore valido per le serie.'
-
-            if error_message:
-                flash(error_message, 'danger')
-            else:
-                try:
-                    updated = _update_template_exercise_sets(user_id, template_exercise_id_int, sets)
-                except Exception as exc:
-                    db.session.rollback()
-                    current_app.logger.error("Errore durante l'aggiornamento delle serie: %s", exc)
-                    flash('Errore durante l\'aggiornamento delle serie.', 'danger')
-                else:
-                    if updated:
-                        flash('Serie aggiornate.', 'success')
-                    else:
-                        flash('Impossibile aggiornare le serie.', 'danger')
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
 
     current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id', {'tid': template_id}, fetchall=True)

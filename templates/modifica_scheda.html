@@ -5,7 +5,6 @@
         <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>{% endfor %}{% endif %}
-        {% endwith %}
     </div>
 </div>
 
@@ -16,33 +15,33 @@
             <tr>
                 <th>Esercizio</th>
                 <th>Serie</th>
-                <th class="text-center">Rimuovi</th>
+                <th class="text-center">Azioni</th>
             </tr>
         </thead>
         <tbody>
             {% for exercise in current_exercises %}
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
-                <td>
-                    <form class="update-sets-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
+                <td class="align-middle">
+                    <form class="update-sets-form d-flex align-items-center">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="update_template_exercise">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <div class="input-group">
-                            <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light btn-slim">Salva</button>
-                        </div>
+                        <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
                     </form>
                 </td>
                 <td class="text-center align-middle">
-                    <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete_template_exercise">
-                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete">X</button>
-                    </form>
+                    <div class="btn-group">
+                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light"><i class="bi bi-floppy"></i></button>
+                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_template_exercise">
+                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
                 </td>
             </tr>
+            <form id="update-sets-form-{{ exercise.id }}" class="d-none"></form>
             {% else %}
             <tr><td colspan="3" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
             {% endfor %}
@@ -91,67 +90,53 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Logica per il filtro live della tabella
         const searchInput = document.getElementById('search-exercise-input');
-        const exercisesTbody = document.getElementById('all-exercises-tbody');
-        const exerciseRows = Array.from(document.querySelectorAll('#all-exercises-tbody tr.exercise-row'));
-        const sortedRows = exerciseRows.slice().sort((a, b) => a.dataset.name.localeCompare(b.dataset.name));
-
-        // Ensure alphabetical order is preserved after any DOM operations
-        sortedRows.forEach(row => exercisesTbody.appendChild(row));
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
 
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
-            sortedRows.forEach(row => {
+            exerciseRows.forEach(row => {
                 const exerciseName = row.dataset.name;
-                const matches = !searchTerm || exerciseName.startsWith(searchTerm);
-                row.style.display = matches ? '' : 'none';
+                if (exerciseName.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
             });
         });
 
         // Logica per l'aggiornamento AJAX delle serie
         document.querySelectorAll('.update-sets-form').forEach(form => {
-            form.addEventListener('submit', async function(event) {
-                event.preventDefault();
-                const submitButton = this.querySelector('button[type="submit"]');
-                const setsInput = this.querySelector('input[name="sets"]');
-                const formData = new FormData(this);
-                const trimmedSets = (setsInput.value || '').trim();
-                formData.set('sets', trimmedSets);
-                const originalText = submitButton.textContent;
-                submitButton.disabled = true;
-                submitButton.textContent = '...';
+            const submitButton = document.querySelector(`button[form='${form.id}']`);
+            if (submitButton) {
+                 submitButton.addEventListener('click', async function(event) {
+                    event.preventDefault();
+                    const originalIcon = this.innerHTML;
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-                try {
-                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'same-origin',
-                        headers: {
-                            'X-CSRFToken': formData.get('csrf_token') || '',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                        submitButton.textContent = 'OK!';
-                        if (typeof data.sets === 'string') {
-                            setsInput.value = data.sets;
+                    try {
+                        const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                            method: 'POST',
+                            body: new FormData(form)
+                        });
+                        const data = await response.json();
+                        if (response.ok && data.success) {
+                            this.innerHTML = '<i class="bi bi-check-lg"></i>';
                         } else {
-                            setsInput.value = trimmedSets;
+                            alert(data.error || 'Errore');
+                            this.innerHTML = '<i class="bi bi-x-lg"></i>';
                         }
-                    } else {
-                        alert(data.error || 'Errore');
-                        submitButton.textContent = 'Errore';
+                    } catch (error) {
+                        alert('Errore di rete.');
+                        this.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    } finally {
+                        setTimeout(() => {
+                            this.disabled = false;
+                            this.innerHTML = originalIcon;
+                        }, 2000);
                     }
-                } catch (error) {
-                    alert('Errore di rete.');
-                    submitButton.textContent = 'Errore';
-                } finally {
-                    setTimeout(() => {
-                        submitButton.disabled = false;
-                        submitButton.textContent = originalText;
-                    }, 1500);
-                }
-            });
+                });
+            }
         });
     });
 </script>
