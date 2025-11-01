@@ -14,7 +14,7 @@ def init_security(app: Flask) -> None:
         'style-src': ["'self'", 'https:'],
         'img-src': ["'self'", 'data:', 'https:'],
         'font-src': ["'self'", 'https:'],
-        'connect-src': ["'self'", 'https:'],
+        'connect-src': ["'self'", 'https:', 'wss:', 'ws:'],
         'object-src': ["'none'"],
         'frame-ancestors': ["'none'"],
         'base-uri': ["'self'"],

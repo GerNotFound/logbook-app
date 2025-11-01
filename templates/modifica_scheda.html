@@ -6,7 +6,29 @@
 <div id="template-editor-app" v-cloak>
     <div class="row">
         <div class="col-12">
-            <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
+            <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mb-3">
+                <h1 class="mb-0 brand-heading">
+                    <span class="logbook-brand brand-heading__brand">LOGBOOK</span>
+                    <span class="brand-heading__section">/
+                        <span v-text="templateName"></span>
+                    </span>
+                </h1>
+                <div class="d-flex gap-2 align-items-center" v-if="!isRenaming">
+                    <button type="button" class="btn btn-outline-light btn-sm" @click="startRename">Rinomina scheda</button>
+                </div>
+            </div>
+            <div v-if="isRenaming" class="mt-3 mb-3">
+                <form ref="renameForm" class="d-flex flex-column flex-md-row align-items-md-center gap-2" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" @submit.prevent="submitRename">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="rename_template">
+                    <label for="rename-template-input" class="form-label mb-0 visually-hidden">Nuovo nome scheda</label>
+                    <input type="text" class="form-control" id="rename-template-input" name="new_name" v-model="renameValue" :disabled="renameSubmitting" minlength="1" maxlength="120" required @keydown.escape.prevent="cancelRename" ref="renameInput">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-custom btn-custom-short" :disabled="renameSubmitting || !isRenameValid">Salva</button>
+                        <button type="button" class="btn btn-outline-secondary" @click="cancelRename" :disabled="renameSubmitting">Annulla</button>
+                    </div>
+                </form>
+            </div>
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -81,19 +103,15 @@
 
         <div class="mb-4">
             <div class="row g-3 align-items-end">
-                <div class="col-md-8 col-lg-6">
+                <div class="col-12 col-lg-8 col-xl-6">
                     <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
                     <div class="input-group" id="search-exercise-controls">
                         <input type="text" id="search-exercise-input" class="form-control" v-model="searchTerm" placeholder="Digita per filtrare gli esercizi...">
-                        <button type="button" class="btn btn-outline-light" id="search-exercise-button" @click.prevent="requestSearch" :disabled="searching && socketConnected">
-                            <span v-if="searching && socketConnected" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            <span v-else>CERCA</span>
-                        </button>
+                        <span class="input-group-text bg-transparent border-start-0" v-if="searching">
+                            <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
+                        </span>
+                        <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
                     </div>
-                    <small class="text-muted" v-if="!socketConnected">Ricerca locale attiva: la connessione in tempo reale verrà ristabilita automaticamente.</small>
-                </div>
-                <div class="col-auto">
-                    <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
                 </div>
             </div>
             <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
@@ -144,6 +162,7 @@
 
         const initialData = {
             templateId: {{ template.id }},
+            templateName: {{ template.name|tojson }},
             cancelUrl: {{ cancel_url|tojson }},
             currentExercises: {{ current_exercises|tojson }},
             availableExercises: {{ all_exercises|tojson }}
@@ -178,26 +197,48 @@
 
         createApp({
             data() {
-                return {
-                    templateId: initialData.templateId,
-                    cancelUrl: initialData.cancelUrl,
-                    exercises: initialData.currentExercises.map((exercise) => ({
+                const safeCurrentExercises = Array.isArray(initialData.currentExercises) ? initialData.currentExercises : [];
+                const safeAvailableExercises = Array.isArray(initialData.availableExercises) ? initialData.availableExercises : [];
+
+                const normalizedAvailable = safeAvailableExercises.map((exercise) => ({
+                    id: exercise.id,
+                    name: exercise.name,
+                    is_global: Boolean(exercise.is_global),
+                    info_url: exercise.info_url || null
+                }));
+
+                const normalizedExercises = safeCurrentExercises.map((exercise) => {
+                    const normalized = {
                         key: `existing-${exercise.template_exercise_id}`,
                         type: 'existing',
                         templateExerciseId: exercise.template_exercise_id,
                         exerciseId: exercise.exercise_id,
                         name: exercise.name,
                         sets: Number.parseInt(exercise.sets, 10) || 0,
-                        isGlobal: Boolean(exercise.is_global)
-                    })),
+                        isGlobal: Boolean(exercise.is_global),
+                        infoUrl: exercise.info_url || null
+                    };
+
+                    if (!normalizedAvailable.some((candidate) => candidate.id === normalized.exerciseId)) {
+                        normalizedAvailable.push({
+                            id: normalized.exerciseId,
+                            name: normalized.name,
+                            is_global: normalized.isGlobal,
+                            info_url: normalized.infoUrl
+                        });
+                    }
+
+                    return normalized;
+                });
+
+                return {
+                    templateId: initialData.templateId,
+                    templateName: initialData.templateName,
+                    cancelUrl: initialData.cancelUrl,
+                    exercises: normalizedExercises,
                     deletedExistingIds: [],
                     nextNewId: 1,
-                    availableExercises: initialData.availableExercises.map((exercise) => ({
-                        id: exercise.id,
-                        name: exercise.name,
-                        is_global: Boolean(exercise.is_global),
-                        info_url: exercise.info_url
-                    })),
+                    availableExercises: normalizedAvailable,
                     searchTerm: '',
                     searchResults: [],
                     searching: false,
@@ -207,7 +248,10 @@
                     searchTimeoutId: null,
                     syncing: false,
                     lastSyncSummary: null,
-                    lastSyncTimestamp: null
+                    lastSyncTimestamp: null,
+                    isRenaming: false,
+                    renameValue: '',
+                    renameSubmitting: false
                 };
             },
             computed: {
@@ -238,9 +282,50 @@
                     } catch (error) {
                         return '';
                     }
+                },
+                isRenameValid() {
+                    if (!this.isRenaming) {
+                        return true;
+                    }
+                    const trimmed = (this.renameValue || '').trim();
+                    return trimmed.length > 0 && trimmed !== this.templateName;
                 }
             },
             methods: {
+                startRename() {
+                    this.renameValue = this.templateName;
+                    this.renameSubmitting = false;
+                    this.isRenaming = true;
+                    this.$nextTick(() => {
+                        const input = this.$refs.renameInput;
+                        if (input) {
+                            input.focus();
+                            if (typeof input.select === 'function') {
+                                input.select();
+                            }
+                        }
+                    });
+                },
+                cancelRename() {
+                    this.isRenaming = false;
+                    this.renameValue = '';
+                    this.renameSubmitting = false;
+                },
+                submitRename() {
+                    const trimmed = (this.renameValue || '').trim();
+                    if (!trimmed || trimmed === this.templateName) {
+                        this.cancelRename();
+                        return;
+                    }
+                    this.renameValue = trimmed;
+                    this.renameSubmitting = true;
+                    this.$nextTick(() => {
+                        const form = this.$refs.renameForm;
+                        if (form) {
+                            form.submit();
+                        }
+                    });
+                },
                 normalizeSearchResult(raw) {
                     return {
                         id: raw.id,
@@ -463,6 +548,7 @@
             },
             mounted() {
                 this.bootstrapSearchResults();
+                this.requestSearch();
                 this.connectSocket();
                 this.queuePreviewSync(true);
             }
