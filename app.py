@@ -10,12 +10,13 @@ import commands
 from config import ProductionConfig
 from migrations import run_migrations
 from bootstrap import ensure_database_indexes
-from extensions import csrf, db, limiter
+from extensions import csrf, db, limiter, socketio
 from logging_config import setup_logging
 from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
 from routes.health import health_bp
 from security import init_security
 from utils import execute_query
+from ws import register_socketio_namespaces
 
 
 def _load_app_version() -> str:
@@ -41,6 +42,11 @@ def create_app() -> Flask:
     init_security(app)
 
     limiter.init_app(app)
+
+    socketio.init_app(
+        app,
+        cors_allowed_origins=app.config.get('SOCKETIO_CORS_ALLOWED_ORIGINS', []),
+    )
 
     commands.init_app(app)
 
@@ -114,9 +120,13 @@ def create_app() -> Flask:
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(health_bp)
 
+    register_socketio_namespaces(socketio)
+
     return app
 
 
+application = create_app()
+
+
 if __name__ == '__main__':
-    application = create_app()
-    application.run(host='0.0.0.0', port=5000)
+    socketio.run(application, host='0.0.0.0', port=5000)
