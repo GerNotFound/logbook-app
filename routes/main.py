@@ -11,6 +11,21 @@ from services import privacy_service
 
 main_bp = Blueprint('main', __name__)
 
+
+@main_bp.route('/.well-known/security.txt')
+def security_txt():
+    """Expose security.txt for browsers and scanners to verify site ownership."""
+
+    lines = [
+        'Contact: mailto:security@logbook.click',
+        'Contact: https://www.logbook.click/support',
+        'Preferred-Languages: it, en',
+        'Canonical: https://www.logbook.click/.well-known/security.txt',
+    ]
+    response = current_app.response_class('\n'.join(lines) + '\n', mimetype='text/plain')
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
+
 @main_bp.route('/service-worker.js')
 def service_worker():
     response = send_from_directory('static', 'service-worker.js', max_age=0)
