@@ -1,9 +1,7 @@
 # utils.py
 
 from datetime import datetime
-import re
 from typing import Any, Dict, List, Optional, Union
-from unicodedata import normalize
 
 from sqlalchemy import text
 
@@ -75,16 +73,4 @@ def is_valid_time_format(time_str):
 def allowed_file(filename):
     """Controlla se l'estensione di un file è permessa."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def slugify(value: str) -> str:
-    """Create a lowercase slug separated by underscores from the given string."""
-
-    if not value:
-        return 'scheda'
-
-    normalized = normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
-    cleaned = re.sub(r'[\W_]+', ' ', normalized).strip().lower()
-    slug = re.sub(r'\s+', '_', cleaned)
-    return slug or 'scheda'
 

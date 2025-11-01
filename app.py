@@ -5,19 +5,17 @@ from pathlib import Path
 
 from flask import Flask, session, current_app, flash, redirect, url_for
 from dotenv import load_dotenv
-from sqlalchemy.pool import StaticPool
 
 import commands
 from config import ProductionConfig
 from migrations import run_migrations
 from bootstrap import ensure_database_indexes
-from extensions import csrf, db, limiter, socketio, talisman
+from extensions import csrf, db, limiter
 from logging_config import setup_logging
 from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
 from routes.health import health_bp
 from security import init_security
 from utils import execute_query
-from ws import register_socketio_namespaces
 
 
 def _load_app_version() -> str:
@@ -38,64 +36,11 @@ def create_app() -> Flask:
     app.logger.handlers = []
     app.logger.propagate = True
 
-    database_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
-    if database_uri.startswith('sqlite'):  # pragma: no cover - only used in ephemeral test environments
-        engine_options = dict(app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}))
-        engine_options.pop('pool_size', None)
-        engine_options.pop('max_overflow', None)
-        connect_args = dict(engine_options.get('connect_args') or {})
-        connect_args.setdefault('check_same_thread', False)
-        engine_options['connect_args'] = connect_args
-        engine_options['poolclass'] = StaticPool
-        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
-
     db.init_app(app)
     csrf.init_app(app)
     init_security(app)
 
-    csp = {
-        'default-src': ("'self'",),
-        'script-src': (
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            'https://cdn.socket.io',
-            'https://unpkg.com',
-        ),
-        'style-src': (
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            'https://fonts.googleapis.com',
-        ),
-        'img-src': (
-            "'self'",
-            'data:',
-            'https://cdn.jsdelivr.net',
-        ),
-        'font-src': (
-            "'self'",
-            'https://cdn.jsdelivr.net',
-            'https://fonts.gstatic.com',
-        ),
-        'connect-src': ("'self'", 'https:', 'wss:'),
-        'manifest-src': ("'self'",),
-        'frame-ancestors': ("'self'",),
-    }
-
-    talisman.init_app(
-        app,
-        content_security_policy=csp,
-        force_https=True,
-        force_https_permanent=True,
-        session_cookie_secure=True,
-        referrer_policy='strict-origin-when-cross-origin',
-    )
-
     limiter.init_app(app)
-
-    socketio.init_app(
-        app,
-        cors_allowed_origins=app.config.get('SOCKETIO_CORS_ALLOWED_ORIGINS', []),
-    )
 
     commands.init_app(app)
 
@@ -169,13 +114,9 @@ def create_app() -> Flask:
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(health_bp)
 
-    register_socketio_namespaces(socketio)
-
     return app
 
 
-application = create_app()
-
-
 if __name__ == '__main__':
-    socketio.run(application, host='0.0.0.0', port=5000)
+    application = create_app()
+    application.run(host='0.0.0.0', port=5000)
