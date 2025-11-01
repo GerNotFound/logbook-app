@@ -25,9 +25,17 @@
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
             <h5 class="mb-0">Esercizi Attuali</h5>
             <div class="d-flex align-items-center gap-2">
-                <span class="badge rounded-pill" :class="syncBadgeClass">{{ syncStatusText }}</span>
-                <small class="text-muted" v-if="lastSyncSummary">Esercizi sincronizzati: {{ lastSyncSummary.total_exercises }} · Serie totali: {{ lastSyncSummary.total_sets }}</small>
-                <small class="text-muted" v-if="lastSyncTimestamp">Ultimo aggiornamento: {{ formattedLastSync }}</small>
+                <span class="badge rounded-pill" :class="syncBadgeClass" v-text="syncStatusText"></span>
+                <small class="text-muted" v-if="lastSyncSummary">
+                    Esercizi sincronizzati:
+                    <span v-text="lastSyncSummary.total_exercises"></span>
+                    · Serie totali:
+                    <span v-text="lastSyncSummary.total_sets"></span>
+                </small>
+                <small class="text-muted" v-if="lastSyncTimestamp">
+                    Ultimo aggiornamento:
+                    <span v-text="formattedLastSync"></span>
+                </small>
             </div>
         </div>
         <table class="table table-sm table-bordered align-middle">
