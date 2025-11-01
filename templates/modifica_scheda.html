@@ -13,202 +13,166 @@
     </div>
 </div>
 
-<form id="edit-template-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div x-data="templateEditor()" x-init="init()">
+    <form id="edit-template-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">{{ template.name }}</h4>
-        <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal">Rinomina</button>
-    </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0" x-text="templateName"></h4>
+            <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal">Rinomina</button>
+        </div>
+
+        <div class="mb-4">
+            <h5>Esercizi</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Esercizio</th>
+                            <th class="serie-column">Serie</th>
+                            <th class="text-center">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="current-exercises-tbody">
+                        <template x-for="(exercise, index) in currentExercises" :key="exercise.exercise_id">
+                            <tr :data-exercise-id="exercise.exercise_id">
+                                <input type="hidden" name="exercise_id" :value="exercise.exercise_id">
+                                <td class="align-middle" x-text="exercise.name"></td>
+                                <td class="align-middle">
+                                    <input type="text" class="form-control form-control-sm" :name="'sets_' + exercise.exercise_id" x-model="exercise.sets">
+                                </td>
+                                <td class="text-center align-middle">
+                                    <div class="btn-group">
+                                        <button @click="moveUp(index)" type="button" class="btn btn-sm btn-outline-light" title="Sposta su" :disabled="index === 0"><i class="bi bi-arrow-up"></i></button>
+                                        <button @click="moveDown(index)" type="button" class="btn btn-sm btn-outline-light" title="Sposta giù" :disabled="index === currentExercises.length - 1"><i class="bi bi-arrow-down"></i></button>
+                                        <button @click="removeExercise(index)" type="button" class="btn btn-sm btn-delete" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <p id="no-exercises-placeholder" class="text-center text-muted" x-show="currentExercises.length === 0">Nessun esercizio in questa scheda.</p>
+            </div>
+        </div>
+    </form>
 
     <div class="mb-4">
-        <h5>Esercizi</h5>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered">
+        <h5>Cerca Esercizio</h5>
+        <input type="text" class="form-control" placeholder="Digita per filtrare gli esercizi..." x-model="searchTerm">
+        <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom w-100 d-block mt-3">CREA ESERCIZIO</a>
+        
+        <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-bordered table-hover table-sm">
                 <thead>
                     <tr>
                         <th>Esercizio</th>
-                        <th class="serie-column">Serie</th>
                         <th class="text-center">Azioni</th>
                     </tr>
                 </thead>
-                <tbody id="current-exercises-tbody">
-                    {% for exercise in current_exercises %}
-                    <tr data-exercise-id="{{ exercise.exercise_id }}">
-                        <input type="hidden" name="exercise_id" value="{{ exercise.exercise_id }}">
-                        <td class="align-middle exercise-name-cell">{{ exercise.name }}</td>
-                        <td class="align-middle">
-                            <input type="text" class="form-control form-control-sm" name="sets_{{ exercise.exercise_id }}" value="{{ exercise.sets }}">
-                        </td>
-                        <td class="text-center align-middle">
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
-                                <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
-                                <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                <tbody>
+                    <template x-for="exercise in filteredExercises" :key="exercise.id">
+                        <tr>
+                            <td x-html="exercise.name + (exercise.is_global ? ' <i class=\'bi bi-globe2 global-icon\' title=\'Esercizio globale\'></i>' : '')"></td>
+                            <td class="text-center">
+                                <button @click="addExercise(exercise)" type="button" class="btn btn-sm btn-outline-light">Aggiungi</button>
+                                <a :href="'/esercizio/' + exercise.id + '/info'" class="btn btn-sm btn-outline-secondary">Info</a>
+                            </td>
+                        </tr>
+                    </template>
                 </tbody>
             </table>
-            <p id="no-exercises-placeholder" class="text-center text-muted {% if current_exercises %}d-none{% endif %}">Nessun esercizio in questa scheda.</p>
         </div>
     </div>
-</form>
 
-<div id="all-exercises-list" class="mb-4">
-    <h5>Cerca Esercizio</h5>
-    <input type="text" class="form-control search" placeholder="Digita per filtrare gli esercizi...">
-    <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom w-100 d-block mt-2">CREA ESERCIZIO</a>
-    
-    <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
-        <table class="table table-bordered table-hover table-sm">
-            <thead>
-                <tr>
-                    <th>Esercizio</th>
-                    <th class="text-center">Azioni</th>
-                </tr>
-            </thead>
-            <tbody class="list">
-                {% for exercise in all_exercises %}
-                <tr data-id="{{ exercise.id }}" data-is-global="{{ 1 if exercise.user_id is none else 0 }}">
-                    <td class="exercise-name-cell">{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-light add-exercise">Aggiungi</button>
-                        <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Modal per rinominare la scheda -->
-<div class="modal fade" id="renameTemplateModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Rinomina Scheda</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <label for="new_template_name" class="form-label">Nuovo nome</label>
-                <input type="text" name="new_template_name" id="new_template_name" class="form-control" value="{{ template.name }}" required form="edit-template-form">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                <button type="button" class="btn btn-custom btn-custom-tight m-0" data-bs-dismiss="modal">Conferma</button>
+    <!-- Modal per rinominare la scheda -->
+    <div class="modal fade" id="renameTemplateModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Rinomina Scheda</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <label for="new_template_name" class="form-label">Nuovo nome</label>
+                    <input type="text" name="new_template_name" id="new_template_name" class="form-control" x-model="templateName" required form="edit-template-form">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-custom btn-custom-tight m-0" data-bs-dismiss="modal">Conferma</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="sticky-bottom-nav">
-    <button type="submit" form="edit-template-form" class="btn btn-custom action-btn">SALVA</button>
-    <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn">INDIETRO</a>
+    <div class="sticky-bottom-nav">
+        <button type="submit" form="edit-template-form" class="btn btn-custom action-btn">SALVA</button>
+        <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn" x-text="isDirty ? 'ANNULLA' : 'INDIETRO'">INDIETRO</a>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script nonce="{{ csp_nonce() }}">
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('edit-template-form');
-        const currentExercisesTbody = document.getElementById('current-exercises-tbody');
-        const noExercisesPlaceholder = document.getElementById('no-exercises-placeholder');
-        const cancelButton = document.getElementById('cancel-button');
-        let isDirty = false;
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('templateEditor', () => ({
+            // --- STATO (I DATI) ---
+            templateName: {{ template.name|tojson|safe }},
+            currentExercises: {{ current_exercises|tojson|safe }},
+            allExercises: {{ all_exercises|tojson|safe }},
+            searchTerm: '',
+            initialState: '',
 
-        // --- Logica per rilevare modifiche e aggiornare il pulsante Annulla ---
-        function getFormState() {
-            const exerciseOrder = Array.from(currentExercisesTbody.querySelectorAll('tr')).map(tr => {
-                const id = tr.dataset.exerciseId;
-                const sets = tr.querySelector(`input[name="sets_${id}"]`).value;
-                return `${id}:${sets}`;
-            }).join(',');
-            const templateName = document.getElementById('new_template_name').value;
-            return `${templateName}|${exerciseOrder}`;
-        }
+            // --- GETTERS (DATI DERIVATI) ---
+            get isDirty() {
+                const currentState = JSON.stringify({
+                    name: this.templateName,
+                    exercises: this.currentExercises.map(e => ({ id: e.exercise_id, sets: e.sets }))
+                });
+                return this.initialState !== currentState;
+            },
+            get filteredExercises() {
+                if (this.searchTerm.trim() === '') {
+                    return this.allExercises;
+                }
+                const lowerTerm = this.searchTerm.toLowerCase();
+                return this.allExercises.filter(ex => 
+                    ex.name.toLowerCase().includes(lowerTerm)
+                );
+            },
 
-        const initialState = getFormState();
-
-        function checkDirtyState() {
-            const currentState = getFormState();
-            isDirty = (currentState !== initialState);
-            cancelButton.textContent = isDirty ? 'ANNULLA' : 'INDIETRO';
-        }
-
-        form.addEventListener('input', checkDirtyState);
-        // Aggiungiamo un listener globale per rilevare aggiunte/rimozioni/riordino
-        new MutationObserver(checkDirtyState).observe(currentExercisesTbody, { childList: true, subtree: true });
-
-        // --- Logica Ricerca Live con List.js ---
-        const exerciseList = new List('all-exercises-list', {
-            valueNames: ['exercise-name-cell']
-        });
-
-        // --- Logica Aggiungi Esercizio (Client-Side) ---
-        document.getElementById('all-exercises-list').addEventListener('click', function(e) {
-            if (e.target.classList.contains('add-exercise')) {
-                const rowToAdd = e.target.closest('tr');
-                const exerciseId = rowToAdd.dataset.id;
-                const exerciseName = rowToAdd.querySelector('.exercise-name-cell').textContent.trim();
-
-                if (currentExercisesTbody.querySelector(`tr[data-exercise-id="${exerciseId}"]`)) {
+            // --- METODI (LE AZIONI) ---
+            init() {
+                // Salva lo stato iniziale per confrontare le modifiche
+                this.initialState = JSON.stringify({
+                    name: this.templateName,
+                    exercises: this.currentExercises.map(e => ({ id: e.exercise_id, sets: e.sets }))
+                });
+            },
+            addExercise(exerciseToAdd) {
+                const isAlreadyAdded = this.currentExercises.some(ex => ex.exercise_id === exerciseToAdd.id);
+                if (isAlreadyAdded) {
                     alert("Questo esercizio è già nella scheda.");
                     return;
                 }
-
-                const newRow = document.createElement('tr');
-                newRow.dataset.exerciseId = exerciseId;
-                newRow.innerHTML = `
-                    <input type="hidden" name="exercise_id" value="${exerciseId}">
-                    <td class="align-middle exercise-name-cell">${exerciseName}</td>
-                    <td class="align-middle">
-                        <input type="text" class="form-control form-control-sm" name="sets_${exerciseId}" value="1">
-                    </td>
-                    <td class="text-center align-middle">
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
-                            <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
-                            <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
-                        </div>
-                    </td>
-                `;
-                currentExercisesTbody.appendChild(newRow);
-                updateEventListenersForRow(newRow);
-                checkDirtyState();
+                this.currentExercises.push({
+                    exercise_id: exerciseToAdd.id,
+                    name: exerciseToAdd.name,
+                    sets: '1'
+                });
+            },
+            removeExercise(index) {
+                this.currentExercises.splice(index, 1);
+            },
+            moveUp(index) {
+                if (index > 0) {
+                    [this.currentExercises[index - 1], this.currentExercises[index]] = [this.currentExercises[index], this.currentExercises[index - 1]];
+                }
+            },
+            moveDown(index) {
+                if (index < this.currentExercises.length - 1) {
+                    [this.currentExercises[index], this.currentExercises[index + 1]] = [this.currentExercises[index + 1], this.currentExercises[index]];
+                }
             }
-        });
-
-        function updateEventListenersForRow(row) {
-            // Rimuovi esercizio
-            row.querySelector('.remove-exercise').addEventListener('click', function() {
-                this.closest('tr').remove();
-                checkDirtyState();
-            });
-            // Sposta su
-            row.querySelector('.move-up').addEventListener('click', function() {
-                const currentRow = this.closest('tr');
-                const prevRow = currentRow.previousElementSibling;
-                if (prevRow) {
-                    currentExercisesTbody.insertBefore(currentRow, prevRow);
-                    checkDirtyState();
-                }
-            });
-            // Sposta giù
-            row.querySelector('.move-down').addEventListener('click', function() {
-                const currentRow = this.closest('tr');
-                const nextRow = currentRow.nextElementSibling;
-                if (nextRow) {
-                    currentExercisesTbody.insertBefore(nextRow, currentRow);
-                    checkDirtyState();
-                }
-            });
-            // Aggiorna placeholder
-            noExercisesPlaceholder.classList.toggle('d-none', currentExercisesTbody.children.length > 0);
-        }
-        
-        // Inizializza gli event listener per le righe esistenti al caricamento
-        currentExercisesTbody.querySelectorAll('tr').forEach(updateEventListenersForRow);
+        }));
     });
 </script>
 {% endblock %}
