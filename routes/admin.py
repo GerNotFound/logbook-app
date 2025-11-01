@@ -11,7 +11,6 @@ from utils import execute_query
 from services.admin_service import build_user_export_archive
 from services import privacy_service
 from services.communication_service import get_welcome_message, update_welcome_message
-import os
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -129,17 +128,7 @@ def admin_utente_dettaglio(user_id):
                 flash(f"Privilegi di super user rimossi per {user['username']}.", 'success')
             return redirect(url_for('admin.admin_utente_dettaglio', user_id=user_id))
         elif action == 'delete_account':
-            profile_to_delete = execute_query('SELECT profile_image_file FROM user_profile WHERE user_id = :user_id', {'user_id': user_id}, fetchone=True)
-            if profile_to_delete and profile_to_delete.get('profile_image_file'):
-                try:
-                    file_path = os.path.join('static', 'profile_pics', profile_to_delete['profile_image_file'])
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                except Exception as e:
-                    print(f"Errore durante l'eliminazione del file immagine per l'utente {user_id}: {e}")
-            
             execute_query('DELETE FROM users WHERE id = :id', {'id': user_id}, commit=True)
-            
             flash(f'Utente {user["username"]} e tutti i suoi dati sono stati eliminati con successo.', 'success')
             return redirect(url_for('admin.admin_utenti'))
 

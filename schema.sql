@@ -17,9 +17,8 @@ CREATE TABLE users (
 
 CREATE TABLE user_profile (
     user_id INTEGER PRIMARY KEY,
-    birth_date DATE, -- MODIFICA: TEXT -> DATE
+    birth_date DATE,
     height REAL,
-    profile_image_file TEXT,
     gender TEXT,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
@@ -41,7 +40,7 @@ CREATE TABLE user_notes (
 CREATE TABLE daily_data (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    record_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
+    record_date DATE NOT NULL,
     weight REAL,
     weight_time TEXT,
     sleep TEXT,
@@ -82,7 +81,7 @@ CREATE TABLE diet_log (
     carbs REAL NOT NULL,
     fat REAL NOT NULL,
     calories REAL NOT NULL,
-    log_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
+    log_date DATE NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (food_id) REFERENCES foods (id) ON DELETE CASCADE
 );
@@ -104,7 +103,7 @@ CREATE INDEX idx_intake_log_user_date ON intake_log(user_id, record_date);
 CREATE TABLE cardio_log (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    record_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
+    record_date DATE NOT NULL,
     location TEXT NOT NULL,
     activity_type TEXT NOT NULL,
     distance_km REAL,
@@ -130,6 +129,7 @@ CREATE TABLE exercises (
     id SERIAL PRIMARY KEY,
     user_id INTEGER,
     name TEXT NOT NULL,
+    consigli TEXT,
     UNIQUE(name, user_id),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
@@ -164,7 +164,7 @@ CREATE TABLE workout_sessions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     session_timestamp TEXT NOT NULL UNIQUE,
-    record_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
+    record_date DATE NOT NULL,
     template_name TEXT,
     duration_minutes INTEGER,
     session_note TEXT,
@@ -176,7 +176,7 @@ CREATE TABLE workout_log (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     exercise_id INTEGER NOT NULL,
-    record_date DATE NOT NULL, -- MODIFICA: TEXT -> DATE
+    record_date DATE NOT NULL,
     session_timestamp TEXT NOT NULL,
     set_number INTEGER NOT NULL,
     reps INTEGER NOT NULL,

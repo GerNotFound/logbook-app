@@ -18,8 +18,10 @@ def corsa():
 def sessione_corsa(date_str):
     user_id = session['user_id']
     
-    if date_str: current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-    else: current_date = date.today()
+    if date_str: 
+        current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    else: 
+        current_date = date.today()
 
     current_date_str = current_date.strftime('%Y-%m-%d')
     prev_day = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -49,7 +51,7 @@ def sessione_corsa(date_str):
             flash('La distanza deve essere un numero valido maggiore o uguale a zero.', 'danger')
             return render_template('sessione_corsa.html', title='Sessione Corsa', date_formatted=current_date.strftime('%d %b %y'),
                                    current_date_str=current_date_str, prev_day=prev_day, next_day=next_day,
-                                   is_today=is_today, form_data=form_data)
+                                   is_today=is_today, form_data=form_data, is_date_sensitive_page=True)
 
         try:
             duration_val = int(duration_raw) if duration_raw else None
@@ -59,7 +61,7 @@ def sessione_corsa(date_str):
             flash('La durata deve essere un numero intero maggiore o uguale a zero.', 'danger')
             return render_template('sessione_corsa.html', title='Sessione Corsa', date_formatted=current_date.strftime('%d %b %y'),
                                    current_date_str=current_date_str, prev_day=prev_day, next_day=next_day,
-                                   is_today=is_today, form_data=form_data)
+                                   is_today=is_today, form_data=form_data, is_date_sensitive_page=True)
 
         try:
             incline_val = float(incline_raw) if incline_raw else None
@@ -69,7 +71,7 @@ def sessione_corsa(date_str):
             flash('L\'inclinazione deve essere un numero valido maggiore o uguale a zero.', 'danger')
             return render_template('sessione_corsa.html', title='Sessione Corsa', date_formatted=current_date.strftime('%d %b %y'),
                                    current_date_str=current_date_str, prev_day=prev_day, next_day=next_day,
-                                   is_today=is_today, form_data=form_data)
+                                   is_today=is_today, form_data=form_data, is_date_sensitive_page=True)
 
         query = "INSERT INTO cardio_log (user_id, record_date, location, activity_type, distance_km, duration_min, incline) VALUES (:user_id, :rd, :loc, :act, :dist, :dur, :inc)"
         params = {
@@ -87,7 +89,7 @@ def sessione_corsa(date_str):
 
     return render_template('sessione_corsa.html', title='Sessione Corsa', date_formatted=current_date.strftime('%d %b %y'),
                            current_date_str=current_date_str, prev_day=prev_day, next_day=next_day, is_today=is_today,
-                           form_data=None)
+                           form_data=None, is_date_sensitive_page=True)
 
 @cardio_bp.route('/diario_corsa')
 @login_required

@@ -513,6 +513,7 @@ def tracking(date_str):
         prev_day=prev_day,
         next_day=next_day,
         is_today=is_today,
+        is_date_sensitive_page=True,
     )
 
 @nutrition_bp.route('/diario_alimentare')
@@ -565,6 +566,7 @@ def dieta(date_str):
         next_day=next_day,
         is_today=is_today,
         food_options=food_options,
+        is_date_sensitive_page=True,
     )
 
 @nutrition_bp.route('/alimenti', methods=['GET', 'POST'])
@@ -610,7 +612,6 @@ def alimenti():
                 execute_query(f'DELETE FROM foods WHERE id = :id AND {condition}', params, commit=True)
                 flash(('Alimento globale eliminato.' if is_global else 'Alimento personale eliminato.'), 'success')
 
-        # NUOVA LOGICA: Rinomina Alimento
         elif action == 'rename_food':
             new_name = (request.form.get('new_food_name') or '').strip()
             is_global = request.form.get('is_global') == '1'

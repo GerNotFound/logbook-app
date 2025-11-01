@@ -87,6 +87,43 @@ def esercizi():
                     flash(f"Errore: L'esercizio '{name}' esiste già.", 'danger')
             else:
                 flash("Inserisci un nome valido per l'esercizio.", 'danger')
+        elif action == 'update_notes':
+            exercise_id = request.form.get('exercise_id')
+            notes = request.form.get('notes')
+            query = "INSERT INTO user_exercise_notes (user_id, exercise_id, notes) VALUES (:uid, :eid, :notes) ON CONFLICT(user_id, exercise_id) DO UPDATE SET notes = EXCLUDED.notes"
+            execute_query(query, {'uid': user_id, 'eid': exercise_id, 'notes': notes}, commit=True)
+            flash('Nota aggiornata.', 'success')
+        elif action == 'delete_exercise':
+            exercise_id = request.form.get('exercise_id')
+            is_global = request.form.get('is_global') == '1'
+            if is_global and not is_superuser:
+                flash('Non sei autorizzato a eliminare questo esercizio.', 'danger')
+            else:
+                params = {'id': exercise_id}
+                condition = 'user_id IS NULL' if is_global else 'user_id = :uid'
+                if not is_global: params['uid'] = user_id
+                execute_query(f'DELETE FROM exercises WHERE id = :id AND {condition}', params, commit=True)
+                flash('Esercizio eliminato.', 'success')
+        elif action == 'rename_exercise':
+            exercise_id = request.form.get('exercise_id')
+            new_name = (request.form.get('new_exercise_name') or '').strip()
+            is_global = request.form.get('is_global') == '1'
+            if new_name:
+                if is_global and not is_superuser:
+                    flash('Non autorizzato.', 'danger')
+                else:
+                    try:
+                        params = {'name': new_name, 'id': exercise_id}
+                        if is_global:
+                            query = "UPDATE exercises SET name = :name WHERE id = :id AND user_id IS NULL"
+                        else:
+                            params['uid'] = user_id
+                            query = "UPDATE exercises SET name = :name WHERE id = :id AND user_id = :uid"
+                        execute_query(query, params, commit=True)
+                        flash('Esercizio rinominato.', 'success')
+                    except IntegrityError:
+                        db.session.rollback()
+                        flash(f"Errore: Esiste già un esercizio con il nome '{new_name}'.", 'danger')
         return redirect(url_for('gym.esercizi'))
 
     query = "SELECT e.id, e.name, e.user_id, uen.notes FROM exercises e LEFT JOIN user_exercise_notes uen ON e.id = uen.exercise_id AND uen.user_id = :user_id WHERE e.user_id IS NULL OR e.user_id = :user_id ORDER BY e.name"
@@ -112,19 +149,40 @@ def scheda():
             template_id = request.form.get('template_id')
             execute_query('DELETE FROM workout_templates WHERE id = :id AND user_id = :uid', {'id': template_id, 'uid': user_id}, commit=True)
             flash('Scheda eliminata con successo.', 'success')
+        elif action == 'rename_template':
+            template_id = request.form.get('template_id')
+            new_name = (request.form.get('new_template_name') or '').strip()
+            if new_name:
+                try:
+                    execute_query('UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid', {'name': new_name, 'id': template_id, 'uid': user_id}, commit=True)
+                    flash('Scheda rinominata.', 'success')
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(f"Errore: Esiste già una scheda con il nome '{new_name}'.", 'danger')
         return redirect(url_for('gym.scheda'))
 
+    # --- OTTIMIZZAZIONE N+1 QUERY ---
     templates_raw = execute_query('SELECT * FROM workout_templates WHERE user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
-    templates = []
-    for t in templates_raw:
-        template_dict = dict(t)
-        exercises = execute_query(
-            'SELECT te.id, e.name, e.user_id, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.id',
-            {'tid': t['id']},
-            fetchall=True,
-        )
-        template_dict['exercises'] = [dict(row) for row in exercises]
-        templates.append(template_dict)
+    templates = [dict(t) for t in templates_raw]
+    template_ids = [t['id'] for t in templates]
+
+    if template_ids:
+        exercises_query = """
+            SELECT te.id, te.template_id, e.name, e.user_id, te.sets 
+            FROM template_exercises te 
+            JOIN exercises e ON te.exercise_id = e.id 
+            WHERE te.template_id = ANY(:tids) 
+            ORDER BY te.id
+        """
+        all_exercises = execute_query(exercises_query, {'tids': template_ids}, fetchall=True)
+        
+        exercises_by_template = defaultdict(list)
+        for ex in all_exercises:
+            exercises_by_template[ex['template_id']].append(dict(ex))
+        
+        for t in templates:
+            t['exercises'] = exercises_by_template[t['id']]
+    # --- FINE OTTIMIZZAZIONE ---
     
     return render_template('scheda.html', title='Scheda Allenamento', templates=templates)
 

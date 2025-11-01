@@ -18,6 +18,38 @@ function togglePasswordVisibility(icon) {
 }
 
 /**
+ * Reindirizza le pagine sensibili alla data all'URL con la data locale corrente se non è specificata.
+ */
+function handleTimezoneRedirect() {
+    const body = document.body;
+    if (body.dataset.dateSensitivePage !== 'true') {
+        return;
+    }
+
+    const path = window.location.pathname;
+    const pathSegments = path.split('/').filter(Boolean);
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    // Se l'URL termina già con una data, non fare nulla.
+    if (lastSegment && dateRegex.test(lastSegment)) {
+        return;
+    }
+
+    // Ottieni la data locale dell'utente nel formato YYYY-MM-DD
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const localDateString = `${year}-${month}-${day}`;
+
+    // Costruisci il nuovo URL e reindirizza
+    const newPath = `${path.endsWith('/') ? path.slice(0, -1) : path}/${localDateString}`;
+    window.location.replace(newPath);
+}
+
+
+/**
  * Funzione per mostrare un feedback di caricamento su un pulsante durante l'invio di un form.
  * @param {string} formId - L'ID del form da monitorare.
  * @param {string} loadingText - Il testo da mostrare durante il caricamento.
@@ -101,175 +133,9 @@ function bindConfirmationDialogs() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    handleTimezoneRedirect(); // Esegui il controllo del fuso orario
     addFormSubmitFeedback('upload-pic-form', 'Caricamento...');
     addFormSubmitFeedback('export-data-form', 'Esportazione...', 3000);
-    bindAjaxForms();
     initPrivacyBanner();
     bindConfirmationDialogs();
 });
-
-/**
- * Risolve dinamicamente un callback che può essere fornito come funzione o come nome in stringa.
- * @param {Function|string|undefined} callback Riferimento al callback di successo.
- * @returns {Function|null}
- */
-function resolveCallback(callback) {
-    if (typeof callback === 'function') {
-        return callback;
-    }
-    if (typeof callback === 'string' && typeof window[callback] === 'function') {
-        return window[callback];
-    }
-    return null;
-}
-
-/**
- * Chiude la modale (se presente) che contiene il form passato.
- * @param {HTMLFormElement} form
- */
-function closeParentModal(form) {
-    if (!form) return;
-    const modalElement = form.closest('.modal');
-    if (!modalElement) return;
-    const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-    modalInstance.hide();
-}
-
-/**
- * Esegue il binding dei form con attributo data-ajax-url per l'invio tramite fetch.
- */
-function bindAjaxForms() {
-    const ajaxForms = document.querySelectorAll('form[data-ajax-url]');
-    ajaxForms.forEach((form) => {
-        if (form.dataset.ajaxBound === '1') {
-            return;
-        }
-        form.dataset.ajaxBound = '1';
-        form.dataset.ajax = 'true';
-
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-
-            const confirmMessage = form.dataset.ajaxConfirm;
-            if (confirmMessage && !confirm(confirmMessage)) {
-                return;
-            }
-
-            const submitButton = form.querySelector('button[type="submit"]');
-            const originalContent = submitButton ? submitButton.innerHTML : null;
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.innerHTML = form.dataset.loadingText || '...';
-            }
-
-            const previousScroll = window.scrollY;
-            form.dataset.lastScrollPosition = String(previousScroll);
-
-            try {
-                const formData = new FormData(form);
-                const csrfToken = form.querySelector('input[name="csrf_token"]')?.value || '';
-                const response = await fetch(form.dataset.ajaxUrl, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'X-CSRFToken': csrfToken },
-                    credentials: 'same-origin'
-                });
-
-                const isJson = response.headers.get('content-type')?.includes('application/json');
-                const payload = isJson ? await response.json() : null;
-
-                if (response.ok && payload?.success) {
-                    const successCallback = resolveCallback(form.dataset.ajaxSuccess);
-                    if (successCallback) {
-                        successCallback(payload, form);
-                    } else {
-                        window.location.reload();
-                    }
-
-                    const storedScroll = parseInt(form.dataset.lastScrollPosition || '', 10);
-                    if (!Number.isNaN(storedScroll)) {
-                        window.requestAnimationFrame(() => {
-                            window.scrollTo(0, storedScroll);
-                        });
-                    }
-                } else {
-                    const errorMessage = payload?.error || 'Si è verificato un problema.';
-                    alert(errorMessage);
-                }
-            } catch (error) {
-                console.error('Errore durante la richiesta AJAX:', error);
-                alert('Si è verificato un errore di rete. Riprova.');
-            } finally {
-                if (submitButton) {
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalContent;
-                }
-            }
-        });
-    });
-}
-
-// --- FUNZIONI SPECIFICHE PER LA PAGINA ESERCIZI ---
-
-function onRenameExerciseSuccess(result, form) {
-    const exerciseId = result.exerciseId;
-    const newName = result.newName;
-    const row = document.querySelector(`#exercise-${exerciseId}`);
-    if (row) {
-        const nameSpan = row.querySelector('.exercise-name');
-        if (nameSpan) {
-            nameSpan.textContent = newName;
-        }
-    } else {
-        window.location.reload();
-        return;
-    }
-    closeParentModal(form);
-}
-
-function onUpdateNotesSuccess(_, form) {
-    const button = form.querySelector('button[type="submit"]');
-    if (!button) return;
-    const originalText = button.dataset.originalText || button.textContent;
-    button.dataset.originalText = originalText;
-    button.textContent = 'Salvato!';
-    button.disabled = true;
-    setTimeout(() => {
-        button.textContent = originalText;
-        button.disabled = false;
-    }, 1500);
-}
-
-function onDeleteExerciseSuccess(_, form) {
-    const row = form.closest('tr');
-    if (row) {
-        row.remove();
-    }
-}
-
-// --- FUNZIONI SPECIFICHE PER LA PAGINA SCHEDA ---
-
-function onRenameTemplateSuccess(result, form) {
-    const templateId = result.templateId;
-    const newName = result.newName;
-    const container = document.querySelector(`#template-${templateId}`);
-    if (container) {
-        const heading = container.querySelector('h4');
-        if (heading) {
-            heading.textContent = newName;
-        }
-    } else {
-        window.location.reload();
-        return;
-    }
-    closeParentModal(form);
-}
-
-function onAddExerciseSuccess() {
-    window.location.reload();
-}
-
-function onTemplateExerciseDeleted() {
-    window.location.reload();
-}

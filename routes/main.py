@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from .auth import login_required
 from utils import execute_query, is_valid_time_format, generate_avatar_color
-from services import user_service, data_service  # NUOVE IMPORTAZIONI
+from services import user_service, data_service
 from services import privacy_service
 
 main_bp = Blueprint('main', __name__)
@@ -75,32 +75,19 @@ def utente():
 
             gender = request.form.get("gender")
             
-            existing_profile = execute_query(
-                'SELECT avatar_color FROM user_profile WHERE user_id = :user_id',
-                {'user_id': user_id},
-                fetchone=True,
-            )
-            avatar_color = (
-                existing_profile.get('avatar_color')
-                if existing_profile and existing_profile.get('avatar_color')
-                else generate_avatar_color(user_id)
-            )
-
             query = (
-                "INSERT INTO user_profile (user_id, birth_date, height, gender, avatar_color) "
-                "VALUES (:user_id, :birth_date, :height, :gender, :avatar_color) "
+                "INSERT INTO user_profile (user_id, birth_date, height, gender) "
+                "VALUES (:user_id, :birth_date, :height, :gender) "
                 "ON CONFLICT(user_id) DO UPDATE SET "
                 "birth_date = EXCLUDED.birth_date, "
                 "height = EXCLUDED.height, "
-                "gender = EXCLUDED.gender, "
-                "avatar_color = COALESCE(user_profile.avatar_color, EXCLUDED.avatar_color)"
+                "gender = EXCLUDED.gender"
             )
             params = {
                 'user_id': user_id,
                 'birth_date': birth_date,
                 'height': height,
                 'gender': gender,
-                'avatar_color': avatar_color,
             }
             execute_query(query, params, commit=True)
             flash("Dati anagrafici aggiornati.", "success")
@@ -198,6 +185,7 @@ def misure(date_str):
     if date_str:
         current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     else:
+        # Se non c'è data, il JS reindirizzerà. Mostriamo la pagina con la data del server nel frattempo.
         current_date = date.today()
 
     current_date_str = current_date.strftime('%Y-%m-%d')
@@ -258,7 +246,7 @@ def misure(date_str):
     
     misure_giorno = execute_query('SELECT * FROM daily_data WHERE user_id = :user_id AND record_date = :date', {'user_id': user_id, 'date': current_date_str}, fetchone=True)
     bfp_mode_selected = 'manual' if misure_giorno and misure_giorno.get('bfp_manual') is not None else 'formula'
-    return render_template('misure.html', title='Misure', date_formatted=current_date.strftime('%d %b %y'), misure=misure_giorno or {}, prev_day=prev_day, next_day=next_day, is_today=is_today, current_date_str=current_date_str, gender=gender, bfp_mode=bfp_mode_selected)
+    return render_template('misure.html', title='Misure', date_formatted=current_date.strftime('%d %b %y'), misure=misure_giorno or {}, prev_day=prev_day, next_day=next_day, is_today=is_today, current_date_str=current_date_str, gender=gender, bfp_mode=bfp_mode_selected, is_date_sensitive_page=True)
 
 @main_bp.route('/note', methods=['GET', 'POST'])
 @login_required
