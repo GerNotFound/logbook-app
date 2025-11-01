@@ -13,15 +13,18 @@
     </div>
 </div>
 
+<!-- Inizia il componente Alpine.js -->
 <div x-data="templateEditor()" x-init="init()">
     <form id="edit-template-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+        <!-- Sezione Nome Scheda -->
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4 class="mb-0" x-text="templateName"></h4>
             <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal">Rinomina</button>
         </div>
 
+        <!-- Sezione Esercizi nella Scheda -->
         <div class="mb-4">
             <h5>Esercizi</h5>
             <div class="table-responsive">
@@ -33,9 +36,11 @@
                             <th class="text-center">Azioni</th>
                         </tr>
                     </thead>
-                    <tbody id="current-exercises-tbody">
+                    <tbody>
+                        <!-- Ciclo dinamico gestito da Alpine.js -->
                         <template x-for="(exercise, index) in currentExercises" :key="exercise.exercise_id">
                             <tr :data-exercise-id="exercise.exercise_id">
+                                <!-- Input nascosto per inviare l'ID al server -->
                                 <input type="hidden" name="exercise_id" :value="exercise.exercise_id">
                                 <td class="align-middle" x-text="exercise.name"></td>
                                 <td class="align-middle">
@@ -52,11 +57,12 @@
                         </template>
                     </tbody>
                 </table>
-                <p id="no-exercises-placeholder" class="text-center text-muted" x-show="currentExercises.length === 0">Nessun esercizio in questa scheda.</p>
+                <p class="text-center text-muted" x-show="currentExercises.length === 0">Nessun esercizio in questa scheda.</p>
             </div>
         </div>
     </form>
 
+    <!-- Sezione Ricerca Esercizi -->
     <div class="mb-4">
         <h5>Cerca Esercizio</h5>
         <input type="text" class="form-control" placeholder="Digita per filtrare gli esercizi..." x-model="searchTerm">
@@ -71,9 +77,10 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <!-- Ciclo dinamico per la lista filtrata -->
                     <template x-for="exercise in filteredExercises" :key="exercise.id">
                         <tr>
-                            <td x-html="exercise.name + (exercise.is_global ? ' <i class=\'bi bi-globe2 global-icon\' title=\'Esercizio globale\'></i>' : '')"></td>
+                            <td x-html="exercise.name + (exercise.user_id === null ? ' <i class=\'bi bi-globe2 global-icon\' title=\'Esercizio globale\'></i>' : '')"></td>
                             <td class="text-center">
                                 <button @click="addExercise(exercise)" type="button" class="btn btn-sm btn-outline-light">Aggiungi</button>
                                 <a :href="'/esercizio/' + exercise.id + '/info'" class="btn btn-sm btn-outline-secondary">Info</a>
@@ -85,7 +92,7 @@
         </div>
     </div>
 
-    <!-- Modal per rinominare la scheda -->
+    <!-- Modale per Rinomina -->
     <div class="modal fade" id="renameTemplateModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -102,6 +109,7 @@
         </div>
     </div>
 
+    <!-- Pulsanti in fondo alla pagina -->
     <div class="sticky-bottom-nav">
         <button type="submit" form="edit-template-form" class="btn btn-custom action-btn">SALVA</button>
         <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn" x-text="isDirty ? 'ANNULLA' : 'INDIETRO'">INDIETRO</a>
@@ -110,18 +118,23 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Inclusione di Alpine.js -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('alpine:init', () => {
         Alpine.data('templateEditor', () => ({
-            // --- STATO (I DATI) ---
+            // --- STATO (I DATI INIZIALI) ---
+            // Questi dati vengono "iniettati" dal server tramite Jinja2
             templateName: {{ template.name|tojson|safe }},
             currentExercises: {{ current_exercises|tojson|safe }},
             allExercises: {{ all_exercises|tojson|safe }},
             searchTerm: '',
             initialState: '',
 
-            // --- GETTERS (DATI DERIVATI) ---
+            // --- GETTERS (PROPRIETÀ CALCOLATE) ---
+            
+            // Controlla se sono state fatte modifiche
             get isDirty() {
                 const currentState = JSON.stringify({
                     name: this.templateName,
@@ -129,6 +142,8 @@
                 });
                 return this.initialState !== currentState;
             },
+
+            // Filtra la lista di tutti gli esercizi in base alla ricerca
             get filteredExercises() {
                 if (this.searchTerm.trim() === '') {
                     return this.allExercises;
@@ -140,13 +155,17 @@
             },
 
             // --- METODI (LE AZIONI) ---
+            
+            // Funzione di inizializzazione
             init() {
-                // Salva lo stato iniziale per confrontare le modifiche
+                // Salva una "fotografia" dello stato iniziale per confrontarlo in seguito
                 this.initialState = JSON.stringify({
                     name: this.templateName,
                     exercises: this.currentExercises.map(e => ({ id: e.exercise_id, sets: e.sets }))
                 });
             },
+
+            // Aggiunge un esercizio alla scheda
             addExercise(exerciseToAdd) {
                 const isAlreadyAdded = this.currentExercises.some(ex => ex.exercise_id === exerciseToAdd.id);
                 if (isAlreadyAdded) {
@@ -159,16 +178,24 @@
                     sets: '1'
                 });
             },
+
+            // Rimuove un esercizio dalla scheda
             removeExercise(index) {
                 this.currentExercises.splice(index, 1);
             },
+
+            // Sposta un esercizio in su
             moveUp(index) {
                 if (index > 0) {
+                    // Scambia l'elemento con il precedente nell'array
                     [this.currentExercises[index - 1], this.currentExercises[index]] = [this.currentExercises[index], this.currentExercises[index - 1]];
                 }
             },
+
+            // Sposta un esercizio in giù
             moveDown(index) {
                 if (index < this.currentExercises.length - 1) {
+                    // Scambia l'elemento con il successivo nell'array
                     [this.currentExercises[index], this.currentExercises[index + 1]] = [this.currentExercises[index + 1], this.currentExercises[index]];
                 }
             }
