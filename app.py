@@ -5,12 +5,13 @@ from pathlib import Path
 
 from flask import Flask, session, current_app, flash, redirect, url_for
 from dotenv import load_dotenv
+from sqlalchemy.pool import StaticPool
 
 import commands
 from config import ProductionConfig
 from migrations import run_migrations
 from bootstrap import ensure_database_indexes
-from extensions import csrf, db, limiter, socketio
+from extensions import csrf, db, limiter, socketio, talisman
 from logging_config import setup_logging
 from routes import admin_bp, auth_bp, cardio_bp, gym_bp, main_bp, nutrition_bp
 from routes.health import health_bp
@@ -37,9 +38,57 @@ def create_app() -> Flask:
     app.logger.handlers = []
     app.logger.propagate = True
 
+    database_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+    if database_uri.startswith('sqlite'):  # pragma: no cover - only used in ephemeral test environments
+        engine_options = dict(app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}))
+        engine_options.pop('pool_size', None)
+        engine_options.pop('max_overflow', None)
+        connect_args = dict(engine_options.get('connect_args') or {})
+        connect_args.setdefault('check_same_thread', False)
+        engine_options['connect_args'] = connect_args
+        engine_options['poolclass'] = StaticPool
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
+
     db.init_app(app)
     csrf.init_app(app)
     init_security(app)
+
+    csp = {
+        'default-src': ("'self'",),
+        'script-src': (
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            'https://cdn.socket.io',
+            'https://unpkg.com',
+        ),
+        'style-src': (
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            'https://fonts.googleapis.com',
+        ),
+        'img-src': (
+            "'self'",
+            'data:',
+            'https://cdn.jsdelivr.net',
+        ),
+        'font-src': (
+            "'self'",
+            'https://cdn.jsdelivr.net',
+            'https://fonts.gstatic.com',
+        ),
+        'connect-src': ("'self'",),
+        'manifest-src': ("'self'",),
+        'frame-ancestors': ("'self'",),
+    }
+
+    talisman.init_app(
+        app,
+        content_security_policy=csp,
+        force_https=True,
+        force_https_permanent=True,
+        session_cookie_secure=True,
+        referrer_policy='strict-origin-when-cross-origin',
+    )
 
     limiter.init_app(app)
 

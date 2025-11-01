@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from sqlalchemy import text
 
 from extensions import db
@@ -7,6 +9,9 @@ from extensions import db
 
 def ensure_database_indexes() -> None:
     """Create essential indexes if they do not yet exist."""
+
+    if os.getenv('SKIP_DB_BOOTSTRAP') == '1':  # pragma: no cover - only used in ephemeral test environments
+        return
 
     statements = (
         "CREATE INDEX IF NOT EXISTS idx_daily_data_user_date ON daily_data (user_id, record_date)",

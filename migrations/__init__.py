@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from importlib import import_module
 from pathlib import Path
 from typing import List, Set
@@ -40,6 +41,8 @@ def _load_migration_modules() -> List:
 
 def run_migrations() -> None:
     """Apply pending migrations."""
+    if os.getenv('SKIP_DB_MIGRATIONS') == '1':  # pragma: no cover - only used in non-production environments
+        return
     _ensure_migration_table()
 
     applied_rows = db.session.execute(text("SELECT version FROM schema_migrations"))
