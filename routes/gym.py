@@ -326,6 +326,38 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                 flash('Esercizio aggiunto.', 'success')
             else:
                 flash('Nessun esercizio selezionato.', 'danger')
+        elif action == 'rename_template':
+            new_name = (request.form.get('new_name') or '').strip()
+            if not new_name:
+                flash('Inserisci un nome valido per la scheda.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            if new_name.lower() == (template['name'] or '').lower():
+                flash('Il nome della scheda è invariato.', 'info')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            existing = execute_query(
+                'SELECT id FROM workout_templates WHERE user_id = :uid AND LOWER(name) = LOWER(:name)',
+                {'uid': user_id, 'name': new_name},
+                fetchone=True,
+            )
+            if existing and existing['id'] != template_id:
+                flash('Esiste già una scheda con questo nome.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            try:
+                execute_query(
+                    'UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid',
+                    {'name': new_name, 'id': template_id, 'uid': user_id},
+                    commit=True,
+                )
+                flash('Nome della scheda aggiornato.', 'success')
+            except Exception:
+                db.session.rollback()
+                flash('Impossibile rinominare la scheda. Riprova.', 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+
+            return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=slugify(new_name)))
         elif action == 'delete_template_exercise':
             template_exercise_id = request.form.get('template_exercise_id')
             execute_query('DELETE FROM template_exercises WHERE id = :id', {'id': template_exercise_id}, commit=True)
@@ -503,6 +535,7 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
             'name': row['name'],
             'sets': row['sets'],
             'is_global': row['exercise_owner_id'] is None,
+            'info_url': url_for('gym.esercizio_info', exercise_id=row['exercise_id']),
         }
         for row in current_exercises_rows
     ]

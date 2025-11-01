@@ -76,7 +76,7 @@ def create_app() -> Flask:
             'https://cdn.jsdelivr.net',
             'https://fonts.gstatic.com',
         ),
-        'connect-src': ("'self'",),
+        'connect-src': ("'self'", 'https:', 'wss:'),
         'manifest-src': ("'self'",),
         'frame-ancestors': ("'self'",),
     }
