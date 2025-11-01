@@ -1,0 +1,19 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ ALLENAMENTO</span></h1>
+    </div>
+</div>
+<div class="row">
+    <div class="col-12">
+        <a href="{{ url_for('gym.palestra') }}" class="btn btn-custom w-100 d-block">PALESTRA</a>
+        <a href="{{ url_for('cardio.corsa') }}" class="btn btn-custom w-100 d-block">CORSA</a>
+    </div>
+</div>
+
+<div class="sticky-bottom-nav">
+    <!-- MODIFICA QUI -->
+    <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

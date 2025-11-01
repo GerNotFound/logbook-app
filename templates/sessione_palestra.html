@@ -1,0 +1,113 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ SESSIONE PALESTRA</span></h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('gym.sessione_palestra', date_param=prev_day) }}" class="btn btn-outline-light">
+                <i class="bi bi-chevron-left me-1" aria-hidden="true"></i>
+                Prec.
+            </a>
+            <span class="text-center">
+                <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
+                {% if not is_today %}
+                    <a href="{{ url_for('gym.sessione_palestra') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
+                {% endif %}
+            </span>
+            <a href="{{ url_for('gym.sessione_palestra', date_param=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">
+                Succ.
+                <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            </a>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div id="sessione-palestra-data" class="d-none"
+     data-templates='{{ (templates or [])|tojson|safe }}'
+     data-log='{{ (log_data or {})|tojson|safe }}'
+     data-user-id="{{ session['user_id'] }}"
+     data-record-date="{{ record_date }}"
+     data-save-message="Sei sicuro di voler salvare la sessione?"
+     data-cancel-message="Sei sicuro di voler annullare la sessione? I dati non salvati andranno persi."
+     data-home-url="{{ url_for('gym.palestra') }}"
+     data-selected-template="{{ selected_template_id or '' }}"
+     data-is-editing="{{ '1' if is_editing else '0' }}"
+     data-session-template-name="{{ selected_template_name or '' }}"
+     data-session-duration-minutes="{{ session_duration_minutes if session_duration_minutes is not none else '' }}"
+     data-cancel-url="{{ cancel_url }}">
+</div>
+
+<div id="stopwatch-wrapper" class="stopwatch-wrapper">
+    <div id="stopwatch-container" class="stopwatch-container">
+        <div id="stopwatch" class="stopwatch-display">00:00</div>
+        <button id="startBtn" type="button" class="btn btn-sm btn-circle ms-3" aria-label="Avvia cronometro">
+            <i class="bi bi-play-fill" aria-hidden="true"></i>
+        </button>
+        <button id="pauseBtn" type="button" class="btn btn-sm btn-circle ms-2" aria-label="Pausa cronometro">
+            <i class="bi bi-pause-fill" aria-hidden="true"></i>
+        </button>
+        <button id="stopBtn" type="button" class="btn btn-outline-light btn-sm btn-circle-outline ms-2" aria-label="Azzera cronometro">
+            <i class="bi bi-stop-fill" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>
+
+<div id="template-selection-box" class="mb-4 p-3 border rounded">
+    <h5>Seleziona Scheda</h5>
+    {% if templates %}
+        {% set selected_id = selected_template_id if selected_template_id is not none else request.args.get('template_id')|int %}
+        <select id="template-selector" class="form-select form-control">
+            <option value="" {% if not selected_id %}selected{% endif %}>Nessuna scheda (allenamento libero)</option>
+            {% for template in templates %}
+                <option value="{{ template.id }}" {% if selected_id and selected_id == template.id %}selected{% endif %}>{{ template.name }}</option>
+            {% endfor %}
+        </select>
+    {% else %}
+        <p class="text-muted">Nessuna scheda creata. Vai alla sezione apposita per iniziare.</p>
+        <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom w-100 d-block mt-2">VAI A SCHEDA</a>
+    {% endif %}
+</div>
+
+    <div id="workout-status-box" class="mb-4 p-3 border rounded d-none">
+        <h5 id="status-template-name" class="mb-1"></h5>
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <p class="mb-0 text-white">Durata: <span id="running-timer" class="fw-bold">00:00:00</span></p>
+            <div class="duration-manual d-flex align-items-center gap-2">
+                <label for="duration-manual-input" class="form-label text-white text-uppercase small mb-0">Modifica manuale (hh:mm)</label>
+                <input type="text" id="duration-manual-input" class="form-control form-control-sm bg-dark text-white duration-manual__input" placeholder="00:00" form="workout-form" inputmode="text" pattern="^\d{1,2}:[0-5]\d$|^\d+$">
+            </div>
+        </div>
+    </div>
+
+
+<form id="workout-form" method="POST" action="{{ url_for('gym.sessione_palestra', date_param=record_date, session_ts=session_timestamp if is_editing else None) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" id="template-name-input" name="template_name" value="">
+    <input type="hidden" id="start-timestamp-input" name="start_timestamp">
+    <input type="hidden" id="duration-minutes-field" name="duration_minutes_manual" value="0">
+    <div id="workout-section">
+        <!-- Contenuto generato da JS -->
+    </div>
+</form>
+
+<div class="sticky-bottom-nav">
+    <button type="submit" form="workout-form" class="btn btn-custom action-btn">
+        SALVA
+    </button>
+    <a id="cancel-workout-btn" class="btn btn-custom action-btn" href="{{ cancel_url }}">ANNULLA</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <script defer src="{{ url_for('static', filename='js/sessione_palestra.js') }}?v={{ app_version }}"></script>
+{% endblock %}

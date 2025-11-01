@@ -1,0 +1,209 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ MISURE</span></h1>
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('main.misure', date_str=prev_day) }}" class="btn btn-outline-light">
+                <i class="bi bi-chevron-left me-1" aria-hidden="true"></i>
+                Prec.
+            </a>
+            <span class="text-center">
+                <h5 class="mb-0 d-inline-block align-middle">{{ date_formatted }}</h5>
+                {% if not is_today %}
+                    <a href="{{ url_for('main.misure') }}" class="btn btn-sm btn-outline-secondary ms-2">Oggi</a>
+                {% endif %}
+            </span>
+            <a href="{{ url_for('main.misure', date_str=next_day) }}" class="btn btn-outline-light {% if is_today %}disabled{% endif %}">
+                Succ.
+                <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            </a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<div class="d-grid gap-2">
+    <button type="button" class="btn btn-custom" data-bs-toggle="modal" data-bs-target="#pesoModal">
+        AGGIUNGI PESO
+    </button>
+    <button type="button" class="btn btn-custom" data-bs-toggle="modal" data-bs-target="#sonnoModal">
+        AGGIUNGI SONNO
+    </button>
+    <button type="button" class="btn btn-custom" data-bs-toggle="modal" data-bs-target="#bfpModal">
+        AGGIUNGI MISURE BFP
+    </button>
+</div>
+
+
+<!-- Modal Peso -->
+<div class="modal fade" id="pesoModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dati Peso</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.misure', date_str=current_date_str) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="weight" class="form-label">Peso (kg)</label>
+                        <input type="number" step="0.1" min="0" name="weight" id="weight" class="form-control" value="{{ misure.weight or '' }}">
+                    </div>
+                    <div>
+                        <label for="weight_time" class="form-label">Orario Peso</label>
+                        <input type="text" name="weight_time" id="weight_time" class="form-control" value="{{ misure.weight_time or '' }}" placeholder="HH:MM">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-custom btn-custom-tight w-100 m-0">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Sonno -->
+<div class="modal fade" id="sonnoModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dati Sonno</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.misure', date_str=current_date_str) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="sleep" class="form-label">Sonno</label>
+                        <input type="text" name="sleep" id="sleep" class="form-control" value="{{ misure.sleep or '' }}" placeholder="ore:min (es. 7:30)">
+                    </div>
+                    <div>
+                        <label for="sleep_quality" class="form-label">Qualità Sonno (1-10)</label>
+                        <input type="number" min="1" max="10" step="1" name="sleep_quality" id="sleep_quality" class="form-control" value="{{ misure.sleep_quality or '' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-custom btn-custom-tight w-100 m-0">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal BFP -->
+<div class="modal fade" id="bfpModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Misure BFP</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.misure', date_str=current_date_str) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="bfp-mode-selector" id="bfp-mode-selector-hidden" value="{{ bfp_mode or 'manual' }}">
+
+                    <ul class="nav nav-tabs nav-fill mb-3">
+                        <li class="nav-item">
+                            <a class="nav-link {% if bfp_mode == 'manual' %}active{% endif %}" data-bs-toggle="tab" href="#bfp-manual-tab">Percentuale</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if bfp_mode != 'manual' %}active{% endif %}" data-bs-toggle="tab" href="#bfp-formula-tab">Misure</a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade {% if bfp_mode == 'manual' %}show active{% endif %}" id="bfp-manual-tab">
+                            <div class="mb-3">
+                                <label for="bfp_manual" class="form-label">BFP (%)</label>
+                                <input type="number" step="0.1" min="0" name="bfp_manual" id="bfp_manual" class="form-control" value="{{ misure.bfp_manual or '' }}" placeholder="Es. 12.5">
+                            </div>
+                        </div>
+                        <div class="tab-pane fade {% if bfp_mode != 'manual' %}show active{% endif %}" id="bfp-formula-tab">
+                            <div class="row">
+                                <div class="col-4">
+                                    <label for="neck" class="form-label label-tall">Collo (cm)</label>
+                                    <input type="number" step="0.1" min="0" name="neck" id="neck" class="form-control" value="{{ misure.neck or '' }}">
+                                </div>
+                                <div class="col-4">
+                                    <label for="waist" class="form-label label-tall">Vita (cm)</label>
+                                    <input type="number" step="0.1" min="0" name="waist" id="waist" class="form-control" value="{{ misure.waist or '' }}">
+                                </div>
+                                {% if gender == 'F' %}
+                                <div class="col-4" id="hip-container">
+                                    <label for="hip" class="form-label label-tall">Fianchi (cm)</label>
+                                    <input type="number" step="0.1" min="0" name="hip" id="hip" class="form-control" value="{{ misure.hip or '' }}">
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label for="measure_time" class="form-label">Orario Misure</label>
+                        <input type="text" name="measure_time" id="measure_time" class="form-control" value="{{ misure.measure_time or '' }}" placeholder="HH:MM">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-custom btn-custom-tight w-100 m-0">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('main.home') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        const bfpModal = document.getElementById('bfpModal');
+        if (bfpModal) {
+            const manualTabPane = document.getElementById('bfp-manual-tab');
+            const formulaTabPane = document.getElementById('bfp-formula-tab');
+            const hiddenInput = document.getElementById('bfp-mode-selector-hidden');
+
+            function setInputsDisabled(pane, isDisabled) {
+                pane.querySelectorAll('input').forEach(input => input.disabled = isDisabled);
+            }
+
+            const tabs = bfpModal.querySelectorAll('[data-bs-toggle="tab"]');
+            tabs.forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function(event) {
+                    if (event.target.getAttribute('href') === '#bfp-manual-tab') {
+                        setInputsDisabled(manualTabPane, false);
+                        setInputsDisabled(formulaTabPane, true);
+                        hiddenInput.value = 'manual';
+                    } else {
+                        setInputsDisabled(manualTabPane, true);
+                        setInputsDisabled(formulaTabPane, false);
+                        hiddenInput.value = 'formula';
+                    }
+                });
+            });
+
+            // Imposta lo stato iniziale corretto al caricamento
+            const activeTab = bfpModal.querySelector('.nav-link.active');
+            if (activeTab && activeTab.getAttribute('href') === '#bfp-manual-tab') {
+                setInputsDisabled(manualTabPane, false);
+                setInputsDisabled(formulaTabPane, true);
+            } else {
+                setInputsDisabled(manualTabPane, true);
+                setInputsDisabled(formulaTabPane, false);
+            }
+        }
+    });
+</script>
+{% endblock %}

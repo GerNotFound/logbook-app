@@ -1,0 +1,91 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="admin-brand brand-heading__brand">ADMIN</span><span class="brand-heading__section">/ ALIMENTI GLOBALI</span></h1>
+        <p class="text-muted">Questi alimenti saranno visibili a tutti gli utenti.</p>
+    </div>
+</div>
+
+<form id="add-food-form" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add">
+    <input type="text" name="name" class="form-control" placeholder="Nome alimento" required>
+    <input type="number" step="0.1" min="0" name="protein" class="form-control" placeholder="Proteine (per 100g)" required>
+    <input type="number" step="0.1" min="0" name="carbs" class="form-control" placeholder="Carboidrati (per 100g)" required>
+    <input type="number" step="0.1" min="0" name="fat" class="form-control" placeholder="Grassi (per 100g)" required>
+    <button type="submit" class="btn btn-custom w-100">AGGIUNGI ALIMENTO</button>
+</form>
+
+<div class="table-responsive mt-4">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Alimento</th>
+                <th>Proteine</th>
+                <th>Carboidrati</th>
+                <th>Grassi</th>
+                <th>Calorie</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for food in foods %}
+            <tr>
+                <td>{{ food.name }}</td>
+                <td>{{ food.protein }}g</td>
+                <td>{{ food.carbs }}g</td>
+                <td>{{ food.fat }}g</td>
+                <td>{{ '%.0f' % food.calories }} kcal</td>
+                <td>
+                    <form method="POST" class="d-inline" data-confirm="Sei sicuro?">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="food_id" value="{{ food.id }}">
+                        <button type="submit" class="btn btn-sm btn-delete">X</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    const DRAFT_KEY_ADD_FOOD = `admin_add_food_draft`;
+    const addFoodForm = document.getElementById('add-food-form');
+    const foodInputs = addFoodForm.querySelectorAll('input[type="text"], input[type="number"]');
+
+    function saveDraft() {
+        const draftData = {};
+        foodInputs.forEach(input => {
+            if (input.value && input.name) {
+                draftData[input.name] = input.value;
+            }
+        });
+        localStorage.setItem(DRAFT_KEY_ADD_FOOD, JSON.stringify(draftData));
+    }
+
+    function loadDraft() {
+        const draft = localStorage.getItem(DRAFT_KEY_ADD_FOOD);
+        if (draft) {
+            const draftData = JSON.parse(draft);
+            foodInputs.forEach(input => {
+                if (draftData[input.name]) {
+                    input.value = draftData[input.name];
+                }
+            });
+        }
+    }
+
+    foodInputs.forEach(input => input.addEventListener('input', saveDraft));
+    addFoodForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_FOOD));
+    document.addEventListener('DOMContentLoaded', loadDraft);
+</script>
+{% endblock %}

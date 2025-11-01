@@ -1,0 +1,102 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+<div class="col-12">
+<h1 class="mb-4 brand-heading"><span class="admin-brand brand-heading__brand">ADMIN</span><span class="brand-heading__section">/ GESTIONE UTENTI</span></h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+{% endwith %}
+</div>
+</div>
+<form method="POST" action="{{ url_for('admin.admin_utenti') }}" class="mb-4 p-3 border rounded" id="add-user-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="action" value="add">
+<h5>Aggiungi Nuovo Utente</h5>
+<div class="row g-2">
+<div class="col-12"><input type="text" name="new_username" class="form-control" placeholder="Nuovo username" required></div>
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
+<div class="col-12 password-wrapper">
+<input type="password" name="new_password" class="form-control mb-0" placeholder="Nuova password" required>
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+</div>
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
+<div class="col-12 password-wrapper">
+<input type="password" name="new_password_confirm" class="form-control mb-0" placeholder="Conferma password" required>
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+</div>
+<div class="col-12"><button type="submit" class="btn btn-custom w-100">Aggiungi</button></div>
+</div>
+</form>
+<form method="GET" action="{{ url_for('admin.admin_utenti') }}" class="mb-4">
+<div class="input-group">
+<input type="text" name="search" class="form-control" placeholder="Cerca per nome o ID..." value="{{ search_term or '' }}">
+<button class="btn btn-outline-light" type="submit">Cerca</button>
+</div>
+</form>
+<div class="table-responsive">
+<table class="table table-bordered">
+<thead>
+<tr>
+<th>ID</th>
+<th>Username</th>
+<th>Gestisci</th>
+</tr>
+</thead>
+<tbody>
+{% for user in users %}
+<tr>
+<td>{{ user.id }}</td>
+<td>{{ user.username }}{% if user.is_superuser %} <span class="badge bg-light text-dark">SUPER</span>{% endif %}</td>
+<td class="text-center">
+<div class="d-flex flex-column align-items-center gap-1">
+    <a href="{{ url_for('admin.admin_utente_dettaglio', user_id=user.id) }}" class="btn btn-sm btn-outline-light">Gestisci</a>
+    <span class="badge {% if user.is_online %}bg-success{% else %}bg-secondary{% endif %}">{{ 'Online' if user.is_online else 'Offline' }}</span>
+    <small class="text-muted small d-block mt-1">Ultima attività: {{ user.last_active_display }}</small>
+</div>
+</td>
+</tr>
+{% else %}
+<tr>
+<td colspan="3" class="text-center">Nessun utente trovato.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<div class="sticky-bottom-nav">
+<a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+const DRAFT_KEY_ADD_USER = `admin_add_user_draft`;
+const addUserForm = document.getElementById('add-user-form');
+const addUserInputs = addUserForm.querySelectorAll('input[type="text"], input[type="password"]');
+
+function saveAddUserDraft() {
+const draftData = {};
+addUserInputs.forEach(input => {
+if (input.value && input.name) {
+draftData[input.name] = input.value;
+}
+});
+localStorage.setItem(DRAFT_KEY_ADD_USER, JSON.stringify(draftData));
+}
+
+function loadAddUserDraft() {
+const draft = localStorage.getItem(DRAFT_KEY_ADD_USER);
+if (draft) {
+const draftData = JSON.parse(draft);
+addUserInputs.forEach(input => {
+if (draftData[input.name]) {
+input.value = draftData[input.name];
+}
+});
+}
+}
+
+addUserInputs.forEach(input => input.addEventListener('input', saveAddUserDraft));
+addUserForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_USER));
+document.addEventListener('DOMContentLoaded', loadAddUserDraft);
+</script>
+{% endblock %}

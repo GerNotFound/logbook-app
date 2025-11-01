@@ -1,0 +1,464 @@
+{% extends 'layout.html' %}
+{% block content %}
+<style nonce="{{ csp_nonce() }}">
+    [v-cloak] { display: none; }
+</style>
+<div id="template-editor-app" v-cloak>
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ template.name }}</span></h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    <form ref="form" id="template-edit-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_slug=template_slug) }}" @submit.prevent="handleSubmit">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_template_changes">
+        <input type="hidden" name="state_payload" id="state-payload" ref="statePayload">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+            <h5 class="mb-0">Esercizi Attuali</h5>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge rounded-pill" :class="syncBadgeClass">{{ syncStatusText }}</span>
+                <small class="text-muted" v-if="lastSyncSummary">Esercizi sincronizzati: {{ lastSyncSummary.total_exercises }} · Serie totali: {{ lastSyncSummary.total_sets }}</small>
+                <small class="text-muted" v-if="lastSyncTimestamp">Ultimo aggiornamento: {{ formattedLastSync }}</small>
+            </div>
+        </div>
+        <table class="table table-sm table-bordered align-middle">
+            <thead>
+                <tr>
+                    <th class="text-center position-column">#</th>
+                    <th>Esercizio</th>
+                    <th class="serie-column">Serie</th>
+                    <th class="text-center">Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-if="exercises.length === 0">
+                    <td colspan="4" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
+                </tr>
+                <tr v-for="(exercise, index) in exercises" :key="exercise.key" class="template-exercise-row">
+                    <td class="text-center">{{ index + 1 }}</td>
+                    <td>
+                        {{ exercise.name }}
+                        <i v-if="exercise.isGlobal" class="bi bi-globe2 global-icon" title="Esercizio globale"></i>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" min="0" step="1" v-model.number="exercise.sets" @input="onSetsInput(exercise)" @blur="normalizeSets(exercise)">
+                    </td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+                            <div class="d-flex flex-column align-items-stretch gap-1 reorder-controls" aria-label="Riordina esercizio">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="index === 0" @click.prevent="moveExercise(index, -1)" title="Sposta su">
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="index === exercises.length - 1" @click.prevent="moveExercise(index, 1)" title="Sposta giù">
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-delete" @click.prevent="removeExercise(index)" title="Rimuovi esercizio">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="mb-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-8 col-lg-6">
+                    <label for="search-exercise-input" class="form-label">Cerca Esercizio</label>
+                    <div class="input-group" id="search-exercise-controls">
+                        <input type="text" id="search-exercise-input" class="form-control" v-model="searchTerm" placeholder="Digita per filtrare gli esercizi...">
+                        <button type="button" class="btn btn-outline-light" id="search-exercise-button" @click.prevent="requestSearch" :disabled="searching && socketConnected">
+                            <span v-if="searching && socketConnected" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span v-else>CERCA</span>
+                        </button>
+                    </div>
+                    <small class="text-muted" v-if="!socketConnected">Ricerca locale attiva: la connessione in tempo reale verrà ristabilita automaticamente.</small>
+                </div>
+                <div class="col-auto">
+                    <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom btn-custom-short">CREA ESERCIZIO</a>
+                </div>
+            </div>
+            <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-bordered table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Esercizio</th>
+                            <th class="text-center">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="searchResults.length === 0">
+                            <td colspan="2" class="text-center text-muted">Nessun esercizio trovato.</td>
+                        </tr>
+                        <tr v-for="result in searchResults" :key="`search-${result.id}`" class="exercise-row">
+                            <td>
+                                <span v-html="result.highlightedName"></span>
+                                <i v-if="result.isGlobal" class="bi bi-globe2 global-icon" title="Esercizio globale"></i>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-inline-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-light" @click.prevent="addExerciseFromSearch(result)" title="Aggiungi esercizio">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                    <a :href="result.infoUrl" class="btn btn-sm btn-outline-secondary">Info</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </form>
+
+    <div class="sticky-bottom-nav">
+        <button type="submit" class="btn btn-custom action-btn" form="template-edit-form" id="save-template-button">SALVA</button>
+        <a id="cancel-changes-button" class="btn btn-custom action-btn" href="{{ cancel_url }}" :href="cancelUrl">ANNULLA</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-D+8a4a9L5xRcmk6VwBEm90LkAMPx/+qvOB0fOkHn84qxd6Q671O5jM90+hCbGyF5" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" integrity="sha384-pJf25G1CEV4VpWw2X2gYdEx+kt1/3uzMdGII4XESyqSeX5TR1+t0NenE2no0RvrR" crossorigin="anonymous"></script>
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        const { createApp } = Vue;
+
+        const initialData = {
+            templateId: {{ template.id }},
+            cancelUrl: {{ cancel_url|tojson }},
+            currentExercises: {{ current_exercises|tojson }},
+            availableExercises: {{ all_exercises|tojson }}
+        };
+
+        const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[char] || char);
+
+        const highlightText = (name, query) => {
+            if (!query) {
+                return escapeHtml(name);
+            }
+            const loweredName = String(name).toLowerCase();
+            const loweredQuery = String(query).trim().toLowerCase();
+            if (!loweredQuery) {
+                return escapeHtml(name);
+            }
+            const index = loweredName.indexOf(loweredQuery);
+            if (index === -1) {
+                return escapeHtml(name);
+            }
+            const before = escapeHtml(name.slice(0, index));
+            const match = escapeHtml(name.slice(index, index + loweredQuery.length));
+            const after = escapeHtml(name.slice(index + loweredQuery.length));
+            return `${before}<mark>${match}</mark>${after}`;
+        };
+
+        createApp({
+            data() {
+                return {
+                    templateId: initialData.templateId,
+                    cancelUrl: initialData.cancelUrl,
+                    exercises: initialData.currentExercises.map((exercise) => ({
+                        key: `existing-${exercise.template_exercise_id}`,
+                        type: 'existing',
+                        templateExerciseId: exercise.template_exercise_id,
+                        exerciseId: exercise.exercise_id,
+                        name: exercise.name,
+                        sets: Number.parseInt(exercise.sets, 10) || 0,
+                        isGlobal: Boolean(exercise.is_global)
+                    })),
+                    deletedExistingIds: [],
+                    nextNewId: 1,
+                    availableExercises: initialData.availableExercises.map((exercise) => ({
+                        id: exercise.id,
+                        name: exercise.name,
+                        is_global: Boolean(exercise.is_global),
+                        info_url: exercise.info_url
+                    })),
+                    searchTerm: '',
+                    searchResults: [],
+                    searching: false,
+                    socketConnected: false,
+                    socket: null,
+                    previewTimeoutId: null,
+                    searchTimeoutId: null,
+                    syncing: false,
+                    lastSyncSummary: null,
+                    lastSyncTimestamp: null
+                };
+            },
+            computed: {
+                syncBadgeClass() {
+                    if (!this.socketConnected) {
+                        return 'bg-secondary';
+                    }
+                    if (this.syncing) {
+                        return 'bg-warning text-dark';
+                    }
+                    return 'bg-success';
+                },
+                syncStatusText() {
+                    if (!this.socketConnected) {
+                        return 'Offline';
+                    }
+                    if (this.syncing) {
+                        return 'Sincronizzazione...';
+                    }
+                    return this.lastSyncTimestamp ? 'Sincronizzato' : 'Pronto';
+                },
+                formattedLastSync() {
+                    if (!this.lastSyncTimestamp) {
+                        return '';
+                    }
+                    try {
+                        return this.lastSyncTimestamp.toLocaleTimeString();
+                    } catch (error) {
+                        return '';
+                    }
+                }
+            },
+            methods: {
+                normalizeSearchResult(raw) {
+                    return {
+                        id: raw.id,
+                        name: raw.name,
+                        highlightedName: raw.highlighted_name ? raw.highlighted_name : highlightText(raw.name, this.searchTerm),
+                        isGlobal: Boolean(raw.is_global),
+                        infoUrl: raw.info_url
+                    };
+                },
+                bootstrapSearchResults() {
+                    this.searchResults = this.availableExercises.map((exercise) => this.normalizeSearchResult({
+                        id: exercise.id,
+                        name: exercise.name,
+                        highlighted_name: highlightText(exercise.name, this.searchTerm),
+                        is_global: exercise.is_global,
+                        info_url: exercise.info_url
+                    }));
+                },
+                connectSocket() {
+                    try {
+                        this.socket = io('/template-editor');
+                    } catch (error) {
+                        console.error('Impossibile inizializzare la connessione Socket.IO', error);
+                        this.socket = null;
+                        return;
+                    }
+                    this.socket.on('connect', () => {
+                        this.socketConnected = true;
+                        this.requestSearch();
+                        this.queuePreviewSync(true);
+                    });
+                    this.socket.on('disconnect', () => {
+                        this.socketConnected = false;
+                        this.searching = false;
+                        this.syncing = false;
+                        this.bootstrapSearchResults();
+                    });
+                    this.socket.on('template_search_results', (payload) => {
+                        this.searching = false;
+                        const results = Array.isArray(payload?.results) ? payload.results : [];
+                        const normalized = results.map((result) => this.normalizeSearchResult(result));
+                        normalized.forEach((entry) => {
+                            if (!this.availableExercises.some((exercise) => exercise.id === entry.id)) {
+                                this.availableExercises.push({
+                                    id: entry.id,
+                                    name: entry.name,
+                                    is_global: entry.isGlobal,
+                                    info_url: entry.infoUrl
+                                });
+                            }
+                        });
+                        this.searchResults = normalized;
+                    });
+                    this.socket.on('template_state_ack', (payload) => {
+                        this.syncing = false;
+                        const summary = payload?.summary || null;
+                        this.lastSyncSummary = summary;
+                        if (payload?.timestamp) {
+                            this.lastSyncTimestamp = new Date(payload.timestamp);
+                        } else {
+                            this.lastSyncTimestamp = new Date();
+                        }
+                    });
+                },
+                queueSearch() {
+                    if (this.searchTimeoutId) {
+                        clearTimeout(this.searchTimeoutId);
+                    }
+                    this.searchTimeoutId = window.setTimeout(() => {
+                        this.requestSearch();
+                    }, 200);
+                },
+                requestSearch() {
+                    if (this.socketConnected && this.socket) {
+                        this.searching = true;
+                        this.socket.emit('template_search', { query: this.searchTerm });
+                    } else {
+                        this.applyLocalSearch();
+                    }
+                },
+                applyLocalSearch() {
+                    const query = this.searchTerm.trim().toLowerCase();
+                    const results = this.availableExercises.filter((exercise) => {
+                        if (!query) {
+                            return true;
+                        }
+                        const loweredName = exercise.name.toLowerCase();
+                        if (loweredName.startsWith(query)) {
+                            return true;
+                        }
+                        return loweredName.includes(query);
+                    }).map((exercise) => this.normalizeSearchResult({
+                        id: exercise.id,
+                        name: exercise.name,
+                        highlighted_name: highlightText(exercise.name, this.searchTerm),
+                        is_global: exercise.is_global,
+                        info_url: exercise.info_url
+                    }));
+                    this.searchResults = results;
+                    this.searching = false;
+                },
+                addExerciseFromSearch(result) {
+                    this.exercises.push({
+                        key: `new-${this.nextNewId}`,
+                        type: 'new',
+                        templateExerciseId: null,
+                        exerciseId: result.id,
+                        name: result.name,
+                        sets: 1,
+                        isGlobal: result.isGlobal
+                    });
+                    this.nextNewId += 1;
+                    this.queuePreviewSync();
+                },
+                moveExercise(index, delta) {
+                    const newIndex = index + delta;
+                    if (newIndex < 0 || newIndex >= this.exercises.length) {
+                        return;
+                    }
+                    const [moved] = this.exercises.splice(index, 1);
+                    this.exercises.splice(newIndex, 0, moved);
+                    this.queuePreviewSync();
+                },
+                removeExercise(index) {
+                    const [removed] = this.exercises.splice(index, 1);
+                    if (removed && removed.type === 'existing' && removed.templateExerciseId !== null) {
+                        if (!this.deletedExistingIds.includes(removed.templateExerciseId)) {
+                            this.deletedExistingIds.push(removed.templateExerciseId);
+                        }
+                    }
+                    this.queuePreviewSync();
+                },
+                onSetsInput(exercise) {
+                    if (exercise.sets === '' || Number.isNaN(Number(exercise.sets))) {
+                        exercise.sets = 0;
+                    }
+                    this.queuePreviewSync();
+                },
+                normalizeSets(exercise) {
+                    const numericValue = Number.parseInt(exercise.sets, 10);
+                    if (!Number.isFinite(numericValue) || numericValue < 0) {
+                        exercise.sets = 0;
+                    } else {
+                        exercise.sets = numericValue;
+                    }
+                    this.queuePreviewSync();
+                },
+                queuePreviewSync(force = false) {
+                    if (this.previewTimeoutId) {
+                        clearTimeout(this.previewTimeoutId);
+                        this.previewTimeoutId = null;
+                    }
+                    if (this.socketConnected) {
+                        this.syncing = true;
+                    }
+                    if (force) {
+                        this.emitPreviewState();
+                        return;
+                    }
+                    this.previewTimeoutId = window.setTimeout(() => {
+                        this.emitPreviewState();
+                    }, 250);
+                },
+                emitPreviewState() {
+                    if (!this.socketConnected || !this.socket) {
+                        return;
+                    }
+                    this.syncing = true;
+                    const payload = {
+                        template_id: this.templateId,
+                        items: this.exercises.map((exercise) => ({
+                            type: exercise.type,
+                            sets: Number.parseInt(exercise.sets, 10) || 0,
+                            template_exercise_id: exercise.type === 'existing' ? exercise.templateExerciseId : undefined,
+                            exercise_id: exercise.type === 'new' ? exercise.exerciseId : undefined
+                        })),
+                        deleted: this.deletedExistingIds
+                    };
+                    this.socket.emit('template_state_preview', payload);
+                },
+                serializePayload() {
+                    return {
+                        items: this.exercises.map((exercise) => {
+                            const sets = Number.parseInt(exercise.sets, 10) || 0;
+                            if (exercise.type === 'existing') {
+                                return {
+                                    type: 'existing',
+                                    template_exercise_id: exercise.templateExerciseId,
+                                    sets
+                                };
+                            }
+                            return {
+                                type: 'new',
+                                exercise_id: exercise.exerciseId,
+                                sets
+                            };
+                        }),
+                        deleted: this.deletedExistingIds
+                    };
+                },
+                handleSubmit() {
+                    const payload = this.serializePayload();
+                    const hiddenField = this.$refs.statePayload;
+                    if (hiddenField) {
+                        hiddenField.value = JSON.stringify(payload);
+                    }
+                    this.$refs.form.submit();
+                }
+            },
+            watch: {
+                searchTerm() {
+                    this.queueSearch();
+                },
+                exercises: {
+                    deep: true,
+                    handler() {
+                        this.queuePreviewSync();
+                    }
+                }
+            },
+            mounted() {
+                this.bootstrapSearchResults();
+                this.connectSocket();
+                this.queuePreviewSync(true);
+            }
+        }).mount('#template-editor-app');
+    });
+</script>
+{% endblock %}
