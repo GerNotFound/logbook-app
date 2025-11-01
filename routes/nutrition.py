@@ -610,7 +610,6 @@ def alimenti():
                 execute_query(f'DELETE FROM foods WHERE id = :id AND {condition}', params, commit=True)
                 flash(('Alimento globale eliminato.' if is_global else 'Alimento personale eliminato.'), 'success')
 
-        # NUOVA LOGICA: Rinomina Alimento
         elif action == 'rename_food':
             new_name = (request.form.get('new_food_name') or '').strip()
             is_global = request.form.get('is_global') == '1'

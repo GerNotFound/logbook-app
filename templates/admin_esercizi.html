@@ -27,20 +27,23 @@
         <thead class="table-dark">
             <tr>
                 <th>Esercizio</th>
-                <th>Azioni</th>
+                <th class="text-center">Azioni</th>
             </tr>
         </thead>
         <tbody>
             {% for ex in exercises %}
             <tr>
-                <td>{{ ex.name }}</td>
+                <td class="align-middle">{{ ex.name }}</td>
                 <td class="text-center align-middle">
-                    <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete_exercise">
-                        <input type="hidden" name="exercise_id" value="{{ ex.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete">X</button>
-                    </form>
+                    <div class="btn-group">
+                        <a href="{{ url_for('admin.admin_esercizio_consigli', exercise_id=ex.id) }}" class="btn btn-sm btn-outline-light">Consigli</a>
+                        <form method="POST" data-confirm="Sei sicuro di voler eliminare questo esercizio?">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_exercise">
+                            <input type="hidden" name="exercise_id" value="{{ ex.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete">X</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}

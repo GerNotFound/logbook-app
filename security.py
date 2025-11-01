@@ -10,7 +10,7 @@ def init_security(app: Flask) -> None:
 
     csp = {
         'default-src': ["'self'", 'https:'],
-        'script-src': ["'self'", 'https:'],
+        'script-src': ["'self'", 'https:', "'unsafe-inline'"], # 'unsafe-inline' per nonce
         'style-src': ["'self'", 'https:'],
         'img-src': ["'self'", 'data:', 'https:'],
         'font-src': ["'self'", 'https:'],
@@ -50,6 +50,7 @@ def init_security(app: Flask) -> None:
         referrer_policy='no-referrer',
         x_content_type_options=True,
         session_cookie_samesite=app.config.get('SESSION_COOKIE_SAMESITE', 'Strict'),
+        content_security_policy_nonce_in=['script-src']
     )
 
     @app.after_request

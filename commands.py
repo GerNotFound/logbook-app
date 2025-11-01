@@ -108,4 +108,3 @@ def init_app(app):
     app.cli.add_command(db_upgrade_command)
     app.cli.add_command(db_prepare_command)
     app.cli.add_command(security_scan_command)
-

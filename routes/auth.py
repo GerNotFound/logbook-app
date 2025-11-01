@@ -179,4 +179,3 @@ def logout():
     session.pop('last_activity_update', None)
     flash('Logout effettuato con successo.', 'success')
     return redirect(url_for('auth.login'))
-

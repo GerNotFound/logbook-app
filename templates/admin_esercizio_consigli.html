@@ -1,0 +1,25 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="admin-brand brand-heading__brand">ADMIN</span><span class="brand-heading__section">/ CONSIGLI</span></h1>
+        <h4 class="text-muted mb-4">{{ exercise.name }}</h4>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+    </div>
+</div>
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label for="consigli-text" class="form-label">Testo dei consigli per gli utenti</label>
+        <textarea id="consigli-text" name="consigli" class="form-control" rows="10">{{ exercise.consigli or '' }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-custom w-100">SALVA CONSIGLI</button>
+</form>
+
+<div class="sticky-bottom-nav">
+    <a href="{{ url_for('admin.admin_esercizi') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

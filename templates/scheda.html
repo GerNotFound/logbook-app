@@ -34,37 +34,23 @@
                 </form>
             </div>
         </div>
-        <!-- MODIFICA QUI: Ripristinata classe semplice 'table-bordered' -->
         <table class="table table-bordered table-sm">
-            <thead><tr><th>Esercizio</th><th>Serie</th><th></th></tr></thead>
-            <tbody>
+            <thead><tr><th>Esercizio</th><th>Serie</th></tr></thead>
+            <tbody id="tbody-template-{{ template.id }}">
             {% for exercise in template.exercises %}
                 <tr id="tex-{{ exercise.id }}">
-                    <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td><td>{{ exercise.sets }}</td>
-                    <td class="text-center">
-                        <form method="POST" action="{{ url_for('gym.scheda') }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="delete_template_exercise">
-                            <input type="hidden" name="template_id" value="{{ template.id }}">
-                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-delete">X</button>
-                        </form>
-                    </td>
+                    <td>{{ exercise.name }}{% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale" aria-label="Esercizio globale"></i>{% endif %}</td>
+                    <td>{{ exercise.sets }}</td>
                 </tr>
             {% else %}
-                <tr class="no-exercise-row"><td colspan="3" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
+                <tr class="no-exercise-row-{{ template.id }}"><td colspan="2" class="text-center text-muted">Aggiungi un esercizio.</td></tr>
             {% endfor %}
             </tbody>
         </table>
         <div class="text-end">
-            <button
-                type="button"
-                class="btn btn-custom btn-custom-short"
-                data-bs-toggle="modal"
-                data-bs-target="#addExerciseModal"
-                data-template-id="{{ template.id }}"
-                data-template-exercise-ids='{{ template.exercises | map(attribute="exercise_id") | list | tojson | safe }}'
-            >Aggiungi</button>
+            <a href="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" class="btn btn-custom btn-custom-short">
+                Modifica / Aggiungi
+            </a>
         </div>
     </div>
 
@@ -91,144 +77,5 @@
     <div class="alert alert-secondary text-center">Nessuna scheda di allenamento trovata.</div>
 {% endif %}
 
-<div class="modal fade" id="addExerciseModal" tabindex="-1" aria-labelledby="addExerciseModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title" id="addExerciseModalLabel">Aggiungi esercizio</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button></div>
-            <form method="POST" action="{{ url_for('gym.scheda') }}" id="add-exercise-modal-form">
-                <div class="modal-body">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="add_exercise">
-                    <input type="hidden" name="template_id" value="">
-                    <input type="hidden" name="exercise_id" class="exercise-id-input">
-                    <div class="mb-3">
-                        <label class="form-label">Esercizio</label>
-                        <div class="suggestions-container">
-                            <input type="text" name="exercise_name" class="form-control exercise-search-input" placeholder="Cerca nell'archivio" autocomplete="off" required>
-                            <div class="suggestions-list"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="form-label">Serie</label>
-                        <input type="text" inputmode="numeric" pattern="[0-9]*" name="sets" class="form-control" required>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-between">
-                    <button type="submit" class="btn btn-custom btn-custom-tight m-0">SALVA</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">INDIETRO</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <div class="sticky-bottom-nav"><a href="{{ url_for('gym.palestra') }}" class="btn btn-custom full-width-btn">INDIETRO</a></div>
-{% endblock %}
-{% block scripts %}
-<script defer src="{{ url_for('static', filename='js/catalog_suggestions.js') }}?v={{ app_version }}"></script>
-<script nonce="{{ csp_nonce() }}">
-    const initializeSchedaSuggestions = (suggestionsModule) => {
-        if (!suggestionsModule) {
-            console.error('Modulo suggerimenti non disponibile.');
-            return;
-        }
-
-        const exerciseOptions = {{ exercise_options|tojson|safe }};
-
-        const instances = suggestionsModule.initCollection({
-            rootSelector: '#add-exercise-modal-form',
-            inputSelector: '.exercise-search-input',
-            hiddenSelector: '.exercise-id-input',
-            suggestionsSelector: '.suggestions-list',
-            items: exerciseOptions,
-            globalIconLabel: 'Esercizio globale',
-        });
-
-        const modalElement = document.getElementById('addExerciseModal');
-        if (!modalElement) {
-            return;
-        }
-
-        const templateIdInput = modalElement.querySelector('input[name="template_id"]');
-        const hiddenInput = modalElement.querySelector('.exercise-id-input');
-        const searchInput = modalElement.querySelector('.exercise-search-input');
-        const setsInput = modalElement.querySelector('input[name="sets"]');
-        const suggestionInstance = Array.isArray(instances) && instances.length ? instances[0] : null;
-
-        const resetModal = () => {
-            if (hiddenInput) {
-                hiddenInput.value = '';
-                delete hiddenInput.dataset.normalized;
-            }
-
-            if (searchInput) {
-                searchInput.value = '';
-                searchInput.classList.remove('is-invalid');
-                searchInput.removeAttribute('aria-invalid');
-            }
-
-            if (setsInput) {
-                setsInput.value = '';
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.hideSuggestions === 'function') {
-                suggestionInstance.hideSuggestions();
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
-                suggestionInstance.setPreferredIds([]);
-            }
-        };
-
-        modalElement.addEventListener('show.bs.modal', (event) => {
-            resetModal();
-            const trigger = event.relatedTarget;
-            if (templateIdInput) {
-                templateIdInput.value = trigger ? (trigger.getAttribute('data-template-id') || '') : '';
-            }
-
-            if (suggestionInstance && typeof suggestionInstance.setPreferredIds === 'function') {
-                const idsRaw = trigger ? trigger.getAttribute('data-template-exercise-ids') : null;
-                let parsedIds = [];
-
-                if (idsRaw) {
-                    try {
-                        const candidate = JSON.parse(idsRaw);
-                        if (Array.isArray(candidate)) {
-                            parsedIds = candidate;
-                        }
-                    } catch (error) {
-                        parsedIds = [];
-                    }
-                }
-
-                suggestionInstance.setPreferredIds(parsedIds);
-            }
-        });
-
-        modalElement.addEventListener('shown.bs.modal', () => {
-            if (searchInput) {
-                searchInput.focus({preventScroll: true});
-            }
-        });
-
-        modalElement.addEventListener('hidden.bs.modal', () => {
-            resetModal();
-        });
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const moduleRef = window.LogbookCatalogSuggestions;
-        if (moduleRef) {
-            initializeSchedaSuggestions(moduleRef);
-            return;
-        }
-
-        const readyHandler = (event) => {
-            const moduleFromEvent = event && event.detail ? event.detail : window.LogbookCatalogSuggestions;
-            initializeSchedaSuggestions(moduleFromEvent);
-        };
-
-        window.addEventListener('logbook:suggestions:ready', readyHandler, {once: true});
-    });
-</script>
 {% endblock %}

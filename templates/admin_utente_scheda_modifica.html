@@ -37,7 +37,6 @@
 <div class="mb-4 p-3 border rounded">
     <h5>Aggiungi Esercizio</h5>
     <form method="POST">
-        <!-- MODIFICA QUI: Aggiunto token CSRF -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add_exercise">
         <input type="hidden" name="exercise_id" class="exercise-id-input">

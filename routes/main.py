@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from .auth import login_required
 from utils import execute_query, is_valid_time_format, generate_avatar_color
-from services import user_service, data_service  # NUOVE IMPORTAZIONI
+from services import user_service, data_service
 from services import privacy_service
 
 main_bp = Blueprint('main', __name__)
@@ -296,7 +296,6 @@ def modifica_misure(record_date):
     date_formatted = date_obj.strftime('%d %b %y')
 
     if request.method == 'POST':
-        # Logica di salvataggio identica alla rotta 'misure'
         weight_time = request.form.get('weight_time'); measure_time = request.form.get('measure_time')
         if not is_valid_time_format(weight_time) or not is_valid_time_format(measure_time):
             flash('Formato orario non valido. Usa HH:MM.', 'danger')
