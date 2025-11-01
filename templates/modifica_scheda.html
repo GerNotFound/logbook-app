@@ -15,7 +15,6 @@
 
 <form id="edit-template-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="save_all">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0">{{ template.name }}</h4>
@@ -28,54 +27,41 @@
             <table class="table table-sm table-bordered">
                 <thead>
                     <tr>
-                        <th class="text-center" style="width: 50px;">Ordina</th>
                         <th>Esercizio</th>
                         <th class="serie-column">Serie</th>
                         <th class="text-center">Azioni</th>
                     </tr>
                 </thead>
-                <tbody id="sortable-exercises">
+                <tbody id="current-exercises-tbody">
                     {% for exercise in current_exercises %}
-                    <tr data-exercise-id="{{ exercise.id }}">
-                        <input type="hidden" name="exercise_order" value="{{ exercise.id }}">
-                        <td class="text-center align-middle sort-handle" style="cursor: grab;"><i class="bi bi-grip-vertical"></i></td>
-                        <td class="align-middle">{{ exercise.name }}</td>
+                    <tr data-exercise-id="{{ exercise.exercise_id }}">
+                        <input type="hidden" name="exercise_id" value="{{ exercise.exercise_id }}">
+                        <td class="align-middle exercise-name-cell">{{ exercise.name }}</td>
                         <td class="align-middle">
-                            <input type="text" class="form-control form-control-sm" name="sets_{{ exercise.id }}" value="{{ exercise.sets }}">
+                            <input type="text" class="form-control form-control-sm" name="sets_{{ exercise.exercise_id }}" value="{{ exercise.sets }}">
                         </td>
                         <td class="text-center align-middle">
                             <div class="btn-group">
                                 <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
                                 <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
-                                <button type="submit" form="delete-form-{{ exercise.id }}" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
+                                <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
                             </div>
                         </td>
                     </tr>
-                    {% else %}
-                    <tr><td colspan="4" class="text-center text-muted">Nessun esercizio in questa scheda.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <p id="no-exercises-placeholder" class="text-center text-muted {% if current_exercises %}d-none{% endif %}">Nessun esercizio in questa scheda.</p>
         </div>
     </div>
 </form>
 
-<!-- Form separati per l'eliminazione -->
-{% for exercise in current_exercises %}
-<form id="delete-form-{{ exercise.id }}" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-none">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="action" value="delete_template_exercise">
-    <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-</form>
-{% endfor %}
-
-<div class="mb-4">
+<div id="all-exercises-list" class="mb-4">
     <h5>Cerca Esercizio</h5>
-    <div class="input-group">
-        <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
-        <a href="{{ url_for('gym.esercizi') }}" class="btn btn-outline-light">Crea</a>
-    </div>
-    <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
+    <input type="text" class="form-control search" placeholder="Digita per filtrare gli esercizi...">
+    <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom w-100 d-block mt-2">CREA ESERCIZIO</a>
+    
+    <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
         <table class="table table-bordered table-hover table-sm">
             <thead>
                 <tr>
@@ -83,17 +69,12 @@
                     <th class="text-center">Azioni</th>
                 </tr>
             </thead>
-            <tbody id="all-exercises-tbody">
+            <tbody class="list">
                 {% for exercise in all_exercises %}
-                <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
-                    <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                <tr data-id="{{ exercise.id }}" data-is-global="{{ 1 if exercise.user_id is none else 0 }}">
+                    <td class="exercise-name-cell">{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
                     <td class="text-center">
-                        <form method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="add_exercise_to_template">
-                            <input type="hidden" name="exercise_id" value="{{ exercise.id }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light">Aggiungi</button>
-                        </form>
+                        <button type="button" class="btn btn-sm btn-outline-light add-exercise">Aggiungi</button>
                         <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
                     </td>
                 </tr>
@@ -122,83 +103,112 @@
 
 <div class="sticky-bottom-nav">
     <button type="submit" form="edit-template-form" class="btn btn-custom action-btn">SALVA</button>
-    <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn">ANNULLA</a>
+    <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn">INDIETRO</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
-        // Logica per il filtro live della tabella
-        const searchInput = document.getElementById('search-exercise-input');
-        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+        const form = document.getElementById('edit-template-form');
+        const currentExercisesTbody = document.getElementById('current-exercises-tbody');
+        const noExercisesPlaceholder = document.getElementById('no-exercises-placeholder');
+        const cancelButton = document.getElementById('cancel-button');
+        let isDirty = false;
 
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            exerciseRows.forEach(row => {
-                const exerciseName = row.dataset.name;
-                if (exerciseName.includes(searchTerm)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+        // --- Logica per rilevare modifiche e aggiornare il pulsante Annulla ---
+        function getFormState() {
+            const exerciseOrder = Array.from(currentExercisesTbody.querySelectorAll('tr')).map(tr => {
+                const id = tr.dataset.exerciseId;
+                const sets = tr.querySelector(`input[name="sets_${id}"]`).value;
+                return `${id}:${sets}`;
+            }).join(',');
+            const templateName = document.getElementById('new_template_name').value;
+            return `${templateName}|${exerciseOrder}`;
+        }
+
+        const initialState = getFormState();
+
+        function checkDirtyState() {
+            const currentState = getFormState();
+            isDirty = (currentState !== initialState);
+            cancelButton.textContent = isDirty ? 'ANNULLA' : 'INDIETRO';
+        }
+
+        form.addEventListener('input', checkDirtyState);
+        // Aggiungiamo un listener globale per rilevare aggiunte/rimozioni/riordino
+        new MutationObserver(checkDirtyState).observe(currentExercisesTbody, { childList: true, subtree: true });
+
+        // --- Logica Ricerca Live con List.js ---
+        const exerciseList = new List('all-exercises-list', {
+            valueNames: ['exercise-name-cell']
         });
 
-        // Logica per l'ordinamento
-        const sortableList = document.getElementById('sortable-exercises');
-        if (sortableList) {
-            new Sortable(sortableList, {
-                animation: 150,
-                handle: '.sort-handle',
-                onEnd: function() {
-                    updateOrderInputs();
-                }
-            });
-        }
+        // --- Logica Aggiungi Esercizio (Client-Side) ---
+        document.getElementById('all-exercises-list').addEventListener('click', function(e) {
+            if (e.target.classList.contains('add-exercise')) {
+                const rowToAdd = e.target.closest('tr');
+                const exerciseId = rowToAdd.dataset.id;
+                const exerciseName = rowToAdd.querySelector('.exercise-name-cell').textContent.trim();
 
-        function updateOrderInputs() {
-            const form = document.getElementById('edit-template-form');
-            // Rimuovi i vecchi input di ordine
-            form.querySelectorAll('input[name="exercise_order"]').forEach(input => input.remove());
-            
-            // Aggiungi i nuovi input aggiornati in base all'ordine del DOM
-            const rows = sortableList.querySelectorAll('tr');
-            rows.forEach(row => {
-                const exerciseId = row.dataset.exerciseId;
-                if (exerciseId) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'exercise_order';
-                    input.value = exerciseId;
-                    form.appendChild(input);
+                if (currentExercisesTbody.querySelector(`tr[data-exercise-id="${exerciseId}"]`)) {
+                    alert("Questo esercizio è già nella scheda.");
+                    return;
                 }
-            });
-        }
 
-        // Logica per i pulsanti Su/Giù
-        document.querySelectorAll('.move-up').forEach(button => {
-            button.addEventListener('click', function() {
-                const row = this.closest('tr');
-                const prevRow = row.previousElementSibling;
+                const newRow = document.createElement('tr');
+                newRow.dataset.exerciseId = exerciseId;
+                newRow.innerHTML = `
+                    <input type="hidden" name="exercise_id" value="${exerciseId}">
+                    <td class="align-middle exercise-name-cell">${exerciseName}</td>
+                    <td class="align-middle">
+                        <input type="text" class="form-control form-control-sm" name="sets_${exerciseId}" value="1">
+                    </td>
+                    <td class="text-center align-middle">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </td>
+                `;
+                currentExercisesTbody.appendChild(newRow);
+                updateEventListenersForRow(newRow);
+                checkDirtyState();
+            }
+        });
+
+        function updateEventListenersForRow(row) {
+            // Rimuovi esercizio
+            row.querySelector('.remove-exercise').addEventListener('click', function() {
+                this.closest('tr').remove();
+                checkDirtyState();
+            });
+            // Sposta su
+            row.querySelector('.move-up').addEventListener('click', function() {
+                const currentRow = this.closest('tr');
+                const prevRow = currentRow.previousElementSibling;
                 if (prevRow) {
-                    sortableList.insertBefore(row, prevRow);
-                    updateOrderInputs();
+                    currentExercisesTbody.insertBefore(currentRow, prevRow);
+                    checkDirtyState();
                 }
             });
-        });
-
-        document.querySelectorAll('.move-down').forEach(button => {
-            button.addEventListener('click', function() {
-                const row = this.closest('tr');
-                const nextRow = row.nextElementSibling;
+            // Sposta giù
+            row.querySelector('.move-down').addEventListener('click', function() {
+                const currentRow = this.closest('tr');
+                const nextRow = currentRow.nextElementSibling;
                 if (nextRow) {
-                    sortableList.insertBefore(nextRow, row);
-                    updateOrderInputs();
+                    currentExercisesTbody.insertBefore(nextRow, currentRow);
+                    checkDirtyState();
                 }
             });
-        });
+            // Aggiorna placeholder
+            noExercisesPlaceholder.classList.toggle('d-none', currentExercisesTbody.children.length > 0);
+        }
+        
+        // Inizializza gli event listener per le righe esistenti al caricamento
+        currentExercisesTbody.querySelectorAll('tr').forEach(updateEventListenersForRow);
     });
 </script>
 {% endblock %}

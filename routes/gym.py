@@ -159,50 +159,41 @@ def modifica_scheda_dettaglio(template_id):
         return redirect(url_for('gym.scheda'))
 
     if request.method == 'POST':
-        action = request.form.get('action')
-        
-        if action == 'save_all':
-            # Salva il nuovo nome della scheda
-            new_template_name = (request.form.get('new_template_name') or '').strip()
-            if new_template_name and new_template_name != template['name']:
-                try:
-                    execute_query('UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid', {'name': new_template_name, 'id': template_id, 'uid': user_id}, commit=True)
-                    flash('Scheda rinominata.', 'success')
-                except IntegrityError:
-                    db.session.rollback()
-                    flash(f"Errore: Esiste già una scheda con il nome '{new_template_name}'.", 'danger')
-                    return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
+        # Rinomina scheda
+        new_template_name = (request.form.get('new_template_name') or '').strip()
+        if new_template_name and new_template_name != template['name']:
+            try:
+                execute_query('UPDATE workout_templates SET name = :name WHERE id = :id AND user_id = :uid', {'name': new_template_name, 'id': template_id, 'uid': user_id}, commit=True)
+                flash('Scheda rinominata.', 'success')
+            except IntegrityError:
+                db.session.rollback()
+                flash(f"Errore: Esiste già una scheda con il nome '{new_template_name}'.", 'danger')
+                return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
 
-            # Aggiorna serie e ordine degli esercizi
-            exercise_ids_order = request.form.getlist('exercise_order')
+        # Logica "Delete-and-Recreate" per salvare tutti gli esercizi
+        try:
+            db.session.begin_nested()
+            # 1. Cancella tutti gli esercizi esistenti per questa scheda
+            execute_query('DELETE FROM template_exercises WHERE template_id = :tid', {'tid': template_id})
+
+            # 2. R-inserisci tutti gli esercizi nell'ordine corretto
+            exercise_ids_order = request.form.getlist('exercise_id')
             for index, exercise_id in enumerate(exercise_ids_order):
                 sets = request.form.get(f'sets_{exercise_id}', '1')
                 execute_query(
-                    'UPDATE template_exercises SET sets = :sets, display_order = :order WHERE id = :id AND template_id = :tid',
-                    {'sets': sets, 'order': index, 'id': exercise_id, 'tid': template_id},
-                    commit=True
+                    'INSERT INTO template_exercises (template_id, exercise_id, sets, display_order) VALUES (:tid, :eid, :sets, :order)',
+                    {'tid': template_id, 'eid': exercise_id, 'sets': sets, 'order': index}
                 )
+            db.session.commit()
             flash('Modifiche alla scheda salvate con successo.', 'success')
-
-        elif action == 'add_exercise_to_template':
-            exercise_id = request.form.get('exercise_id')
-            if exercise_id:
-                max_order = execute_query('SELECT MAX(display_order) as max_o FROM template_exercises WHERE template_id = :tid', {'tid': template_id}, fetchone=True)
-                new_order = (max_order['max_o'] or -1) + 1
-                execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets, display_order) VALUES (:tid, :eid, :sets, :order)',
-                              {'tid': template_id, 'eid': exercise_id, 'sets': '1', 'order': new_order}, commit=True)
-                flash('Esercizio aggiunto.', 'success')
-            else:
-                flash('Nessun esercizio selezionato.', 'danger')
-
-        elif action == 'delete_template_exercise':
-            template_exercise_id = request.form.get('template_exercise_id')
-            execute_query('DELETE FROM template_exercises WHERE id = :id AND template_id = :tid', {'id': template_exercise_id, 'tid': template_id}, commit=True)
-            flash('Esercizio rimosso dalla scheda.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Errore durante il salvataggio della scheda {template_id}: {e}")
+            flash('Si è verificato un errore durante il salvataggio.', 'danger')
             
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_id=template_id))
 
-    current_exercises = execute_query('SELECT te.id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.display_order, te.id', {'tid': template_id}, fetchall=True)
+    current_exercises = execute_query('SELECT te.id, e.id as exercise_id, e.name, te.sets FROM template_exercises te JOIN exercises e ON te.exercise_id = e.id WHERE te.template_id = :tid ORDER BY te.display_order, te.id', {'tid': template_id}, fetchall=True)
     all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
 
     return render_template('modifica_scheda.html', 
