@@ -100,6 +100,57 @@ def _prune_orphan_template_exercises(template_id: int) -> set[int]:
     db.session.commit()
     return orphan_ids
 
+
+def _load_template_editor_data(template_id: int, user_id: int) -> tuple[list[dict], list[dict]]:
+    """Return the current and available exercises for a workout template."""
+
+    current_exercises_rows = execute_query(
+        'SELECT te.id AS template_exercise_id, '
+        '       te.exercise_id, '
+        '       e.name, '
+        '       e.user_id AS exercise_owner_id, '
+        '       te.sets '
+        'FROM template_exercises te '
+        'JOIN exercises e ON te.exercise_id = e.id '
+        'WHERE te.template_id = :tid '
+        'ORDER BY te.sort_order, te.id',
+        {'tid': template_id},
+        fetchall=True,
+    ) or []
+
+    current_exercises = [
+        {
+            'template_exercise_id': row['template_exercise_id'],
+            'exercise_id': row['exercise_id'],
+            'name': row['name'],
+            'sets': row['sets'],
+            'is_global': row['exercise_owner_id'] is None,
+            'info_url': url_for('gym.esercizio_info', exercise_id=row['exercise_id']),
+        }
+        for row in current_exercises_rows
+    ]
+
+    all_exercises_rows = execute_query(
+        'SELECT id, name, user_id '
+        'FROM exercises WHERE user_id IS NULL OR user_id = :uid '
+        'ORDER BY name',
+        {'uid': user_id},
+        fetchall=True,
+    ) or []
+
+    all_exercises = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': row['user_id'] is None,
+            'info_url': url_for('gym.esercizio_info', exercise_id=row['id']),
+        }
+        for row in all_exercises_rows
+    ]
+
+    return current_exercises, all_exercises
+
+
 @gym_bp.route('/api/suggest/exercises')
 @login_required
 def suggest_exercises():
@@ -515,47 +566,7 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
     _ensure_template_exercise_order(template_id)
-    current_exercises_rows = execute_query(
-        'SELECT te.id AS template_exercise_id, '
-        '       te.exercise_id, '
-        '       e.name, '
-        '       e.user_id AS exercise_owner_id, '
-        '       te.sets '
-        'FROM template_exercises te '
-        'JOIN exercises e ON te.exercise_id = e.id '
-        'WHERE te.template_id = :tid '
-        'ORDER BY te.sort_order, te.id',
-        {'tid': template_id},
-        fetchall=True,
-    ) or []
-    current_exercises = [
-        {
-            'template_exercise_id': row['template_exercise_id'],
-            'exercise_id': row['exercise_id'],
-            'name': row['name'],
-            'sets': row['sets'],
-            'is_global': row['exercise_owner_id'] is None,
-            'info_url': url_for('gym.esercizio_info', exercise_id=row['exercise_id']),
-        }
-        for row in current_exercises_rows
-    ]
-
-    all_exercises_rows = execute_query(
-        'SELECT id, name, user_id '
-        'FROM exercises WHERE user_id IS NULL OR user_id = :uid '
-        'ORDER BY name',
-        {'uid': user_id},
-        fetchall=True,
-    ) or []
-    all_exercises = [
-        {
-            'id': row['id'],
-            'name': row['name'],
-            'is_global': row['user_id'] is None,
-            'info_url': url_for('gym.esercizio_info', exercise_id=row['id']),
-        }
-        for row in all_exercises_rows
-    ]
+    current_exercises, all_exercises = _load_template_editor_data(template_id, user_id)
 
     return render_template(
         'modifica_scheda.html',
@@ -565,6 +576,28 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
         current_exercises=current_exercises,
         all_exercises=all_exercises,
         cancel_url=url_for('gym.scheda'),
+    )
+
+
+@gym_bp.get('/api/templates/<template_slug>/editor-data')
+@login_required
+def template_editor_data_api(template_slug: str):
+    """Expose the data required to hydrate the template editor UI."""
+
+    user_id = session['user_id']
+    template = _get_template_by_slug(user_id, template_slug)
+    if not template:
+        return jsonify({'error': 'Scheda non trovata.'}), 404
+
+    _ensure_template_exercise_order(template['id'])
+    current_exercises, all_exercises = _load_template_editor_data(template['id'], user_id)
+
+    return jsonify(
+        {
+            'template': {'id': template['id'], 'name': template['name']},
+            'current_exercises': current_exercises,
+            'all_exercises': all_exercises,
+        }
     )
 
 @gym_bp.route('/esercizio/<int:exercise_id>/info')
