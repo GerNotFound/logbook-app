@@ -433,9 +433,10 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                     return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
             missing_existing = valid_existing_ids - seen_existing - normalized_deleted_ids
+            auto_removed_missing = set()
             if missing_existing:
-                flash('Impossibile salvare le modifiche. Alcuni esercizi non sono stati inclusi.', 'danger')
-                return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
+                auto_removed_missing = missing_existing
+                normalized_deleted_ids.update(missing_existing)
 
             try:
                 for delete_id in normalized_deleted_ids:
@@ -471,6 +472,8 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
                     sort_order += 1
 
                 db.session.commit()
+                if auto_removed_missing:
+                    flash('Alcuni esercizi non erano più inclusi e sono stati rimossi automaticamente.', 'warning')
                 flash('Scheda aggiornata con successo.', 'success')
             except Exception:
                 db.session.rollback()
@@ -480,24 +483,56 @@ def modifica_scheda_dettaglio(template_id=None, template_slug=None):
         return redirect(url_for('gym.modifica_scheda_dettaglio', template_slug=canonical_slug))
 
     _ensure_template_exercise_order(template_id)
-    current_exercises = execute_query(
-        'SELECT te.id, e.name, te.sets '
+    current_exercises_rows = execute_query(
+        'SELECT te.id AS template_exercise_id, '
+        '       te.exercise_id, '
+        '       e.name, '
+        '       e.user_id AS exercise_owner_id, '
+        '       te.sets '
         'FROM template_exercises te '
         'JOIN exercises e ON te.exercise_id = e.id '
         'WHERE te.template_id = :tid '
         'ORDER BY te.sort_order, te.id',
         {'tid': template_id},
         fetchall=True,
-    )
-    all_exercises = execute_query('SELECT id, name, user_id FROM exercises WHERE user_id IS NULL OR user_id = :uid ORDER BY name', {'uid': user_id}, fetchall=True)
+    ) or []
+    current_exercises = [
+        {
+            'template_exercise_id': row['template_exercise_id'],
+            'exercise_id': row['exercise_id'],
+            'name': row['name'],
+            'sets': row['sets'],
+            'is_global': row['exercise_owner_id'] is None,
+        }
+        for row in current_exercises_rows
+    ]
 
-    return render_template('modifica_scheda.html',
-                           title=f'Modifica {template["name"]}',
-                           template=template,
-                           template_slug=canonical_slug,
-                           current_exercises=current_exercises,
-                           all_exercises=all_exercises,
-                           cancel_url=url_for('gym.scheda'))
+    all_exercises_rows = execute_query(
+        'SELECT id, name, user_id '
+        'FROM exercises WHERE user_id IS NULL OR user_id = :uid '
+        'ORDER BY name',
+        {'uid': user_id},
+        fetchall=True,
+    ) or []
+    all_exercises = [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'is_global': row['user_id'] is None,
+            'info_url': url_for('gym.esercizio_info', exercise_id=row['id']),
+        }
+        for row in all_exercises_rows
+    ]
+
+    return render_template(
+        'modifica_scheda.html',
+        title=f'Modifica {template["name"]}',
+        template=template,
+        template_slug=canonical_slug,
+        current_exercises=current_exercises,
+        all_exercises=all_exercises,
+        cancel_url=url_for('gym.scheda'),
+    )
 
 @gym_bp.route('/esercizio/<int:exercise_id>/info')
 @login_required
