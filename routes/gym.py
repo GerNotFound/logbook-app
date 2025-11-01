@@ -143,7 +143,6 @@ def modifica_scheda_dettaglio(template_id):
         if action == 'add_exercise_to_template':
             exercise_id = request.form.get('exercise_id')
             if exercise_id:
-                # Aggiunge con un valore di default per le serie
                 execute_query('INSERT INTO template_exercises (template_id, exercise_id, sets) VALUES (:tid, :eid, :sets)',
                               {'tid': template_id, 'eid': exercise_id, 'sets': '1'}, commit=True)
                 flash('Esercizio aggiunto.', 'success')

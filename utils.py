@@ -73,3 +73,4 @@ def is_valid_time_format(time_str):
 def allowed_file(filename):
     """Controlla se l'estensione di un file è permessa."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+

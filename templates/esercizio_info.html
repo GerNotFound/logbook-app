@@ -1,0 +1,26 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 brand-heading"><span class="logbook-brand brand-heading__brand">LOGBOOK</span><span class="brand-heading__section">/ {{ exercise.name }}</span></h1>
+    </div>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Work in Progress</h5>
+    <p class="text-muted">Questa sezione è in costruzione. Torna più tardi per ulteriori dettagli!</p>
+</div>
+
+<div class="mb-4 p-3 border rounded">
+    <h5>Consigli</h5>
+    {% if exercise.consigli %}
+        <div class="text-prewrap">{{ exercise.consigli }}</div>
+    {% else %}
+        <p class="text-muted">Nessun consiglio disponibile per questo esercizio.</p>
+    {% endif %}
+</div>
+
+<div class="sticky-bottom-nav">
+    <a href="javascript:history.back()" class="btn btn-custom full-width-btn">INDIETRO</a>
+</div>
+{% endblock %}

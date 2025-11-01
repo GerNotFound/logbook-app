@@ -9,6 +9,7 @@
                     {{ session['username'][:10] }}{% if session['username']|length > 10 %}...{% endif %}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
+                    <!-- MODIFICA QUI -->
                     <li><a class="dropdown-item" href="{{ url_for('main.impostazioni') }}">IMPOSTAZIONI</a></li>
                     <li><hr class="dropdown-divider dropdown-divider-dark"></li>
                     <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">LOGOUT</a></li>

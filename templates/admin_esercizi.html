@@ -57,30 +57,3 @@
     <a href="{{ url_for('admin.admin_generale') }}" class="btn btn-custom full-width-btn">INDIETRO</a>
 </div>
 {% endblock %}
-
-{% block scripts %}
-<script nonce="{{ csp_nonce() }}">
-    const DRAFT_KEY_ADD_EXERCISE = `admin_add_exercise_draft`;
-    const addExerciseForm = document.getElementById('add-exercise-form');
-    const exerciseInput = addExerciseForm.querySelector('input[name="name"]');
-
-    function saveDraft() {
-        if (exerciseInput.value) {
-            localStorage.setItem(DRAFT_KEY_ADD_EXERCISE, exerciseInput.value);
-        } else {
-            localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE);
-        }
-    }
-
-    function loadDraft() {
-        const draft = localStorage.getItem(DRAFT_KEY_ADD_EXERCISE);
-        if (draft) {
-            exerciseInput.value = draft;
-        }
-    }
-
-    exerciseInput.addEventListener('input', saveDraft);
-    addExerciseForm.addEventListener('submit', () => localStorage.removeItem(DRAFT_KEY_ADD_EXERCISE));
-    document.addEventListener('DOMContentLoaded', loadDraft);
-</script>
-{% endblock %}

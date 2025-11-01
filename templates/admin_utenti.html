@@ -14,13 +14,15 @@
 <h5>Aggiungi Nuovo Utente</h5>
 <div class="row g-2">
 <div class="col-12"><input type="text" name="new_username" class="form-control" placeholder="Nuovo username" required></div>
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
 <div class="col-12 password-wrapper">
 <input type="password" name="new_password" class="form-control mb-0" placeholder="Nuova password" required>
-<i class="bi bi-eye-fill password-toggle-icon"></i>
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
 </div>
+<!-- MODIFICA QUI: Aggiunto onclick="togglePasswordVisibility(this)" -->
 <div class="col-12 password-wrapper">
 <input type="password" name="new_password_confirm" class="form-control mb-0" placeholder="Conferma password" required>
-<i class="bi bi-eye-fill password-toggle-icon"></i>
+<i class="bi bi-eye-fill password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
 </div>
 <div class="col-12"><button type="submit" class="btn btn-custom w-100">Aggiungi</button></div>
 </div>

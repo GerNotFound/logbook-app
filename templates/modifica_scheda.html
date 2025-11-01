@@ -18,9 +18,9 @@
     <table class="table table-sm table-bordered">
         <thead>
             <tr>
-                <th style="width: 50%;">Esercizio</th>
-                <th style="width: 25%;">Serie</th>
-                <th class="text-center" style="width: 25%;">Azioni</th>
+                <th>Esercizio</th>
+                <th class="serie-column">Serie</th>
+                <th class="text-center">Azioni</th>
             </tr>
         </thead>
         <tbody>
@@ -28,30 +28,22 @@
             <tr>
                 <td class="align-middle">{{ exercise.name }}</td>
                 <td class="align-middle">
-                    <form hx-post="{{ url_for('gym.aggiorna_serie') }}" hx-trigger="submit" hx-swap="none"
-                          x-data="{ status: 'idle' }"
-                          @htmx:before-request="status = 'loading'"
-                          @htmx:after-request="status = $event.detail.successful ? 'success' : 'error'; setTimeout(() => status = 'idle', 2000)">
+                    <form class="update-sets-form" id="update-sets-form-{{ exercise.id }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <div class="input-group">
-                            <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
-                            <button type="submit" class="btn btn-sm btn-outline-light" :disabled="status !== 'idle'">
-                                <span x-show="status === 'idle'"><i class="bi bi-floppy"></i></span>
-                                <span x-show="status === 'loading'" class="spinner-border spinner-border-sm"></span>
-                                <span x-show="status === 'success'"><i class="bi bi-check-lg"></i></span>
-                                <span x-show="status === 'error'"><i class="bi bi-x-lg"></i></span>
-                            </button>
-                        </div>
+                        <input type="text" class="form-control form-control-sm" name="sets" value="{{ exercise.sets }}">
                     </form>
                 </td>
                 <td class="text-center align-middle">
-                    <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="delete_template_exercise">
-                        <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
-                        <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
-                    </form>
+                    <div class="btn-group">
+                        <button type="submit" form="update-sets-form-{{ exercise.id }}" class="btn btn-sm btn-outline-light" title="Salva Serie"><i class="bi bi-floppy"></i></button>
+                        <form method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}" onsubmit="return confirm('Sei sicuro?');" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete_template_exercise">
+                            <input type="hidden" name="template_exercise_id" value="{{ exercise.id }}">
+                            <button type="submit" class="btn btn-sm btn-delete" title="Elimina Esercizio"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -61,9 +53,9 @@
     </table>
 </div>
 
-<div class="mb-4" x-data="{ searchTerm: '' }">
+<div class="mb-4">
     <h5>Cerca Esercizio</h5>
-    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi..." x-model="searchTerm">
+    <input type="text" id="search-exercise-input" class="form-control" placeholder="Digita per filtrare gli esercizi...">
     <div class="table-responsive mt-2" style="max-height: 400px; overflow-y: auto;">
         <table class="table table-bordered table-hover table-sm">
             <thead>
@@ -74,7 +66,7 @@
             </thead>
             <tbody id="all-exercises-tbody">
                 {% for exercise in all_exercises %}
-                <tr x-show="searchTerm === '' || '{{ exercise.name | lower }}'.includes(searchTerm.toLowerCase().trim())">
+                <tr class="exercise-row" data-name="{{ exercise.name | lower }}">
                     <td>{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
                     <td class="text-center">
                         <form method="POST" class="d-inline">
@@ -95,4 +87,63 @@
 <div class="sticky-bottom-nav">
     <a href="{{ url_for('gym.scheda') }}" class="btn btn-custom full-width-btn">TORNA ALLE SCHEDE</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        // Logica per il filtro live della tabella
+        const searchInput = document.getElementById('search-exercise-input');
+        const exerciseRows = document.querySelectorAll('#all-exercises-tbody .exercise-row');
+
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            exerciseRows.forEach(row => {
+                const exerciseName = row.dataset.name;
+                if (exerciseName.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // Logica per l'aggiornamento AJAX delle serie
+        document.querySelectorAll('button[type="submit"][form^="update-sets-form-"]').forEach(button => {
+            button.addEventListener('click', async function(event) {
+                event.preventDefault();
+                const formId = this.getAttribute('form');
+                const form = document.getElementById(formId);
+                if (!form) return;
+
+                const originalIconHTML = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+                try {
+                    const response = await fetch("{{ url_for('gym.aggiorna_serie') }}", {
+                        method: 'POST',
+                        body: new FormData(form)
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        this.innerHTML = '<i class="bi bi-check-lg"></i>'; // Icona di successo
+                    } else {
+                        alert(data.error || 'Errore');
+                        this.innerHTML = '<i class="bi bi-x-lg"></i>'; // Icona di errore
+                    }
+                } catch (error) {
+                    alert('Errore di rete.');
+                    this.innerHTML = '<i class="bi bi-x-lg"></i>';
+                } finally {
+                    // Ripristina l'icona originale dopo 2 secondi
+                    setTimeout(() => {
+                        this.disabled = false;
+                        this.innerHTML = originalIconHTML;
+                    }, 2000);
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
