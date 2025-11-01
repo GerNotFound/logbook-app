@@ -13,60 +13,54 @@
     </div>
 </div>
 
-<!-- Inizia il componente Alpine.js -->
-<div x-data="templateEditor()" x-init="init()">
+<div id="template-editor-container">
     <form id="edit-template-form" method="POST" action="{{ url_for('gym.modifica_scheda_dettaglio', template_id=template.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Sezione Nome Scheda -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0" x-text="templateName"></h4>
+            <h4 class="mb-0">{{ template.name }}</h4>
             <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#renameTemplateModal">Rinomina</button>
         </div>
 
-        <!-- Sezione Esercizi nella Scheda -->
         <div class="mb-4">
             <h5>Esercizi</h5>
             <div class="table-responsive">
                 <table class="table table-sm table-bordered">
                     <thead>
                         <tr>
+                            <th class="text-center" style="width: 50px;">Ordina</th>
                             <th>Esercizio</th>
                             <th class="serie-column">Serie</th>
                             <th class="text-center">Azioni</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <!-- Ciclo dinamico gestito da Alpine.js -->
-                        <template x-for="(exercise, index) in currentExercises" :key="exercise.exercise_id">
-                            <tr :data-exercise-id="exercise.exercise_id">
-                                <!-- Input nascosto per inviare l'ID al server -->
-                                <input type="hidden" name="exercise_id" :value="exercise.exercise_id">
-                                <td class="align-middle" x-text="exercise.name"></td>
-                                <td class="align-middle">
-                                    <input type="text" class="form-control form-control-sm" :name="'sets_' + exercise.exercise_id" x-model="exercise.sets">
-                                </td>
-                                <td class="text-center align-middle">
-                                    <div class="btn-group">
-                                        <button @click="moveUp(index)" type="button" class="btn btn-sm btn-outline-light" title="Sposta su" :disabled="index === 0"><i class="bi bi-arrow-up"></i></button>
-                                        <button @click="moveDown(index)" type="button" class="btn btn-sm btn-outline-light" title="Sposta giù" :disabled="index === currentExercises.length - 1"><i class="bi bi-arrow-down"></i></button>
-                                        <button @click="removeExercise(index)" type="button" class="btn btn-sm btn-delete" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </template>
+                    <tbody id="current-exercises-tbody">
+                        {% for exercise in current_exercises %}
+                        <tr data-exercise-id="{{ exercise.exercise_id }}">
+                            <td class="text-center align-middle sort-handle" style="cursor: grab;"><i class="bi bi-grip-vertical"></i></td>
+                            <td class="align-middle exercise-name-cell">{{ exercise.name }}</td>
+                            <td class="align-middle">
+                                <input type="text" class="form-control form-control-sm" name="sets_{{ exercise.exercise_id }}" value="{{ exercise.sets }}">
+                            </td>
+                            <td class="text-center align-middle">
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
+                                    <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
+                                    <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
-                <p class="text-center text-muted" x-show="currentExercises.length === 0">Nessun esercizio in questa scheda.</p>
+                <p id="no-exercises-placeholder" class="text-center text-muted {% if current_exercises %}d-none{% endif %}">Nessun esercizio in questa scheda.</p>
             </div>
         </div>
     </form>
 
-    <!-- Sezione Ricerca Esercizi -->
-    <div class="mb-4">
+    <div id="all-exercises-list" class="mb-4">
         <h5>Cerca Esercizio</h5>
-        <input type="text" class="form-control" placeholder="Digita per filtrare gli esercizi..." x-model="searchTerm">
-        <a href="{{ url_for('gym.esercizi') }}" class="btn btn-custom w-100 d-block mt-3">CREA ESERCIZIO</a>
+        <input type="text" class="form-control search" placeholder="Digita per filtrare gli esercizi...">
         
         <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
             <table class="table table-bordered table-hover table-sm">
@@ -76,30 +70,28 @@
                         <th class="text-center">Azioni</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <!-- Ciclo dinamico per la lista filtrata -->
-                    <template x-for="exercise in filteredExercises" :key="exercise.id">
-                        <tr>
-                            <td x-html="exercise.name + (exercise.user_id === null ? ' <i class=\'bi bi-globe2 global-icon\' title=\'Esercizio globale\'></i>' : '')"></td>
-                            <td class="text-center">
-                                <button @click="addExercise(exercise)" type="button" class="btn btn-sm btn-outline-light">Aggiungi</button>
-                                <a :href="'/esercizio/' + exercise.id + '/info'" class="btn btn-sm btn-outline-secondary">Info</a>
-                            </td>
-                        </tr>
-                    </template>
+                <tbody class="list">
+                    {% for exercise in all_exercises %}
+                    <tr data-id="{{ exercise.id }}" data-is-global="{{ 1 if exercise.user_id is none else 0 }}">
+                        <td class="exercise-name-cell">{{ exercise.name }} {% if exercise.user_id is none %}<i class="bi bi-globe2 global-icon" title="Esercizio globale"></i>{% endif %}</td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-light add-exercise">Aggiungi</button>
+                            <a href="{{ url_for('gym.esercizio_info', exercise_id=exercise.id) }}" class="btn btn-sm btn-outline-secondary">Info</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- Modale per Rinomina -->
     <div class="modal fade" id="renameTemplateModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header"><h5 class="modal-title">Rinomina Scheda</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <label for="new_template_name" class="form-label">Nuovo nome</label>
-                    <input type="text" name="new_template_name" id="new_template_name" class="form-control" x-model="templateName" required form="edit-template-form">
+                    <input type="text" name="new_template_name" id="new_template_name" class="form-control" value="{{ template.name }}" required form="edit-template-form">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
@@ -109,97 +101,150 @@
         </div>
     </div>
 
-    <!-- Pulsanti in fondo alla pagina -->
     <div class="sticky-bottom-nav">
         <button type="submit" form="edit-template-form" class="btn btn-custom action-btn">SALVA</button>
-        <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn" x-text="isDirty ? 'ANNULLA' : 'INDIETRO'">INDIETRO</a>
+        <a id="cancel-button" href="{{ url_for('gym.scheda') }}" class="btn btn-custom action-btn">INDIETRO</a>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<!-- Inclusione di Alpine.js -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Librerie Specializzate -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/2.3.1/list.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script nonce="{{ csp_nonce() }}">
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('templateEditor', () => ({
-            // --- STATO (I DATI INIZIALI) ---
-            // Questi dati vengono "iniettati" dal server tramite Jinja2
-            templateName: {{ template.name|tojson|safe }},
-            currentExercises: {{ current_exercises|tojson|safe }},
-            allExercises: {{ all_exercises|tojson|safe }},
-            searchTerm: '',
-            initialState: '',
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('edit-template-form');
+        const currentExercisesTbody = document.getElementById('current-exercises-tbody');
+        const noExercisesPlaceholder = document.getElementById('no-exercises-placeholder');
+        const cancelButton = document.getElementById('cancel-button');
+        let isDirty = false;
 
-            // --- GETTERS (PROPRIETÀ CALCOLATE) ---
-            
-            // Controlla se sono state fatte modifiche
-            get isDirty() {
-                const currentState = JSON.stringify({
-                    name: this.templateName,
-                    exercises: this.currentExercises.map(e => ({ id: e.exercise_id, sets: e.sets }))
-                });
-                return this.initialState !== currentState;
-            },
+        // --- STATO INIZIALE ---
+        function getInitialState() {
+            const exerciseOrder = Array.from(currentExercisesTbody.querySelectorAll('tr')).map(tr => {
+                const id = tr.dataset.exerciseId;
+                const sets = tr.querySelector(`input[name="sets_${id}"]`).value;
+                return `${id}:${sets}`;
+            }).join(',');
+            const templateName = document.getElementById('new_template_name').value;
+            return `${templateName}|${exerciseOrder}`;
+        }
+        const initialState = getInitialState();
 
-            // Filtra la lista di tutti gli esercizi in base alla ricerca
-            get filteredExercises() {
-                if (this.searchTerm.trim() === '') {
-                    return this.allExercises;
-                }
-                const lowerTerm = this.searchTerm.toLowerCase();
-                return this.allExercises.filter(ex => 
-                    ex.name.toLowerCase().includes(lowerTerm)
-                );
-            },
+        function setDirty() {
+            isDirty = true;
+            cancelButton.textContent = 'ANNULLA';
+        }
 
-            // --- METODI (LE AZIONI) ---
-            
-            // Funzione di inizializzazione
-            init() {
-                // Salva una "fotografia" dello stato iniziale per confrontarlo in seguito
-                this.initialState = JSON.stringify({
-                    name: this.templateName,
-                    exercises: this.currentExercises.map(e => ({ id: e.exercise_id, sets: e.sets }))
-                });
-            },
+        // --- 1. LIBRERIA PER LA RICERCA: List.js ---
+        const exerciseList = new List('all-exercises-list', {
+            valueNames: ['exercise-name-cell']
+        });
 
-            // Aggiunge un esercizio alla scheda
-            addExercise(exerciseToAdd) {
-                const isAlreadyAdded = this.currentExercises.some(ex => ex.exercise_id === exerciseToAdd.id);
-                if (isAlreadyAdded) {
+        // --- 2. LIBRERIA PER L'ORDINAMENTO: SortableJS ---
+        const sortable = new Sortable(currentExercisesTbody, {
+            animation: 150,
+            handle: '.sort-handle',
+            onEnd: setDirty
+        });
+
+        // --- 3. LOGICA DI INTERAZIONE (AGGIUNGI, RIMUOVI, SPOSTA) ---
+        function updateEventListeners(container) {
+            container.querySelectorAll('.remove-exercise').forEach(button => {
+                button.onclick = function() {
+                    this.closest('tr').remove();
+                    updatePlaceholder();
+                    setDirty();
+                };
+            });
+            container.querySelectorAll('.move-up').forEach(button => {
+                button.onclick = function() {
+                    const row = this.closest('tr');
+                    const prevRow = row.previousElementSibling;
+                    if (prevRow) {
+                        currentExercisesTbody.insertBefore(row, prevRow);
+                        setDirty();
+                    }
+                };
+            });
+            container.querySelectorAll('.move-down').forEach(button => {
+                button.onclick = function() {
+                    const row = this.closest('tr');
+                    const nextRow = row.nextElementSibling;
+                    if (nextRow) {
+                        currentExercisesTbody.insertBefore(nextRow, row);
+                        setDirty();
+                    }
+                };
+            });
+        }
+
+        function updatePlaceholder() {
+            noExercisesPlaceholder.classList.toggle('d-none', currentExercisesTbody.children.length > 0);
+        }
+
+        document.getElementById('all-exercises-list').addEventListener('click', function(e) {
+            if (e.target.classList.contains('add-exercise')) {
+                const rowToAdd = e.target.closest('tr');
+                const exerciseId = rowToAdd.dataset.id;
+                const exerciseName = rowToAdd.querySelector('.exercise-name-cell').textContent.trim();
+
+                if (currentExercisesTbody.querySelector(`tr[data-exercise-id="${exerciseId}"]`)) {
                     alert("Questo esercizio è già nella scheda.");
                     return;
                 }
-                this.currentExercises.push({
-                    exercise_id: exerciseToAdd.id,
-                    name: exerciseToAdd.name,
-                    sets: '1'
-                });
-            },
 
-            // Rimuove un esercizio dalla scheda
-            removeExercise(index) {
-                this.currentExercises.splice(index, 1);
-            },
-
-            // Sposta un esercizio in su
-            moveUp(index) {
-                if (index > 0) {
-                    // Scambia l'elemento con il precedente nell'array
-                    [this.currentExercises[index - 1], this.currentExercises[index]] = [this.currentExercises[index], this.currentExercises[index - 1]];
-                }
-            },
-
-            // Sposta un esercizio in giù
-            moveDown(index) {
-                if (index < this.currentExercises.length - 1) {
-                    // Scambia l'elemento con il successivo nell'array
-                    [this.currentExercises[index], this.currentExercises[index + 1]] = [this.currentExercises[index + 1], this.currentExercises[index]];
-                }
+                const newRow = document.createElement('tr');
+                newRow.dataset.exerciseId = exerciseId;
+                newRow.innerHTML = `
+                    <td class="text-center align-middle sort-handle" style="cursor: grab;"><i class="bi bi-grip-vertical"></i></td>
+                    <td class="align-middle exercise-name-cell">${exerciseName}</td>
+                    <td class="align-middle">
+                        <input type="text" class="form-control form-control-sm" name="sets_${exerciseId}" value="1">
+                    </td>
+                    <td class="text-center align-middle">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-light move-up" title="Sposta su"><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-light move-down" title="Sposta giù"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-sm btn-delete remove-exercise" title="Rimuovi Esercizio"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </td>
+                `;
+                currentExercisesTbody.appendChild(newRow);
+                updateEventListeners(newRow);
+                updatePlaceholder();
+                setDirty();
             }
-        }));
+        });
+
+        // --- 4. GESTIONE DEL SALVATAGGIO E DELLO STATO "DIRTY" ---
+        form.addEventListener('input', () => {
+            const currentState = getInitialState();
+            if (currentState !== initialState) {
+                setDirty();
+            }
+        });
+
+        form.addEventListener('submit', function(e) {
+            // Prima di inviare, crea gli input nascosti con l'ordine corretto
+            const existingOrderInputs = form.querySelectorAll('input[name="exercise_id"]');
+            existingOrderInputs.forEach(input => input.remove());
+
+            const rows = currentExercisesTbody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const exerciseId = row.dataset.exerciseId;
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'exercise_id';
+                input.value = exerciseId;
+                form.appendChild(input);
+            });
+        });
+
+        // Inizializza gli event listener per gli elementi già presenti
+        updateEventListeners(currentExercisesTbody);
     });
 </script>
 {% endblock %}
