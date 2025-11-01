@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 import math
 from collections import defaultdict
 from .auth import login_required
-from utils import execute_query, is_valid_time_format, generate_avatar_color
+from utils import execute_query, is_valid_time_format
 from services import user_service, data_service
 from services import privacy_service
 

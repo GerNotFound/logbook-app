@@ -45,6 +45,7 @@ function handleTimezoneRedirect() {
 
     // Costruisci il nuovo URL e reindirizza
     const newPath = `${path.endsWith('/') ? path.slice(0, -1) : path}/${localDateString}`;
+    // Usiamo replace per non creare una nuova voce nella cronologia del browser
     window.location.replace(newPath);
 }
 
@@ -132,9 +133,9 @@ function bindConfirmationDialogs() {
     });
 }
 
+// Esegui le funzioni all'avvio
 document.addEventListener('DOMContentLoaded', () => {
-    handleTimezoneRedirect(); // Esegui il controllo del fuso orario
-    addFormSubmitFeedback('upload-pic-form', 'Caricamento...');
+    handleTimezoneRedirect(); // Esegui il controllo del fuso orario per primo
     addFormSubmitFeedback('export-data-form', 'Esportazione...', 3000);
     initPrivacyBanner();
     bindConfirmationDialogs();
