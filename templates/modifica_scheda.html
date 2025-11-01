@@ -201,6 +201,7 @@
             templateId: {{ template.id }},
             templateName: {{ template.name|tojson }},
             cancelUrl: {{ cancel_url|tojson }},
+            dataEndpoint: {{ url_for('gym.template_editor_data_api', template_slug=template_slug)|tojson }},
             currentExercises: {{ current_exercises|tojson }},
             availableExercises: {{ all_exercises|tojson }}
         };
@@ -232,46 +233,64 @@
             return `${before}<mark>${match}</mark>${after}`;
         };
 
+        const normaliseAvailableExercises = (collection) => {
+            if (!Array.isArray(collection)) {
+                return [];
+            }
+            return collection.map((exercise) => ({
+                id: exercise.id,
+                name: exercise.name,
+                is_global: Boolean(exercise.is_global),
+                info_url: exercise.info_url || null,
+            }));
+        };
+
+        const normaliseCurrentExercises = (collection, availableCollection) => {
+            const safeAvailable = Array.isArray(availableCollection) ? availableCollection : [];
+            const knownIds = new Set(safeAvailable.map((exercise) => exercise.id));
+            if (!Array.isArray(collection)) {
+                return [];
+            }
+            return collection.map((exercise) => {
+                const templateExerciseIdRaw = Number.parseInt(exercise.template_exercise_id, 10);
+                const exerciseIdRaw = Number.parseInt(exercise.exercise_id, 10);
+                const templateExerciseId = Number.isFinite(templateExerciseIdRaw) ? templateExerciseIdRaw : exercise.template_exercise_id;
+                const exerciseId = Number.isFinite(exerciseIdRaw) ? exerciseIdRaw : exercise.exercise_id;
+                const normalized = {
+                    key: `existing-${templateExerciseId}`,
+                    type: 'existing',
+                    templateExerciseId,
+                    exerciseId,
+                    name: exercise.name,
+                    sets: Number.parseInt(exercise.sets, 10) || 0,
+                    isGlobal: Boolean(exercise.is_global),
+                    infoUrl: exercise.info_url || null,
+                };
+
+                if (!knownIds.has(normalized.exerciseId)) {
+                    safeAvailable.push({
+                        id: normalized.exerciseId,
+                        name: normalized.name,
+                        is_global: normalized.isGlobal,
+                        info_url: normalized.infoUrl,
+                    });
+                    knownIds.add(normalized.exerciseId);
+                }
+
+                return normalized;
+            });
+        };
+
         createApp({
             data() {
-                const safeCurrentExercises = Array.isArray(initialData.currentExercises) ? initialData.currentExercises : [];
-                const safeAvailableExercises = Array.isArray(initialData.availableExercises) ? initialData.availableExercises : [];
-
-                const normalizedAvailable = safeAvailableExercises.map((exercise) => ({
-                    id: exercise.id,
-                    name: exercise.name,
-                    is_global: Boolean(exercise.is_global),
-                    info_url: exercise.info_url || null
-                }));
-
-                const normalizedExercises = safeCurrentExercises.map((exercise) => {
-                    const normalized = {
-                        key: `existing-${exercise.template_exercise_id}`,
-                        type: 'existing',
-                        templateExerciseId: exercise.template_exercise_id,
-                        exerciseId: exercise.exercise_id,
-                        name: exercise.name,
-                        sets: Number.parseInt(exercise.sets, 10) || 0,
-                        isGlobal: Boolean(exercise.is_global),
-                        infoUrl: exercise.info_url || null
-                    };
-
-                    if (!normalizedAvailable.some((candidate) => candidate.id === normalized.exerciseId)) {
-                        normalizedAvailable.push({
-                            id: normalized.exerciseId,
-                            name: normalized.name,
-                            is_global: normalized.isGlobal,
-                            info_url: normalized.infoUrl
-                        });
-                    }
-
-                    return normalized;
-                });
+                const normalizedAvailable = normaliseAvailableExercises(initialData.availableExercises);
+                const normalizedExercises = normaliseCurrentExercises(initialData.currentExercises, normalizedAvailable);
 
                 return {
                     templateId: initialData.templateId,
                     templateName: initialData.templateName,
                     cancelUrl: initialData.cancelUrl,
+                    dataEndpoint: initialData.dataEndpoint || null,
                     exercises: normalizedExercises,
                     deletedExistingIds: [],
                     nextNewId: 1,
@@ -382,6 +401,35 @@
                             this.lastSyncTimestamp = new Date();
                         }
                     });
+                },
+                async fetchInitialDataIfMissing() {
+                    if (this.exercises.length > 0 && this.availableExercises.length > 0) {
+                        return;
+                    }
+                    const endpoint = this.dataEndpoint;
+                    if (!endpoint) {
+                        return;
+                    }
+                    try {
+                        const response = await fetch(endpoint, {
+                            headers: { 'Accept': 'application/json' },
+                            credentials: 'same-origin',
+                        });
+                        if (!response.ok) {
+                            throw new Error(`Unexpected status ${response.status}`);
+                        }
+                        const payload = await response.json();
+                        const freshAvailable = normaliseAvailableExercises(payload?.all_exercises);
+                        const freshExercises = normaliseCurrentExercises(payload?.current_exercises, freshAvailable);
+                        this.availableExercises = freshAvailable;
+                        this.exercises = freshExercises;
+                        this.deletedExistingIds = [];
+                        this.bootstrapSearchResults();
+                        this.requestSearch();
+                        this.queuePreviewSync(true);
+                    } catch (error) {
+                        console.error('Impossibile caricare gli esercizi dal server', error);
+                    }
                 },
                 queueSearch() {
                     if (this.searchTimeoutId) {
@@ -541,6 +589,7 @@
             },
             mounted() {
                 this.bootstrapSearchResults();
+                this.fetchInitialDataIfMissing();
                 this.requestSearch();
                 this.connectSocket();
                 this.queuePreviewSync(true);
