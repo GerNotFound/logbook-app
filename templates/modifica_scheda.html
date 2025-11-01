@@ -52,9 +52,9 @@
                     <td colspan="4" class="text-center text-muted">Nessun esercizio in questa scheda.</td>
                 </tr>
                 <tr v-for="(exercise, index) in exercises" :key="exercise.key" class="template-exercise-row">
-                    <td class="text-center">{{ index + 1 }}</td>
+                    <td class="text-center"><span v-text="index + 1"></span></td>
                     <td>
-                        {{ exercise.name }}
+                        <span v-text="exercise.name"></span>
                         <i v-if="exercise.isGlobal" class="bi bi-globe2 global-icon" title="Esercizio globale"></i>
                     </td>
                     <td>
